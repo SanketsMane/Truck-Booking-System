@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Phone, Mail } from "lucide-react";
 import * as authApi from "../api/auth";
 import { useAuth } from "../context/AuthContext";
 import AuthShell from "../layouts/AuthShell";
@@ -38,29 +37,24 @@ const RoleOption = styled.button`
   font-size: 14px;
 `;
 
-const TabStrip = styled.div`
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 26px;
-  border-radius: ${({ theme }) => theme.radius.sm};
-  background: ${({ theme }) => theme.color.surfaceRaised};
-`;
-
-const Tab = styled.button`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px;
-  border-radius: ${({ theme }) => theme.radius.sm};
+const MethodSwitch = styled.p`
+  margin: 0 0 26px;
   font-size: 13.5px;
-  font-weight: 600;
-  color: ${({ theme, $active }) => ($active ? theme.color.text : theme.color.textMuted)};
-  background: ${({ theme, $active }) => ($active ? theme.color.surface : "transparent")};
-  box-shadow: ${({ theme, $active }) => ($active ? theme.shadow.card : "none")};
-  transition: color 0.15s ease, background 0.15s ease;
+  color: ${({ theme }) => theme.color.textMuted};
+
+  button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: ${({ theme }) => theme.color.accent};
+    cursor: pointer;
+  }
+
+  button:hover {
+    text-decoration: underline;
+  }
 `;
 
 const ForgotLink = styled(Link)`
@@ -177,34 +171,17 @@ export const Login = () => {
 
   return (
     <AuthShell>
-      <TabStrip role="tablist" aria-label="Login method">
-        <Tab
-          type="button"
-          role="tab"
-          $active={method === "mobile"}
-          aria-selected={method === "mobile"}
-          onClick={() => setMethod("mobile")}
-        >
-          <Phone size={14} strokeWidth={2.4} />
-          Mobile number
-        </Tab>
-        <Tab
-          type="button"
-          role="tab"
-          $active={method === "password"}
-          aria-selected={method === "password"}
-          onClick={() => setMethod("password")}
-        >
-          <Mail size={14} strokeWidth={2.4} />
-          Email &amp; password
-        </Tab>
-      </TabStrip>
-
       {method === "mobile" ? (
         step === "mobile" ? (
           <form onSubmit={handleRequestOtp}>
             <Title>Welcome back</Title>
             <Subtitle>We'll text you a one-time code — no password needed.</Subtitle>
+            <MethodSwitch>
+              Prefer a password?{" "}
+              <button type="button" onClick={() => setMethod("password")}>
+                Use email &amp; password
+              </button>
+            </MethodSwitch>
             <Field label="Mobile number">
               <Input
                 type="tel"
@@ -290,6 +267,12 @@ export const Login = () => {
         <form onSubmit={handlePasswordLogin}>
           <Title>Welcome back</Title>
           <Subtitle>Use the password you set for your account.</Subtitle>
+          <MethodSwitch>
+            Or{" "}
+            <button type="button" onClick={() => setMethod("mobile")}>
+              sign in with mobile OTP
+            </button>
+          </MethodSwitch>
           <Field label="Email or mobile number">
             <Input
               type="text"
