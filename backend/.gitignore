@@ -1,0 +1,25 @@
+# Environment files — only .env.example is meant to be committed.
+.env
+.env.local
+.env.development
+.env.production
+
+# Dependencies
+node_modules
+
+# Local file storage (STORAGE_PROVIDER=local writes here — see utils/objectStorage.js)
+uploads
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Testing / coverage
+coverage
+
+# Local database backups
+backups
+
+# OS files
+.DS_Store

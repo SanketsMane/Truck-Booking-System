@@ -1,0 +1,57 @@
+# Local full-stack dev environment. Not the production deployment topology
+# (that's Vercel + Render + MongoDB Atlas — see README) — this is for
+# running everything locally with one command.
+services:
+  # Single-node replica set, not a plain standalone server — the wallet
+  # ledger (backend/utils/walletService.js's withWalletSession, used by
+  # booking payment/payout, admin wallet adjustments, withdrawal approve/
+  # reject, and dispute resolution) runs real multi-document transactions,
+  # which MongoDB only supports on a replica set (even a single-node one)
+  # or a sharded cluster — never on a standalone mongod. The healthcheck
+  # self-initiates the replica set on first boot (rs.status() throws until
+  # then) so `depends_on: condition: service_healthy` below never lets the
+  # backend connect before it's actually usable.
+  mongo:
+    image: mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: >
+        mongosh --quiet --eval
+        "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGODB_URL: mongodb://mongo:27017/sharetruck?replicaSet=rs0
+      SECRET_KEY: dev-secret-change-me
+      FRONTEND_URL: http://localhost:5173
+      OTP_PROVIDER: console
+      STORAGE_PROVIDER: local
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:

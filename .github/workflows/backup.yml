@@ -1,0 +1,34 @@
+name: Weekly DB Backup
+
+on:
+  schedule:
+    # Sundays 03:00 UTC — see Docs/OPERATIONS.md for the full backup/restore runbook.
+    - cron: "0 3 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MongoDB Database Tools
+        run: |
+          wget -qO- https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+
+      - name: Run backup
+        env:
+          MONGODB_URL: ${{ secrets.MONGODB_URL }}
+        run: |
+          chmod +x backend/scripts/backupDb.sh
+          backend/scripts/backupDb.sh ./backups
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharetruck-db-backup-${{ github.run_id }}
+          path: backups/*.gz
+          retention-days: 30

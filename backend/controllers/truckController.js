@@ -1,0 +1,248 @@
+const Truck = require("../models/truckModel");
+const Trip = require("../models/tripModel");
+const { notify } = require("../utils/notify");
+const resolveDocuments = require("../utils/resolveDocuments");
+const { logAdminAction } = require("../utils/audit");
+const sendServerError = require("../utils/sendServerError");
+const {
+  registerTruckValidation,
+  updateTruckValidation,
+  addDocumentsValidation,
+  addPhotosValidation,
+  reviewTruckValidation,
+} = require("../validators/truckValidation");
+
+const registerTruck = async (req, res) => {
+  try {
+    const { error } = registerTruckValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const { regNumber, truckType, bodyType, totalCapacity, documents = [], photos = [] } = req.body;
+
+    const existing = await Truck.findOne({ regNumber: regNumber.toUpperCase() });
+    if (existing) {
+      return res.status(409).json({ success: false, msg: "This registration number is already listed" });
+    }
+
+    let resolvedDocuments = [];
+    if (documents.length) {
+      try {
+        resolvedDocuments = await resolveDocuments(documents, req.auth.id);
+      } catch (docError) {
+        return res.status(400).json({ success: false, msg: docError.message });
+      }
+    }
+
+    let resolvedPhotos = [];
+    if (photos.length) {
+      try {
+        resolvedPhotos = await resolveDocuments(photos, req.auth.id);
+      } catch (photoError) {
+        return res.status(400).json({ success: false, msg: photoError.message });
+      }
+    }
+
+    const truck = await Truck.create({
+      owner: req.auth.id,
+      regNumber,
+      truckType,
+      bodyType,
+      totalCapacity,
+      documents: resolvedDocuments,
+      photos: resolvedPhotos,
+    });
+
+    res.status(201).json({ success: true, msg: "Truck registered", truck });
+  } catch (error) {
+    // The findOne check above is a courtesy fast-path, not a guarantee —
+    // two concurrent registrations for the same regNumber can both pass it
+    // before either commits. The schema's unique index is what actually
+    // enforces this; without catching it here, a genuine race falls
+    // through to a generic 500 instead of the same clean 409.
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, msg: "This registration number is already listed" });
+    }
+    sendServerError(res, error, "truckController");
+  }
+};
+
+const listMyTrucks = async (req, res) => {
+  try {
+    const trucks = await Truck.find({ owner: req.auth.id }).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, trucks });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+const updateTruck = async (req, res) => {
+  try {
+    const { error } = updateTruckValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    // A trip's own totalCapacity is fixed at post time (postTrip already
+    // checks it against the truck's rating then) — but nothing stopped a
+    // transporter from later shrinking the truck below what an already-live
+    // trip committed to, leaving the truck's own "rated capacity" lying
+    // about what it's actually carrying right now.
+    if (req.body.totalCapacity !== undefined) {
+      const oversizedTrip = await Trip.findOne({
+        truck: req.params.id,
+        status: { $in: ["published", "full", "ongoing"] },
+        totalCapacity: { $gt: req.body.totalCapacity },
+      }).select("totalCapacity");
+      if (oversizedTrip) {
+        return res.status(409).json({
+          success: false,
+          msg: `Can't reduce capacity below ${oversizedTrip.totalCapacity} tons — an active trip on this truck already committed to that much`,
+        });
+      }
+    }
+
+    const truck = await Truck.findOneAndUpdate(
+      { _id: req.params.id, owner: req.auth.id },
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+    if (!truck) {
+      return res.status(404).json({ success: false, msg: "Truck not found" });
+    }
+
+    res.status(200).json({ success: true, msg: "Truck updated", truck });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+// Adding documents to a previously rejected truck resubmits it for review (SRS-02.2)
+const addDocuments = async (req, res) => {
+  try {
+    const { error } = addDocumentsValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const truck = await Truck.findOne({ _id: req.params.id, owner: req.auth.id });
+    if (!truck) {
+      return res.status(404).json({ success: false, msg: "Truck not found" });
+    }
+
+    let resolvedDocuments;
+    try {
+      resolvedDocuments = await resolveDocuments(req.body.documents, req.auth.id);
+    } catch (docError) {
+      return res.status(400).json({ success: false, msg: docError.message });
+    }
+
+    truck.documents.push(...resolvedDocuments);
+    if (truck.status === "rejected") {
+      truck.status = "pending";
+      truck.rejectReason = undefined;
+      truck.reviewedBy = undefined;
+      truck.reviewedAt = undefined;
+    }
+    await truck.save();
+
+    res.status(200).json({ success: true, msg: "Documents added", truck });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+// Adding photos never affects verification status — photos aren't KYC
+// documents, so unlike addDocuments this doesn't touch truck.status.
+const addPhotos = async (req, res) => {
+  try {
+    const { error } = addPhotosValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const truck = await Truck.findOne({ _id: req.params.id, owner: req.auth.id });
+    if (!truck) {
+      return res.status(404).json({ success: false, msg: "Truck not found" });
+    }
+
+    let resolvedPhotos;
+    try {
+      resolvedPhotos = await resolveDocuments(req.body.photos, req.auth.id);
+    } catch (photoError) {
+      return res.status(400).json({ success: false, msg: photoError.message });
+    }
+
+    truck.photos.push(...resolvedPhotos);
+    await truck.save();
+
+    res.status(200).json({ success: true, msg: "Photos added", truck });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+const listQueue = async (req, res) => {
+  try {
+    const { status = "pending" } = req.query;
+    const filter = status === "all" ? {} : { status };
+    const trucks = await Truck.find(filter).populate("owner", "name mobile city").sort({ createdAt: 1 });
+    res.status(200).json({ success: true, trucks });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+const reviewTruck = async (req, res) => {
+  try {
+    const { error } = reviewTruckValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const truck = await Truck.findById(req.params.id);
+    if (!truck) {
+      return res.status(404).json({ success: false, msg: "Truck not found" });
+    }
+
+    const before = truck.status;
+    truck.status = req.body.status;
+    truck.rejectReason = req.body.status === "rejected" ? req.body.reason : undefined;
+    truck.reviewedBy = req.auth.id;
+    truck.reviewedAt = new Date();
+    await truck.save();
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "truck.review",
+      targetType: "Truck",
+      targetId: truck._id,
+      before: { status: before },
+      after: { status: truck.status },
+      reason: truck.rejectReason,
+      scope: req.auth.adminScope,
+    });
+
+    await notify(truck.owner, "truck_status_changed", {
+      truckId: truck._id,
+      regNumber: truck.regNumber,
+      status: truck.status,
+      reason: truck.rejectReason,
+    });
+
+    res.status(200).json({ success: true, msg: "Truck reviewed", truck });
+  } catch (error) {
+    sendServerError(res, error, "truckController");
+  }
+};
+
+module.exports = {
+  registerTruck,
+  listMyTrucks,
+  updateTruck,
+  addDocuments,
+  addPhotos,
+  listQueue,
+  reviewTruck,
+};

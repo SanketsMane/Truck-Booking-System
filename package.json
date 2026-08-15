@@ -1,0 +1,12 @@
+{
+  "name": "sharetruck",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ShareTruck — end-to-end tests (repo root; backend/ and frontend/ are separate workspaces with their own package.json)",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

@@ -1,0 +1,5 @@
+node_modules
+uploads
+.env.development
+.env.production
+npm-debug.log
