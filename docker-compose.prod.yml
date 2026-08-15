@@ -3,16 +3,22 @@
 # MongoDB service here, unlike docker-compose.yml — this expects an
 # external MongoDB (Atlas) via MONGODB_URL in backend/.env.production.
 #
+# File storage is self-hosted MinIO (S3-compatible) rather than local disk
+# — backend/config/validateEnv.js refuses to boot with NODE_ENV=production
+# unless STORAGE_PROVIDER=s3, and local disk doesn't survive a container
+# recreate on most hosts anyway. MinIO is internal-only (no host ports),
+# reached by the backend over the sharetruck_default network.
+#
 # No host ports are published at all — matches how the other projects on
 # this host are already set up (e.g. echosoul-backend, echosoul-web). The
-# shared front-door nginx container (mbfx-web-1) reaches these two
-# services by container name over a Docker network, once connected to it:
+# shared front-door nginx container (mbfx-web-1) reaches backend/frontend
+# by container name over a Docker network, once connected to it:
 #
 #   docker network connect sharetruck_default mbfx-web-1
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml build
-#   docker compose -f docker-compose.prod.yml up -d
+#   MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... docker compose -f docker-compose.prod.yml build
+#   MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... docker compose -f docker-compose.prod.yml up -d
 services:
   backend:
     build:
@@ -21,8 +27,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env.production
-    volumes:
-      - sharetruck-uploads:/app/uploads
+    depends_on:
+      - minio
 
   frontend:
     build:
@@ -33,5 +39,16 @@ services:
     container_name: sharetruck-frontend
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    container_name: sharetruck-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - sharetruck-minio-data:/data
+
 volumes:
-  sharetruck-uploads:
+  sharetruck-minio-data:
