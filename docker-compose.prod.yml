@@ -1,14 +1,17 @@
-# Production deployment on a shared host (alongside other, unrelated
-# projects) — no local MongoDB service here, unlike docker-compose.yml.
-# This expects an external MongoDB (e.g. Atlas) via MONGODB_URL in
-# backend/.env.production.
+# Production deployment on a shared host, alongside other unrelated
+# projects (mbfx, echosoul, abct) that are already running there. No local
+# MongoDB service here, unlike docker-compose.yml — this expects an
+# external MongoDB (Atlas) via MONGODB_URL in backend/.env.production.
 #
-# Both services bind to 127.0.0.1 only — never exposed directly to the
-# internet. The host's own nginx (shared with other projects, not managed
-# by this compose file) reverse-proxies to them. See deploy/nginx/sharetruck.conf.
+# No host ports are published at all — matches how the other projects on
+# this host are already set up (e.g. echosoul-backend, echosoul-web). The
+# shared front-door nginx container (mbfx-web-1) reaches these two
+# services by container name over a Docker network, once connected to it:
+#
+#   docker network connect sharetruck_default mbfx-web-1
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml --env-file backend/.env.production build
+#   docker compose -f docker-compose.prod.yml build
 #   docker compose -f docker-compose.prod.yml up -d
 services:
   backend:
@@ -18,8 +21,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env.production
-    ports:
-      - "127.0.0.1:4001:3000"
     volumes:
       - sharetruck-uploads:/app/uploads
 
@@ -31,8 +32,6 @@ services:
         VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
     container_name: sharetruck-frontend
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:4080:80"
 
 volumes:
   sharetruck-uploads:
