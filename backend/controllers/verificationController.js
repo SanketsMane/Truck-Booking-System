@@ -4,6 +4,7 @@ const { notify } = require("../utils/notify");
 const resolveDocuments = require("../utils/resolveDocuments");
 const { logAdminAction } = require("../utils/audit");
 const emailProvider = require("../utils/emailProvider");
+const kycProvider = require("../utils/kycProvider");
 const { verificationStatusEmail } = require("../emailTemplates/templates");
 const sendServerError = require("../utils/sendServerError");
 const {
@@ -44,6 +45,47 @@ const submitVerification = async (req, res) => {
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
+
+    // No-op (still lands in the admin queue as "pending") until an admin
+    // configures a real KYC provider — see utils/kycProvider.js. Only a
+    // decisive verified/rejected result short-circuits the manual queue;
+    // manual_review (the default) leaves `verification` as pending, same
+    // as always.
+    const decision = await kycProvider.verifyDocuments(type, resolvedDocuments);
+    if (decision.status === "verified" || decision.status === "rejected") {
+      verification.status = decision.status;
+      verification.rejectReason = decision.status === "rejected" ? decision.note || "Rejected by automated KYC check" : undefined;
+      verification.reviewedAt = new Date();
+      await verification.save();
+
+      await logAdminAction({
+        actor: req.auth.id,
+        action: "verification.autoReview",
+        targetType: "Verification",
+        targetId: verification._id,
+        after: { status: verification.status, provider: "kyc-provider" },
+        reason: decision.note,
+      });
+
+      await notify(verification.user, "verification_status_changed", {
+        type: verification.type,
+        status: verification.status,
+        reason: verification.rejectReason,
+      });
+
+      const submitter = await User.findById(req.auth.id).select("name email");
+      if (submitter?.email) {
+        const { subject, html } = verificationStatusEmail({
+          name: submitter.name,
+          type: verification.type,
+          status: verification.status,
+          reason: verification.rejectReason,
+        });
+        emailProvider
+          .sendEmail({ to: submitter.email, subject, html })
+          .catch((err) => console.error("verification status email failed:", err.message));
+      }
+    }
 
     res.status(200).json({ success: true, msg: "Verification submitted", verification });
   } catch (error) {

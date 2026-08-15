@@ -30,6 +30,12 @@ const platformSettingSchema = new mongoose.Schema(
     sms: { type: integrationSchema, default: () => ({ provider: "console" }) },
     email: { type: integrationSchema, default: () => ({ provider: "console" }) },
     razorpay: { type: integrationSchema, default: () => ({ provider: "none" }) },
+    // "manual" — the existing upload-then-admin-queue flow — until an
+    // admin configures a real KYC vendor. See utils/kycProvider.js.
+    kyc: { type: integrationSchema, default: () => ({ provider: "manual" }) },
+    // "manual" — the existing admin-transfers-then-marks-paid flow —
+    // until an admin configures a real payout rail. See utils/payoutProvider.js.
+    payout: { type: integrationSchema, default: () => ({ provider: "manual" }) },
 
     // Platform's cut of each completed booking, applied in
     // bookingController.confirmDrop — the rest goes to the transporter's

@@ -7,6 +7,7 @@ const razorpayProvider = require("../utils/razorpayProvider");
 const { applyWalletEntry, withWalletSession, InsufficientBalanceError } = require("../utils/walletService");
 const { finalizePayment, sendPaymentReceiptEmail } = require("../utils/paymentFinalizer");
 const { razorpayVerifyValidation } = require("../validators/walletValidation");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 
 // Shared ownership + state check for all three payment endpoints below —
 // only the shipper who owns a confirmed-but-unpaid booking may pay for it.
@@ -87,7 +88,7 @@ const createRazorpayOrder = async (req, res) => {
 
     const order = await client.orders.create({
       amount: amountPaise,
-      currency: "INR",
+      currency: DEFAULT_CURRENCY,
       receipt: `booking_${booking._id}`,
       notes: { bookingId: String(booking._id), purpose: "booking_payment" },
     });
@@ -104,7 +105,7 @@ const createRazorpayOrder = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      order: { orderId: order.id, amount: amountPaise, currency: "INR", keyId: config.keyId },
+      order: { orderId: order.id, amount: amountPaise, currency: DEFAULT_CURRENCY, keyId: config.keyId },
     });
   } catch (error) {
     if (/isn't configured yet/.test(error.message)) {

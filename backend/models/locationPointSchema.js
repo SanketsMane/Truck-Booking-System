@@ -4,6 +4,13 @@
 // address was typed freehand rather than picked from a suggestion, so a
 // plain-text pickup point — as this app has always allowed — still works.
 //
+// `location` is a GeoJSON shadow of lat/lng (same {type, coordinates}
+// convention Trip.currentLocation already uses for live GPS), kept in sync
+// by utils/setLocationGeo.js whenever lat/lng are set — MongoDB's
+// $geoWithin/$near queries need a real GeoJSON field to index, not a pair
+// of plain Number fields. The {address, lat, lng} contract itself doesn't
+// change; `location` is purely additive, for indexing/search.
+//
 // A function, not a shared object literal, so each field (Trip.pickupPoint,
 // Trip.dropPoint, Booking.pickupPoint) gets its own schema object; Mongoose
 // mutates these internally, and reusing one literal across paths would let
@@ -12,6 +19,10 @@ const locationPointSchema = () => ({
   address: { type: String, required: true, trim: true },
   lat: { type: Number, min: -90, max: 90 },
   lng: { type: Number, min: -180, max: 180 },
+  location: {
+    type: { type: String, enum: ["Point"] },
+    coordinates: { type: [Number], default: undefined }, // [lng, lat] — GeoJSON order
+  },
 });
 
 module.exports = locationPointSchema;

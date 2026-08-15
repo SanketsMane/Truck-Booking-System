@@ -1,6 +1,7 @@
 const axios = require("axios");
 const PlatformSetting = require("../models/platformSettingModel");
 const { encrypt, decrypt } = require("./crypto");
+const { PHONE_CALLING_CODE } = require("../config/marketplaceConfig");
 
 // Provider-specific field lists, used both to validate what an admin submits
 // and to know what to mask when echoing config back to the Settings UI.
@@ -38,7 +39,7 @@ const sendViaTwilio = async (mobile, message, config) => {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   await axios.post(
     url,
-    new URLSearchParams({ To: `+91${mobile}`, From: fromNumber, Body: message }),
+    new URLSearchParams({ To: `+${PHONE_CALLING_CODE}${mobile}`, From: fromNumber, Body: message }),
     { auth: { username: accountSid, password: authToken } }
   );
 };
@@ -46,7 +47,7 @@ const sendViaTwilio = async (mobile, message, config) => {
 const sendViaMsg91 = async (mobile, message, config) => {
   const { authKey, senderId, route = "4" } = config;
   await axios.get("https://api.msg91.com/api/sendhttp.php", {
-    params: { authkey: authKey, mobiles: mobile, message, sender: senderId, route, country: "91" },
+    params: { authkey: authKey, mobiles: mobile, message, sender: senderId, route, country: PHONE_CALLING_CODE },
   });
 };
 

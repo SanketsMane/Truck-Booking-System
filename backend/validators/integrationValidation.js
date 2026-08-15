@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const { MOBILE_PATTERN } = require("../config/marketplaceConfig");
 
 const smsConfigSchemas = {
   console: Joi.object({}),
@@ -42,6 +43,24 @@ const razorpayConfigSchemas = {
   }),
 };
 
+// Shared shape for both KYC and payout's custom_http seam — a webhook URL
+// plus optional headers, same generic-integration pattern as SMS's own
+// custom_http provider.
+const customHttpSeamSchema = Joi.object({
+  url: Joi.string().uri().required(),
+  headers: Joi.object().pattern(Joi.string(), Joi.string()).default({}),
+});
+
+const kycConfigSchemas = {
+  manual: Joi.object({}),
+  custom_http: customHttpSeamSchema,
+};
+
+const payoutConfigSchemas = {
+  manual: Joi.object({}),
+  custom_http: customHttpSeamSchema,
+};
+
 const updateSmsValidation = Joi.object({
   provider: Joi.string().valid("console", "twilio", "msg91", "custom_http").required(),
   config: Joi.object().required(),
@@ -63,7 +82,7 @@ const updateEmailValidation = Joi.object({
 }, "email config shape");
 
 const testSmsValidation = Joi.object({
-  mobile: Joi.string().pattern(/^[6-9]\d{9}$/).required(),
+  mobile: Joi.string().pattern(MOBILE_PATTERN).required(),
 });
 
 const testEmailValidation = Joi.object({
@@ -84,13 +103,37 @@ const updateRazorpayValidation = Joi.object({
 // free-text value like a mobile number/email address is needed.
 const testRazorpayValidation = Joi.object({});
 
+const updateKycValidation = Joi.object({
+  provider: Joi.string().valid("manual", "custom_http").required(),
+  config: Joi.object().required(),
+}).custom((value, helpers) => {
+  const schema = kycConfigSchemas[value.provider];
+  const { error, value: validatedConfig } = schema.validate(value.config);
+  if (error) return helpers.message(error.details[0].message);
+  return { ...value, config: validatedConfig };
+}, "kyc config shape");
+
+const updatePayoutValidation = Joi.object({
+  provider: Joi.string().valid("manual", "custom_http").required(),
+  config: Joi.object().required(),
+}).custom((value, helpers) => {
+  const schema = payoutConfigSchemas[value.provider];
+  const { error, value: validatedConfig } = schema.validate(value.config);
+  if (error) return helpers.message(error.details[0].message);
+  return { ...value, config: validatedConfig };
+}, "payout config shape");
+
 module.exports = {
   smsConfigSchemas,
   emailConfigSchemas,
   razorpayConfigSchemas,
+  kycConfigSchemas,
+  payoutConfigSchemas,
   updateSmsValidation,
   updateEmailValidation,
   updateRazorpayValidation,
+  updateKycValidation,
+  updatePayoutValidation,
   testSmsValidation,
   testEmailValidation,
   testRazorpayValidation,

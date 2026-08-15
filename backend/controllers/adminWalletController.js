@@ -7,6 +7,7 @@ const { applyWalletEntry, withWalletSession, InsufficientBalanceError } = requir
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const emailProvider = require("../utils/emailProvider");
+const payoutProvider = require("../utils/payoutProvider");
 const { withdrawalPaidEmail } = require("../emailTemplates/templates");
 const { decryptPayoutDetails } = require("../utils/withdrawalCrypto");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
@@ -137,6 +138,23 @@ const describeMissedClaim = async (id) => {
   return { status: 400, msg: `Request is already ${existing.status}` };
 };
 
+// The "just transitioned to paid" side effects — shared between the manual
+// markWithdrawalPaid flow below and an automated payoutProvider success in
+// approveWithdrawal, so both notify/email the transporter identically.
+const notifyWithdrawalPaid = async (request) => {
+  await notify(request.transporter, "withdrawal_paid", { requestId: request._id, amount: request.amount });
+
+  const transporter = await User.findById(request.transporter).select("name email");
+  if (transporter?.email) {
+    const { subject, html } = withdrawalPaidEmail({
+      name: transporter.name,
+      amount: request.amount,
+      payoutReference: request.payoutReference,
+    });
+    emailProvider.sendEmail({ to: transporter.email, subject, html }).catch((err) => console.error("withdrawal paid email failed:", err.message));
+  }
+};
+
 // Marks a request as reviewed/approved without moving money — lets an admin
 // signal "I've checked this and I'm about to pay it" as a separate step
 // from actually recording the payout reference in markWithdrawalPaid below.
@@ -165,7 +183,38 @@ const approveWithdrawal = async (req, res) => {
 
     await notify(request.transporter, "withdrawal_approved", { requestId: request._id, amount: request.amount });
 
-    res.status(200).json({ success: true, msg: "Withdrawal approved", request: decryptPayoutDetails(request) });
+    // A "manual" provider (the default) returns null immediately — no HTTP
+    // call, no behavior change from before this existed. A configured
+    // provider gets exactly one attempt right after approval; anything
+    // other than a clean "completed" just leaves the request "approved"
+    // for the existing manual mark-paid flow below, same as today.
+    let finalRequest = request;
+    const payoutResult = await payoutProvider.initiatePayout(request);
+    if (payoutResult?.status === "completed") {
+      const paid = await WithdrawalRequest.findOneAndUpdate(
+        { _id: request._id, status: "approved" },
+        { $set: { status: "paid", payoutReference: payoutResult.reference || "auto", paidAt: new Date() } },
+        { new: true }
+      );
+      if (paid) {
+        finalRequest = paid;
+        await logAdminAction({
+          actor: req.auth.id,
+          action: "withdrawal.autoPaid",
+          targetType: "WithdrawalRequest",
+          targetId: paid._id,
+          after: { status: "paid", payoutReference: paid.payoutReference },
+          scope: req.auth.adminScope,
+        });
+        await notifyWithdrawalPaid(paid);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      msg: finalRequest.status === "paid" ? "Withdrawal approved and paid automatically" : "Withdrawal approved",
+      request: decryptPayoutDetails(finalRequest),
+    });
   } catch (error) {
     sendServerError(res, error, "adminWalletController");
   }
@@ -277,17 +326,7 @@ const markWithdrawalPaid = async (req, res) => {
       scope: req.auth.adminScope,
     });
 
-    await notify(request.transporter, "withdrawal_paid", { requestId: request._id, amount: request.amount });
-
-    const transporter = await User.findById(request.transporter).select("name email");
-    if (transporter?.email) {
-      const { subject, html } = withdrawalPaidEmail({
-        name: transporter.name,
-        amount: request.amount,
-        payoutReference: request.payoutReference,
-      });
-      emailProvider.sendEmail({ to: transporter.email, subject, html }).catch((err) => console.error("withdrawal paid email failed:", err.message));
-    }
+    await notifyWithdrawalPaid(request);
 
     res.status(200).json({ success: true, msg: "Withdrawal marked as paid", request: decryptPayoutDetails(request) });
   } catch (error) {

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 
 // One wallet per user, plus a single ownerType:"platform" doc (user: null)
 // that acts as the platform/admin earnings wallet — same shape, same
@@ -25,7 +26,7 @@ const walletSchema = new mongoose.Schema(
 
     currency: {
       type: String,
-      default: "INR",
+      default: DEFAULT_CURRENCY,
     },
   },
   { timestamps: true }

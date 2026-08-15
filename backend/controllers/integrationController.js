@@ -2,13 +2,18 @@ const PlatformSetting = require("../models/platformSettingModel");
 const smsProvider = require("../utils/smsProvider");
 const emailProvider = require("../utils/emailProvider");
 const razorpayProvider = require("../utils/razorpayProvider");
+const kycProvider = require("../utils/kycProvider");
+const payoutProvider = require("../utils/payoutProvider");
 const { decrypt } = require("../utils/crypto");
 const { logAdminAction } = require("../utils/audit");
 const sendServerError = require("../utils/sendServerError");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 const {
   updateSmsValidation,
   updateEmailValidation,
   updateRazorpayValidation,
+  updateKycValidation,
+  updatePayoutValidation,
   testSmsValidation,
   testEmailValidation,
   testRazorpayValidation,
@@ -41,6 +46,8 @@ const getIntegrations = async (req, res) => {
     const smsConfig = settings.sms?.encryptedConfig ? JSON.parse(decrypt(settings.sms.encryptedConfig)) : {};
     const emailConfig = settings.email?.encryptedConfig ? JSON.parse(decrypt(settings.email.encryptedConfig)) : {};
     const razorpayConfig = settings.razorpay?.encryptedConfig ? JSON.parse(decrypt(settings.razorpay.encryptedConfig)) : {};
+    const kycConfig = settings.kyc?.encryptedConfig ? JSON.parse(decrypt(settings.kyc.encryptedConfig)) : {};
+    const payoutConfig = settings.payout?.encryptedConfig ? JSON.parse(decrypt(settings.payout.encryptedConfig)) : {};
 
     res.status(200).json({
       success: true,
@@ -66,6 +73,18 @@ const getIntegrations = async (req, res) => {
           configured: Boolean(settings.razorpay?.encryptedConfig) && settings.razorpay?.provider !== "none",
           config: maskConfig(razorpayConfig),
           updatedAt: settings.razorpay?.updatedAt,
+        },
+        kyc: {
+          provider: settings.kyc?.provider || "manual",
+          configured: Boolean(settings.kyc?.encryptedConfig) && settings.kyc?.provider !== "manual",
+          config: maskConfig(kycConfig),
+          updatedAt: settings.kyc?.updatedAt,
+        },
+        payout: {
+          provider: settings.payout?.provider || "manual",
+          configured: Boolean(settings.payout?.encryptedConfig) && settings.payout?.provider !== "manual",
+          config: maskConfig(payoutConfig),
+          updatedAt: settings.payout?.updatedAt,
         },
       },
     });
@@ -146,6 +165,54 @@ const updateRazorpay = async (req, res) => {
   }
 };
 
+const updateKyc = async (req, res) => {
+  try {
+    const { error, value } = updateKycValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    await kycProvider.setConfig(value.provider, value.config, req.auth.id);
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "integrations.kyc.update",
+      targetType: "PlatformSetting",
+      targetId: "global",
+      after: { provider: value.provider, configured: true },
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, msg: "KYC provider updated" });
+  } catch (error) {
+    sendServerError(res, error, "integrationController");
+  }
+};
+
+const updatePayout = async (req, res) => {
+  try {
+    const { error, value } = updatePayoutValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    await payoutProvider.setConfig(value.provider, value.config, req.auth.id);
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "integrations.payout.update",
+      targetType: "PlatformSetting",
+      targetId: "global",
+      after: { provider: value.provider, configured: true },
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, msg: "Payout provider updated" });
+  } catch (error) {
+    sendServerError(res, error, "integrationController");
+  }
+};
+
 // Tests against whatever is currently SAVED — an admin should save first,
 // then test, so what's tested is exactly what OTPs/notifications will use.
 const testSms = async (req, res) => {
@@ -202,7 +269,7 @@ const testRazorpay = async (req, res) => {
     }
 
     const client = await razorpayProvider.getClient();
-    await client.orders.create({ amount: 100, currency: "INR", receipt: `integration_test_${Date.now()}` });
+    await client.orders.create({ amount: 100, currency: DEFAULT_CURRENCY, receipt: `integration_test_${Date.now()}` });
 
     res.status(200).json({ success: true, msg: "Razorpay keys are valid — test order created successfully" });
   } catch (error) {
@@ -210,4 +277,14 @@ const testRazorpay = async (req, res) => {
   }
 };
 
-module.exports = { getIntegrations, updateSms, updateEmail, updateRazorpay, testSms, testEmail, testRazorpay };
+module.exports = {
+  getIntegrations,
+  updateSms,
+  updateEmail,
+  updateRazorpay,
+  updateKyc,
+  updatePayout,
+  testSms,
+  testEmail,
+  testRazorpay,
+};

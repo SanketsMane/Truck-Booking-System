@@ -18,4 +18,16 @@ module.exports = {
   // — capacity is committed at accept time, before payment exists, so an
   // unpaid booking left open forever would squat on it indefinitely.
   PAYMENT_WINDOW_HOURS: 12,
+
+  // Default radius for the optional nearLat/nearLng trip search mode
+  // (tripController.searchTrips) when the caller doesn't specify radiusKm.
+  SEARCH_RADIUS_KM_DEFAULT: 25,
+
+  // Single-region assumptions, collected here so a future second
+  // region/currency/gateway is a config edit instead of a grep-and-replace
+  // across smsProvider/paymentModel/walletModel/authValidation/indiaCities.
+  DEFAULT_COUNTRY_CODE: "IN",
+  PHONE_CALLING_CODE: "91",
+  DEFAULT_CURRENCY: "INR",
+  MOBILE_PATTERN: /^[6-9]\d{9}$/,
 };

@@ -8,6 +8,7 @@ const { finalizePayment } = require("../utils/paymentFinalizer");
 const { encryptPayoutDetails, decryptPayoutDetails } = require("../utils/withdrawalCrypto");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
 const sendServerError = require("../utils/sendServerError");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 const {
   rechargeOrderValidation,
   razorpayVerifyValidation,
@@ -56,7 +57,7 @@ const createRechargeOrder = async (req, res) => {
 
     const order = await client.orders.create({
       amount: amountPaise,
-      currency: "INR",
+      currency: DEFAULT_CURRENCY,
       receipt: `recharge_${req.auth.id}_${Date.now()}`,
       notes: { userId: req.auth.id, purpose: "wallet_recharge" },
     });
@@ -72,7 +73,7 @@ const createRechargeOrder = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      order: { orderId: order.id, amount: amountPaise, currency: "INR", keyId: config.keyId },
+      order: { orderId: order.id, amount: amountPaise, currency: DEFAULT_CURRENCY, keyId: config.keyId },
     });
   } catch (error) {
     if (/isn't configured yet/.test(error.message)) {

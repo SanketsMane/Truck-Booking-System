@@ -27,6 +27,18 @@ const tripSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Trimmed+lowercased shadow of fromCity/toCity, populated at write time
+    // (tripController.postTrip) — searchTrips matches on these via plain
+    // equality instead of the case-insensitive regex fromCity/toCity still
+    // display, so search gets a real index seek instead of an index scan.
+    fromCityNormalized: {
+      type: String,
+    },
+
+    toCityNormalized: {
+      type: String,
+    },
+
     departureAt: {
       type: Date,
       required: true,
@@ -107,8 +119,11 @@ const tripSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-tripSchema.index({ fromCity: 1, toCity: 1, departureAt: 1 });
+tripSchema.index({ fromCityNormalized: 1, toCityNormalized: 1, departureAt: 1 });
 tripSchema.index({ transporter: 1 });
+// Backs the optional nearLat/nearLng/radiusKm search mode (searchTrips) —
+// $geoWithin/$centerSphere against the pickup point's coordinates.
+tripSchema.index({ "pickupPoint.location": "2dsphere" });
 
 const Trip = mongoose.model("Trip", tripSchema);
 

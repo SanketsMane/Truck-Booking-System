@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 
 // One row per money-in event — a Razorpay order (recharge or direct booking
 // payment) or a wallet-funded booking payment (method:"wallet", no
@@ -39,7 +40,7 @@ const paymentSchema = new mongoose.Schema(
 
     currency: {
       type: String,
-      default: "INR",
+      default: DEFAULT_CURRENCY,
     },
 
     status: {

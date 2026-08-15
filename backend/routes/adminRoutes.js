@@ -20,6 +20,8 @@ router.put("/integrations/email", requireAdminScope("full"), integrationControll
 router.post("/integrations/email/test", requireAdminScope("full"), integrationController.testEmail);
 router.put("/integrations/razorpay", requireAdminScope("full"), integrationController.updateRazorpay);
 router.post("/integrations/razorpay/test", requireAdminScope("full"), integrationController.testRazorpay);
+router.put("/integrations/kyc", requireAdminScope("full"), integrationController.updateKyc);
+router.put("/integrations/payout", requireAdminScope("full"), integrationController.updatePayout);
 
 router.get("/users", adminController.listUsers);
 router.get("/users/:id", adminController.getUserDetail);

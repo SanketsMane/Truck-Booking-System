@@ -1,4 +1,5 @@
 const allCities = require("all-the-cities");
+const { DEFAULT_COUNTRY_CODE } = require("../config/marketplaceConfig");
 
 // Sourced from GeoNames via the all-the-cities package — no external API
 // call needed, so this has no rate limit, no API key, and no dependency on
@@ -10,7 +11,7 @@ const allCities = require("all-the-cities");
 // almost always the place someone actually means.
 const byName = new Map();
 allCities
-  .filter((c) => c.country === "IN")
+  .filter((c) => c.country === DEFAULT_COUNTRY_CODE)
   .forEach((c) => {
     const existing = byName.get(c.name);
     if (!existing || c.population > existing.population) {

@@ -7,10 +7,13 @@ const PlatformSetting = require("../models/platformSettingModel");
 const { notify } = require("../utils/notify");
 const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
 const escapeRegex = require("../utils/escapeRegex");
+const setLocationGeo = require("../utils/setLocationGeo");
 const { getPendingHeldMap, visibleAvailable, visibleAvailableVolume } = require("../utils/capacityHelpers");
-const { SEARCH_DATE_RANGE_DAYS } = require("../config/marketplaceConfig");
+const { SEARCH_DATE_RANGE_DAYS, SEARCH_RADIUS_KM_DEFAULT } = require("../config/marketplaceConfig");
 const { postTripValidation, editTripValidation, searchAlertValidation } = require("../validators/tripValidation");
 const sendServerError = require("../utils/sendServerError");
+
+const EARTH_RADIUS_KM = 6371;
 
 const cityMatch = (city) => new RegExp(`^${escapeRegex(city.trim())}$`, "i");
 
@@ -79,10 +82,12 @@ const postTrip = async (req, res) => {
       transporter: req.auth.id,
       fromCity: req.body.fromCity,
       toCity: req.body.toCity,
+      fromCityNormalized: req.body.fromCity.trim().toLowerCase(),
+      toCityNormalized: req.body.toCity.trim().toLowerCase(),
       departureAt: req.body.departureAt,
       estimatedArrivalAt: req.body.estimatedArrivalAt,
-      pickupPoint: req.body.pickupPoint,
-      dropPoint: req.body.dropPoint,
+      pickupPoint: setLocationGeo({ ...req.body.pickupPoint }),
+      dropPoint: setLocationGeo({ ...req.body.dropPoint }),
       totalCapacity,
       availableCapacity,
       volumeCbm: req.body.volumeCbm,
@@ -99,13 +104,33 @@ const postTrip = async (req, res) => {
   }
 };
 
-// FR-04.1 / SRS-04.1 — exact city match (case-insensitive), date within a
-// configurable window, soonest-departure by default.
+// FR-04.1 / SRS-04.1 — exact city match, date within a configurable window,
+// soonest-departure by default. City match is against fromCityNormalized/
+// toCityNormalized (trimmed+lowercased at write time) rather than a regex
+// on the display fields, so this gets a real index seek — see the compound
+// index in models/tripModel.js.
+//
+// Optional radius mode: nearLat/nearLng (+radiusKm, default
+// SEARCH_RADIUS_KM_DEFAULT) matches trips whose pickup point falls within
+// that radius, via the 2dsphere index on pickupPoint.location. Independent
+// of city search — either mode alone is enough to satisfy the "where"
+// requirement, and both can combine to narrow further. Multi-leg/route
+// matching (a trip matching a search for part of its route) isn't
+// attempted here — that needs real waypoint data, not just an endpoint.
 const searchTrips = async (req, res) => {
   try {
-    const { fromCity, toCity, date, minCapacity, minVolumeCbm, sort = "departure", rangeDays } = req.query;
-    if (!fromCity || !toCity || !date) {
-      return res.status(400).json({ success: false, msg: "fromCity, toCity and date are required" });
+    const { fromCity, toCity, date, nearLat, nearLng, radiusKm, minCapacity, minVolumeCbm, sort = "departure", rangeDays } = req.query;
+
+    const hasCitySearch = Boolean(fromCity && toCity);
+    const hasNearSearch = nearLat !== undefined && nearLng !== undefined;
+    if (!hasCitySearch && !hasNearSearch) {
+      return res.status(400).json({
+        success: false,
+        msg: "Provide either fromCity and toCity, or nearLat and nearLng",
+      });
+    }
+    if (!date) {
+      return res.status(400).json({ success: false, msg: "date is required" });
     }
 
     const searchDate = new Date(date);
@@ -117,8 +142,6 @@ const searchTrips = async (req, res) => {
     const windowMs = windowDays * 24 * 60 * 60 * 1000;
 
     const filter = {
-      fromCity: cityMatch(fromCity),
-      toCity: cityMatch(toCity),
       status: "published",
       availableCapacity: { $gte: Number(minCapacity) || 0 },
       departureAt: {
@@ -126,6 +149,22 @@ const searchTrips = async (req, res) => {
         $lte: new Date(searchDate.getTime() + windowMs),
       },
     };
+
+    if (hasCitySearch) {
+      filter.fromCityNormalized = fromCity.trim().toLowerCase();
+      filter.toCityNormalized = toCity.trim().toLowerCase();
+    }
+
+    if (hasNearSearch) {
+      const lat = Number(nearLat);
+      const lng = Number(nearLng);
+      const radius = Number(radiusKm) || SEARCH_RADIUS_KM_DEFAULT;
+      if (Number.isNaN(lat) || Number.isNaN(lng) || radius <= 0) {
+        return res.status(400).json({ success: false, msg: "nearLat/nearLng/radiusKm must be valid numbers" });
+      }
+      filter["pickupPoint.location"] = { $geoWithin: { $centerSphere: [[lng, lat], radius / EARTH_RADIUS_KM] } };
+    }
+
     // Only trips that actually track volume can guarantee a minimum, so
     // this naturally excludes weight-only trips rather than treating them
     // as having unlimited volume.
@@ -236,6 +275,8 @@ const editTrip = async (req, res) => {
     ["departureAt", "estimatedArrivalAt", "pickupPoint", "dropPoint", "pricePerTon"].forEach((field) => {
       if (req.body[field] !== undefined) otherFields[field] = req.body[field];
     });
+    if (otherFields.pickupPoint) otherFields.pickupPoint = setLocationGeo({ ...otherFields.pickupPoint });
+    if (otherFields.dropPoint) otherFields.dropPoint = setLocationGeo({ ...otherFields.dropPoint });
 
     let updated = trip;
 

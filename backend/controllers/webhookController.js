@@ -2,6 +2,7 @@ const Payment = require("../models/paymentModel");
 const razorpayProvider = require("../utils/razorpayProvider");
 const { finalizePayment } = require("../utils/paymentFinalizer");
 const sendServerError = require("../utils/sendServerError");
+const { DEFAULT_CURRENCY } = require("../config/marketplaceConfig");
 
 // Server-to-server reliability backstop for the checkout-callback verify
 // endpoints — a shipper who closes their browser mid-payment still gets
@@ -46,11 +47,11 @@ const handleRazorpayWebhook = async (req, res) => {
           // amount in paise; Payment.amount is stored in rupees.
           const expectedPaise = razorpayProvider.toPaise(payment.amount);
           const amountMatches = paymentEntity.amount === expectedPaise;
-          const currencyMatches = (paymentEntity.currency || "INR") === "INR";
+          const currencyMatches = (paymentEntity.currency || DEFAULT_CURRENCY) === DEFAULT_CURRENCY;
 
           if (!amountMatches || !currencyMatches) {
             console.error(
-              `[webhook] amount/currency mismatch for payment ${payment._id}: expected ${expectedPaise} paise INR, got ${paymentEntity.amount} ${paymentEntity.currency}`
+              `[webhook] amount/currency mismatch for payment ${payment._id}: expected ${expectedPaise} paise ${DEFAULT_CURRENCY}, got ${paymentEntity.amount} ${paymentEntity.currency}`
             );
           } else {
             await finalizePayment(payment, {
