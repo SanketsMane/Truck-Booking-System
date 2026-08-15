@@ -1,0 +1,38 @@
+# Production deployment on a shared host (alongside other, unrelated
+# projects) — no local MongoDB service here, unlike docker-compose.yml.
+# This expects an external MongoDB (e.g. Atlas) via MONGODB_URL in
+# backend/.env.production.
+#
+# Both services bind to 127.0.0.1 only — never exposed directly to the
+# internet. The host's own nginx (shared with other projects, not managed
+# by this compose file) reverse-proxies to them. See deploy/nginx/sharetruck.conf.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file backend/.env.production build
+#   docker compose -f docker-compose.prod.yml up -d
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: sharetruck-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.production
+    ports:
+      - "127.0.0.1:4001:3000"
+    volumes:
+      - sharetruck-uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://sharetruck.visionitinfra.com
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
+    container_name: sharetruck-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4080:80"
+
+volumes:
+  sharetruck-uploads:
