@@ -59,10 +59,14 @@ const raiseDispute = async (req, res) => {
   }
 };
 
+// Both directions — a dispute raised by this user, and one raised against
+// them (e.g. a transporter accused of a no-show has no other way to see
+// it, short of the one-time "dispute_raised" notification).
 const listMyDisputes = async (req, res) => {
   try {
-    const disputes = await Dispute.find({ raisedBy: req.auth.id })
+    const disputes = await Dispute.find({ $or: [{ raisedBy: req.auth.id }, { againstUser: req.auth.id }] })
       .populate("booking", "goodsDescription status")
+      .populate("raisedBy", "name")
       .populate("againstUser", "name")
       .sort({ createdAt: -1 });
     res.status(200).json({ success: true, disputes });
@@ -96,12 +100,24 @@ const listAllDisputes = async (req, res) => {
   }
 };
 
-// requireAdminScope("support"). A refund/payout resolution moves money
-// through the same wallet-session pattern already proven in
-// adminWalletController.adjustWallet — a straight credit, audit-logged and
-// linked back to this dispute, same "admin can issue compensation, it's on
-// the record" contract (no paired debit anywhere, by the same design as
-// wallet.adjust elsewhere in this codebase).
+// Loads a fresh copy for the 404-vs-400 distinction after an atomic claim
+// misses — same pattern as adminWalletController's describeMissedClaim.
+const describeMissedClaim = async (id) => {
+  const existing = await Dispute.findById(id);
+  if (!existing) return { status: 404, msg: "Dispute not found" };
+  return { status: 400, msg: `Dispute is already ${existing.status}` };
+};
+
+// requireAdminScope("support"). The open/under_review -> resolved/rejected
+// transition is claimed atomically (findOneAndUpdate inside the same
+// transaction as the wallet credit) so two concurrent resolve calls on the
+// same dispute — a double-click, or two support-scoped admins — can't both
+// pass the "not already resolved?" check and both credit the beneficiary.
+// A refund/payout resolution moves money through the same wallet-session
+// pattern already proven in adminWalletController.adjustWallet — a straight
+// credit, audit-logged and linked back to this dispute, same "admin can
+// override but it's on the record" contract (no paired debit anywhere, by
+// the same design as wallet.adjust elsewhere in this codebase).
 const resolveDispute = async (req, res) => {
   try {
     const { error } = resolveDisputeValidation.validate(req.body);
@@ -109,55 +125,60 @@ const resolveDispute = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const dispute = await Dispute.findById(req.params.id).populate("booking");
-    if (!dispute) {
-      return res.status(404).json({ success: false, msg: "Dispute not found" });
-    }
-    if (["resolved", "rejected"].includes(dispute.status)) {
-      return res.status(400).json({ success: false, msg: `Dispute is already ${dispute.status}` });
-    }
-
     const { status, resolutionAction, resolutionAmount, resolutionNote } = req.body;
-    const before = { status: dispute.status };
 
-    let beneficiary;
-    if (resolutionAction === "refund_shipper") {
-      beneficiary = dispute.booking.shipper;
-    } else if (resolutionAction === "payout_transporter") {
-      const trip = await Trip.findById(dispute.booking.trip).select("transporter");
-      beneficiary = trip?.transporter;
-    }
+    const dispute = await withWalletSession(async (session) => {
+      const claimed = await Dispute.findOneAndUpdate(
+        { _id: req.params.id, status: { $nin: ["resolved", "rejected"] } },
+        {
+          $set: {
+            status,
+            resolutionAction,
+            resolutionAmount,
+            resolutionNote,
+            resolvedBy: req.auth.id,
+            resolvedAt: new Date(),
+          },
+        },
+        { new: true, session }
+      ).populate("booking");
+      if (!claimed) return null;
 
-    if (beneficiary) {
-      await withWalletSession(async (session) => {
+      let beneficiary;
+      if (resolutionAction === "refund_shipper") {
+        beneficiary = claimed.booking.shipper;
+      } else if (resolutionAction === "payout_transporter") {
+        const trip = await Trip.findById(claimed.booking.trip).select("transporter").session(session);
+        beneficiary = trip?.transporter;
+      }
+
+      if (beneficiary) {
         await applyWalletEntry({
           walletFilter: { ownerType: "user", user: beneficiary },
           amount: resolutionAmount,
           direction: "credit",
           type: "dispute_resolution",
-          booking: dispute.booking._id,
-          dispute: dispute._id,
+          booking: claimed.booking._id,
+          dispute: claimed._id,
           note: resolutionNote,
           createdBy: req.auth.id,
           session,
         });
-      });
-    }
+      }
 
-    dispute.status = status;
-    dispute.resolutionAction = resolutionAction;
-    dispute.resolutionAmount = resolutionAmount;
-    dispute.resolutionNote = resolutionNote;
-    dispute.resolvedBy = req.auth.id;
-    dispute.resolvedAt = new Date();
-    await dispute.save();
+      return claimed;
+    });
+
+    if (!dispute) {
+      const missed = await describeMissedClaim(req.params.id);
+      return res.status(missed.status).json({ success: false, msg: missed.msg });
+    }
 
     await logAdminAction({
       actor: req.auth.id,
       action: "dispute.resolve",
       targetType: "Dispute",
       targetId: dispute._id,
-      before,
       after: { status: dispute.status, resolutionAction, resolutionAmount },
       reason: resolutionNote,
       scope: req.auth.adminScope,

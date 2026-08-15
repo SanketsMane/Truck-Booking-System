@@ -10,6 +10,7 @@ import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input, ErrorText } from "../components/ui/Form";
+import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, formatINR, formatTons, toDateTimeInputValue } from "../utils/format";
 
@@ -25,8 +26,8 @@ export const ManageTrip = () => {
   const [editMode, setEditMode] = useState(false);
   const [departureAt, setDepartureAt] = useState("");
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState("");
-  const [pickupPoint, setPickupPoint] = useState("");
-  const [dropPoint, setDropPoint] = useState("");
+  const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
+  const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
   const [totalCapacity, setTotalCapacity] = useState("");
   const [pricePerTon, setPricePerTon] = useState("");
   const [editErrors, setEditErrors] = useState({});
@@ -37,9 +38,10 @@ export const ManageTrip = () => {
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [actioningId, setActioningId] = useState(null);
 
-  const loadTrip = () =>
+  const loadTrip = (cancelled) =>
     getTrip(id)
       .then(({ trip }) => {
+        if (cancelled?.current) return;
         setTrip(trip);
         setDepartureAt(toDateTimeInputValue(trip.departureAt));
         setEstimatedArrivalAt(trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "");
@@ -48,17 +50,43 @@ export const ManageTrip = () => {
         setTotalCapacity(String(trip.totalCapacity));
         setPricePerTon(String(trip.pricePerTon));
       })
-      .finally(() => setLoadingTrip(false));
+      .catch((error) => {
+        if (cancelled?.current) return;
+        setTrip(null);
+        toast.error(error.message || "Couldn't load this trip — check your connection and try again");
+      })
+      .finally(() => {
+        if (!cancelled?.current) setLoadingTrip(false);
+      });
 
-  const loadBookings = () =>
+  const loadBookings = (cancelled) =>
     listMyBookings({ role: "transporter", tripId: id })
-      .then(({ bookings }) => setBookings(bookings || []))
-      .catch(() => setBookings([]))
-      .finally(() => setLoadingBookings(false));
+      .then(({ bookings }) => {
+        if (!cancelled?.current) setBookings(bookings || []);
+      })
+      .catch((error) => {
+        if (cancelled?.current) return;
+        setBookings([]);
+        toast.error(error.message || "Couldn't load bookings for this trip");
+      })
+      .finally(() => {
+        if (!cancelled?.current) setLoadingBookings(false);
+      });
 
   useEffect(() => {
-    loadTrip();
-    loadBookings();
+    const cancelled = { current: false };
+    // Reset to loading on every id change (not just first mount) — this
+    // component instance is reused when navigating from managing one trip
+    // straight to another, so without this the previous trip's data would
+    // stay on screen while the new one loads.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingTrip(true);
+    setLoadingBookings(true);
+    loadTrip(cancelled);
+    loadBookings(cancelled);
+    return () => {
+      cancelled.current = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -73,8 +101,8 @@ export const ManageTrip = () => {
       errors.totalCapacity = `Can't go below the ${formatTons(bookedCapacity)} already booked`;
     }
     if (!price || price <= 0) errors.pricePerTon = "Enter a price per ton";
-    if (!pickupPoint.trim()) errors.pickupPoint = "Pickup point is required";
-    if (!dropPoint.trim()) errors.dropPoint = "Drop point is required";
+    if (!pickupPoint.address.trim()) errors.pickupPoint = "Pickup point is required";
+    if (!dropPoint.address.trim()) errors.dropPoint = "Drop point is required";
     if (!departureAt) errors.departureAt = "Pick a departure date & time";
     setEditErrors(errors);
     return Object.keys(errors).length === 0;
@@ -86,8 +114,12 @@ export const ManageTrip = () => {
     const updates = {};
     if (Number(totalCapacity) !== trip.totalCapacity) updates.totalCapacity = Number(totalCapacity);
     if (Number(pricePerTon) !== trip.pricePerTon) updates.pricePerTon = Number(pricePerTon);
-    if (pickupPoint.trim() !== trip.pickupPoint) updates.pickupPoint = pickupPoint.trim();
-    if (dropPoint.trim() !== trip.dropPoint) updates.dropPoint = dropPoint.trim();
+    if (pickupPoint.address.trim() !== trip.pickupPoint.address) {
+      updates.pickupPoint = { ...pickupPoint, address: pickupPoint.address.trim() };
+    }
+    if (dropPoint.address.trim() !== trip.dropPoint.address) {
+      updates.dropPoint = { ...dropPoint, address: dropPoint.address.trim() };
+    }
     if (departureAt !== toDateTimeInputValue(trip.departureAt)) {
       updates.departureAt = new Date(departureAt).toISOString();
     }
@@ -222,11 +254,11 @@ export const ManageTrip = () => {
               </CardRow>
               <CardRow>
                 <Muted>Pickup</Muted>
-                <span>{trip.pickupPoint}</span>
+                <span>{trip.pickupPoint.address}</span>
               </CardRow>
               <CardRow>
                 <Muted>Drop</Muted>
-                <span>{trip.dropPoint}</span>
+                <span>{trip.dropPoint.address}</span>
               </CardRow>
 
               <Row $gap={3} $wrap>
@@ -273,10 +305,10 @@ export const ManageTrip = () => {
                 <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
               </Field>
               <Field label="Pickup point" error={editErrors.pickupPoint}>
-                <Input value={pickupPoint} onChange={(e) => setPickupPoint(e.target.value)} />
+                <LocationAutocomplete value={pickupPoint} onChange={setPickupPoint} />
               </Field>
               <Field label="Drop point" error={editErrors.dropPoint}>
-                <Input value={dropPoint} onChange={(e) => setDropPoint(e.target.value)} />
+                <LocationAutocomplete value={dropPoint} onChange={setDropPoint} />
               </Field>
 
               <Row $gap={3}>

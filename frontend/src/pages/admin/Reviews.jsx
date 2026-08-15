@@ -6,6 +6,7 @@ import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../../componen
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/Spinner";
+import { Pagination } from "../../components/ui/Pagination";
 import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
 import { formatDate } from "../../utils/format";
 
@@ -25,20 +26,25 @@ const StarsCell = styled.span`
 
 export const AdminReviews = () => {
   const [ratings, setRatings] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { ratings } = await listFlaggedRatings();
-      setRatings(ratings || []);
+      const res = await listFlaggedRatings({ page, limit: 20 });
+      setRatings(res.items || []);
+      setTotal(res.total || 0);
+      setPages(res.pages || 1);
     } catch (error) {
       toast.error(error.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +85,7 @@ export const AdminReviews = () => {
             <Muted>No flagged reviews right now.</Muted>
           </EmptyState>
         ) : (
+          <>
           <TableScroll>
             <Table $minWidth="920px">
               <thead>
@@ -95,7 +102,7 @@ export const AdminReviews = () => {
               <tbody>
                 {ratings.map((r, i) => (
                   <Tr key={r._id}>
-                    <IndexTd style={{ verticalAlign: "top" }}>{i + 1}</IndexTd>
+                    <IndexTd style={{ verticalAlign: "top" }}>{(page - 1) * 20 + i + 1}</IndexTd>
                     <TopTd>
                       <div style={{ fontWeight: 600 }}>{r.rater?.name || "—"}</div>
                       <Muted>{r.rater?.mobile || "—"}</Muted>
@@ -139,6 +146,8 @@ export const AdminReviews = () => {
               </tbody>
             </Table>
           </TableScroll>
+          <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+          </>
         )}
       </Card>
     </PageContainer>

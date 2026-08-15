@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { Card } from "./Card";
 import { Button } from "./Button";
@@ -27,6 +27,10 @@ const ModalCard = styled(Card)`
   width: 100%;
   max-width: 420px;
   animation: ${scaleIn} 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:focus {
+    outline: none;
+  }
 `;
 
 export const ConfirmModal = ({
@@ -43,8 +47,8 @@ export const ConfirmModal = ({
   onCancel,
 }) => {
   const [reason, setReason] = useState("");
-
-  if (!open) return null;
+  const cardRef = useRef(null);
+  const previouslyFocused = useRef(null);
 
   const reasonMissing = requireReason && !reason.trim();
 
@@ -59,12 +63,47 @@ export const ConfirmModal = ({
     onCancel();
   };
 
+  // Moves focus into the dialog on open, restores it to whatever triggered
+  // the modal on close — a modal that traps focus visually but leaves
+  // keyboard/screen-reader focus behind on the page underneath is only
+  // half-accessible. The reason textarea already autofocuses itself when
+  // present; otherwise focus the dialog card so Tab/Escape work immediately.
+  useEffect(() => {
+    if (!open) return undefined;
+    previouslyFocused.current = document.activeElement;
+    if (!requireReason) {
+      cardRef.current?.focus();
+    }
+    return () => {
+      previouslyFocused.current?.focus?.();
+    };
+  }, [open, requireReason]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting) handleCancel();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, submitting]);
+
+  if (!open) return null;
+
   return (
     <Overlay onClick={submitting ? undefined : handleCancel}>
-      <ModalCard onClick={(e) => e.stopPropagation()}>
+      <ModalCard
+        ref={cardRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Stack $gap={3}>
           <Stack $gap={1}>
-            <SectionTitle>{title}</SectionTitle>
+            <SectionTitle id="confirm-modal-title">{title}</SectionTitle>
             {description && <Muted>{description}</Muted>}
           </Stack>
           {requireReason && (

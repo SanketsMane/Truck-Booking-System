@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import * as authApi from "../api/auth";
 import { connectSocket, disconnectSocket } from "../api/socket";
+import { listMyNotifications } from "../api/notifications";
+import { describeNotification } from "../utils/notificationCopy";
 import { setUnauthorizedHandler } from "../api/client";
 
 const AuthContext = createContext(null);
@@ -10,6 +12,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const bouncedRef = useRef(false);
 
@@ -59,14 +62,45 @@ export const AuthProvider = ({ children }) => {
     return () => setUnauthorizedHandler(null);
   }, [navigate]);
 
+  // Connects the socket for the session, seeds the unread notification
+  // count, and keeps it live from here — this is the one place "logged in"
+  // and "subscribed to this user's real-time events" naturally belong
+  // together, so any page can read unreadCount without its own socket
+  // wiring. See Navbar/DashboardShell for the badge, Notifications.jsx for
+  // clearing it.
   useEffect(() => {
-    if (user) {
-      connectSocket();
-      bouncedRef.current = false;
-    } else {
+    if (!user) {
       disconnectSocket();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUnreadCount(0);
+      return undefined;
     }
-  }, [user]);
+
+    const socket = connectSocket();
+    bouncedRef.current = false;
+
+    let cancelled = false;
+    listMyNotifications({ unreadOnly: true })
+      .then(({ notifications }) => {
+        if (!cancelled) setUnreadCount(notifications?.length || 0);
+      })
+      .catch(() => {});
+
+    const handleNewNotification = (n) => {
+      setUnreadCount((count) => count + 1);
+      const { text, to } = describeNotification(n);
+      toast.info(text, to ? { onClick: () => navigate(to) } : undefined);
+    };
+    socket.on("notification:new", handleNewNotification);
+
+    return () => {
+      cancelled = true;
+      socket.off("notification:new", handleNewNotification);
+    };
+  }, [user, navigate]);
+
+  const clearUnreadCount = useCallback(() => setUnreadCount(0), []);
+  const decrementUnreadCount = useCallback(() => setUnreadCount((count) => Math.max(0, count - 1)), []);
 
   const logout = useCallback(async () => {
     try {
@@ -76,7 +110,16 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const value = { user, setUser, loading, refreshUser, logout };
+  const value = {
+    user,
+    setUser,
+    loading,
+    refreshUser,
+    logout,
+    unreadCount,
+    clearUnreadCount,
+    decrementUnreadCount,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

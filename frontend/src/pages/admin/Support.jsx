@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Select } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/Spinner";
+import { Pagination } from "../../components/ui/Pagination";
 import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
 import { formatDateTime } from "../../utils/format";
 
@@ -23,13 +24,18 @@ const MessageText = styled.div`
 export const Support = () => {
   const [status, setStatus] = useState("open");
   const [requests, setRequests] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState(null);
 
   const load = async () => {
     try {
-      const { requests } = await supportApi.listAllSupportRequests({ status: status || undefined });
-      setRequests(requests);
+      const res = await supportApi.listAllSupportRequests({ page, limit: 20, status: status || undefined });
+      setRequests(res.items || []);
+      setTotal(res.total || 0);
+      setPages(res.pages || 1);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -39,10 +45,16 @@ export const Support = () => {
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       await load();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [page, status]);
+
+  const handleStatusChange = (e) => {
+    setStatus(e.target.value);
+    setPage(1);
+  };
 
   const handleResolve = async (id) => {
     setResolvingId(id);
@@ -61,7 +73,7 @@ export const Support = () => {
     <PageContainer style={{ maxWidth: 1080 }}>
       <Row style={{ justifyContent: "space-between" }} $wrap>
         <PageTitle>Support Requests</PageTitle>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}>
+        <Select value={status} onChange={handleStatusChange} style={{ maxWidth: 160 }}>
           <option value="open">Open</option>
           <option value="resolved">Resolved</option>
           <option value="">All</option>
@@ -78,6 +90,7 @@ export const Support = () => {
             <Muted>No {status || ""} support requests.</Muted>
           </EmptyState>
         ) : (
+          <>
           <TableScroll>
             <Table $minWidth="900px">
               <thead>
@@ -95,7 +108,7 @@ export const Support = () => {
               <tbody>
                 {requests.map((r, i) => (
                   <Tr key={r._id}>
-                    <IndexTd style={{ verticalAlign: "top" }}>{i + 1}</IndexTd>
+                    <IndexTd style={{ verticalAlign: "top" }}>{(page - 1) * 20 + i + 1}</IndexTd>
                     <TopTd>
                       <strong>{r.subject}</strong>
                     </TopTd>
@@ -132,6 +145,8 @@ export const Support = () => {
               </tbody>
             </Table>
           </TableScroll>
+          <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+          </>
         )}
       </Card>
     </PageContainer>

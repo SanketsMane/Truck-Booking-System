@@ -10,6 +10,7 @@ import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { CityAutocomplete } from "../components/ui/CityAutocomplete";
+import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { Spinner } from "../components/ui/Spinner";
 import { formatINR, formatTons, formatCbm, toDateTimeInputValue } from "../utils/format";
 
@@ -66,8 +67,8 @@ export const PostTrip = () => {
   const [volumeCbm, setVolumeCbm] = useState("");
   const [availableVolumeCbm, setAvailableVolumeCbm] = useState("");
   const [pricePerTon, setPricePerTon] = useState("");
-  const [pickupPoint, setPickupPoint] = useState("");
-  const [dropPoint, setDropPoint] = useState("");
+  const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
+  const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
   const [capacityErrors, setCapacityErrors] = useState({});
 
   const [submitting, setSubmitting] = useState(false);
@@ -127,8 +128,8 @@ export const PostTrip = () => {
       else if (vol && availVol > vol) errors.availableVolumeCbm = "Can't exceed total volume";
     }
     if (!price || price <= 0) errors.pricePerTon = "Enter a price per ton";
-    if (!pickupPoint.trim()) errors.pickupPoint = "Pickup point is required";
-    if (!dropPoint.trim()) errors.dropPoint = "Drop point is required";
+    if (!pickupPoint.address.trim()) errors.pickupPoint = "Pickup point is required";
+    if (!dropPoint.address.trim()) errors.dropPoint = "Drop point is required";
     setCapacityErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -143,8 +144,8 @@ export const PostTrip = () => {
         toCity: toCity.trim(),
         departureAt: new Date(departureAt).toISOString(),
         estimatedArrivalAt: estimatedArrivalAt ? new Date(estimatedArrivalAt).toISOString() : undefined,
-        pickupPoint: pickupPoint.trim(),
-        dropPoint: dropPoint.trim(),
+        pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
+        dropPoint: { ...dropPoint, address: dropPoint.address.trim() },
         totalCapacity: Number(totalCapacity),
         availableCapacity: Number(availableCapacity),
         volumeCbm: volumeCbm.trim() ? Number(volumeCbm) : undefined,
@@ -351,17 +352,17 @@ export const PostTrip = () => {
                 <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
               </Field>
               <Field label="Pickup point" error={capacityErrors.pickupPoint}>
-                <Input
+                <LocationAutocomplete
                   placeholder="e.g. Hadapsar warehouse, near ring road"
                   value={pickupPoint}
-                  onChange={(e) => setPickupPoint(e.target.value)}
+                  onChange={setPickupPoint}
                 />
               </Field>
               <Field label="Drop point" error={capacityErrors.dropPoint}>
-                <Input
+                <LocationAutocomplete
                   placeholder="e.g. APMC yard, Nashik"
                   value={dropPoint}
-                  onChange={(e) => setDropPoint(e.target.value)}
+                  onChange={setDropPoint}
                 />
               </Field>
               <Row $gap={3}>
@@ -428,11 +429,11 @@ export const PostTrip = () => {
                 </CardRow>
                 <CardRow>
                   <Muted>Pickup</Muted>
-                  <span>{pickupPoint}</span>
+                  <span>{pickupPoint.address}</span>
                 </CardRow>
                 <CardRow>
                   <Muted>Drop</Muted>
-                  <span>{dropPoint}</span>
+                  <span>{dropPoint.address}</span>
                 </CardRow>
               </Stack>
 

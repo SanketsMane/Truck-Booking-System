@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { listMyDisputes } from "../api/disputes";
+import { useAuth } from "../context/AuthContext";
 import { PageContainer, PageTitle, Stack, Row, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
@@ -21,6 +22,7 @@ const CATEGORY_LABELS = {
 const badgeStatus = (status) => (status === "resolved" ? "completed" : status === "rejected" ? "rejected" : "pending");
 
 export const Disputes = () => {
+  const { user } = useAuth();
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,32 +51,36 @@ export const Disputes = () => {
         ) : disputes.length === 0 ? (
           <EmptyState>
             <Muted>
-              You haven't raised any disputes. If something went wrong on a completed booking, open it and use
-              "Report an issue".
+              No disputes involving you yet. If something went wrong on a completed booking, open it and use "Report
+              an issue".
             </Muted>
           </EmptyState>
         ) : (
           <Stack $gap={3}>
-            {disputes.map((d) => (
-              <Card key={d._id}>
-                <Stack $gap={2}>
-                  <CardRow>
-                    <strong>{CATEGORY_LABELS[d.category] || d.category}</strong>
-                    <StatusBadge status={badgeStatus(d.status)}>{d.status.replace(/_/g, " ")}</StatusBadge>
-                  </CardRow>
-                  <Muted>{d.description}</Muted>
-                  {d.booking?.goodsDescription && <Muted>Booking: {d.booking.goodsDescription}</Muted>}
-                  <Muted>Against: {d.againstUser?.name || "—"}</Muted>
-                  <Muted>Raised {formatDateTime(d.createdAt)}</Muted>
-                  {(d.status === "resolved" || d.status === "rejected") && (
-                    <Stack $gap={1} style={{ marginTop: 4 }}>
-                      {d.resolutionNote && <Muted>Resolution: {d.resolutionNote}</Muted>}
-                      {d.resolutionAmount > 0 && <Muted>Amount: {formatINR(d.resolutionAmount)}</Muted>}
-                    </Stack>
-                  )}
-                </Stack>
-              </Card>
-            ))}
+            {disputes.map((d) => {
+              const raisedByMe = String(d.raisedBy?._id) === String(user?.id);
+              return (
+                <Card key={d._id}>
+                  <Stack $gap={2}>
+                    <CardRow>
+                      <strong>{CATEGORY_LABELS[d.category] || d.category}</strong>
+                      <StatusBadge status={badgeStatus(d.status)}>{d.status.replace(/_/g, " ")}</StatusBadge>
+                    </CardRow>
+                    <Muted>{raisedByMe ? "Raised by you" : `Raised against you by ${d.raisedBy?.name || "the other party"}`}</Muted>
+                    <Muted>{d.description}</Muted>
+                    {d.booking?.goodsDescription && <Muted>Booking: {d.booking.goodsDescription}</Muted>}
+                    {raisedByMe && <Muted>Against: {d.againstUser?.name || "—"}</Muted>}
+                    <Muted>Raised {formatDateTime(d.createdAt)}</Muted>
+                    {(d.status === "resolved" || d.status === "rejected") && (
+                      <Stack $gap={1} style={{ marginTop: 4 }}>
+                        {d.resolutionNote && <Muted>Resolution: {d.resolutionNote}</Muted>}
+                        {d.resolutionAmount > 0 && <Muted>Amount: {formatINR(d.resolutionAmount)}</Muted>}
+                      </Stack>
+                    )}
+                  </Stack>
+                </Card>
+              );
+            })}
           </Stack>
         )}
       </Stack>

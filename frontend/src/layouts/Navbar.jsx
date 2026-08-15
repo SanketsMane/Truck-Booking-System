@@ -75,10 +75,27 @@ const NavItem = styled(NavLink)`
 `;
 
 const IconLink = styled(NavItem)`
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
+`;
+
+const UnreadBadge = styled.span`
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.color.danger};
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
 `;
 
 const Actions = styled.div`
@@ -88,7 +105,7 @@ const Actions = styled.div`
 `;
 
 export const Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, unreadCount } = useAuth();
   const navigate = useNavigate();
   const barRef = useRef(null);
 
@@ -139,8 +156,9 @@ export const Navbar = () => {
       <Actions>
         {user ? (
           <>
-            <IconLink to="/notifications" aria-label="Notifications">
+            <IconLink to="/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}>
               <Bell size={18} strokeWidth={2.2} />
+              {unreadCount > 0 && <UnreadBadge>{unreadCount > 9 ? "9+" : unreadCount}</UnreadBadge>}
             </IconLink>
             <NavItem to="/profile">{user.name?.split(" ")[0] || "Profile"}</NavItem>
             <Button $variant="ghost" $size="sm" onClick={handleLogout}>

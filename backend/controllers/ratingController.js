@@ -6,6 +6,7 @@ const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const { submitRatingValidation, moderateRatingValidation } = require("../validators/ratingValidation");
 const sendServerError = require("../utils/sendServerError");
+const { getPagination, paginatedResponse } = require("../utils/paginate");
 
 // Recomputed from the source ratings rather than incremented in place, so a
 // hidden/removed review can never leave the average drifted.
@@ -85,11 +86,17 @@ const listRatingsForUser = async (req, res) => {
 // (e.g. listUsers/listTrips): compact name+mobile projections, no full docs.
 const listFlaggedRatings = async (req, res) => {
   try {
-    const ratings = await Rating.find({ flagged: true })
-      .populate("rater", "name mobile")
-      .populate("ratee", "name mobile")
-      .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, ratings });
+    const { page, limit, skip } = getPagination(req.query);
+    const [ratings, total] = await Promise.all([
+      Rating.find({ flagged: true })
+        .populate("rater", "name mobile")
+        .populate("ratee", "name mobile")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Rating.countDocuments({ flagged: true }),
+    ]);
+    res.status(200).json({ success: true, ...paginatedResponse(ratings, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "ratingController");
   }

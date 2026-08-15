@@ -12,6 +12,7 @@ const { accountStatusEmail } = require("../emailTemplates/templates");
 const { toCsv } = require("../utils/csv");
 const escapeRegex = require("../utils/escapeRegex");
 const sendServerError = require("../utils/sendServerError");
+const { getPagination, paginatedResponse } = require("../utils/paginate");
 const {
   setUserStatusValidation,
   forceCancelBookingValidation,
@@ -74,6 +75,7 @@ const getDashboard = async (req, res) => {
 const listUsers = async (req, res) => {
   try {
     const { search, role, status } = req.query;
+    const { page, limit, skip } = getPagination(req.query);
     const filter = {};
     if (role) filter.roles = role;
     if (status) filter.status = status;
@@ -82,8 +84,11 @@ const listUsers = async (req, res) => {
       filter.$or = [{ name: re }, { mobile: re }, { email: re }];
     }
 
-    const users = await User.find(filter).select("-otp").sort({ createdAt: -1 }).limit(100);
-    res.status(200).json({ success: true, users });
+    const [users, total] = await Promise.all([
+      User.find(filter).select("-otp").sort({ createdAt: -1 }).skip(skip).limit(limit),
+      User.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, ...paginatedResponse(users, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -230,6 +235,7 @@ const listLiveTrips = async (req, res) => {
 const listTrucks = async (req, res) => {
   try {
     const { search, status } = req.query;
+    const { page, limit, skip } = getPagination(req.query);
     const filter = {};
     if (status) filter.status = status;
     if (search) {
@@ -237,9 +243,12 @@ const listTrucks = async (req, res) => {
       filter.$or = [{ regNumber: re }, { truckType: re }];
     }
 
-    const trucks = await Truck.find(filter).populate("owner", "name mobile").sort({ createdAt: -1 }).limit(100);
+    const [trucks, total] = await Promise.all([
+      Truck.find(filter).populate("owner", "name mobile").sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Truck.countDocuments(filter),
+    ]);
 
-    res.status(200).json({ success: true, trucks });
+    res.status(200).json({ success: true, ...paginatedResponse(trucks, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -249,6 +258,7 @@ const listTrucks = async (req, res) => {
 const listTrips = async (req, res) => {
   try {
     const { search, status } = req.query;
+    const { page, limit, skip } = getPagination(req.query);
     const filter = {};
     if (status) filter.status = status;
     if (search) {
@@ -256,13 +266,17 @@ const listTrips = async (req, res) => {
       filter.$or = [{ fromCity: re }, { toCity: re }];
     }
 
-    const trips = await Trip.find(filter)
-      .populate("truck", "regNumber truckType")
-      .populate("transporter", "name mobile")
-      .sort({ createdAt: -1 })
-      .limit(100);
+    const [trips, total] = await Promise.all([
+      Trip.find(filter)
+        .populate("truck", "regNumber truckType")
+        .populate("transporter", "name mobile")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Trip.countDocuments(filter),
+    ]);
 
-    res.status(200).json({ success: true, trips });
+    res.status(200).json({ success: true, ...paginatedResponse(trips, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -335,19 +349,40 @@ const deactivateTrip = async (req, res) => {
   }
 };
 
-// FR-11.6 — search all bookings across statuses.
+// FR-11.6 — search all bookings across statuses. `search` spans shipper
+// name/mobile, transporter name/mobile, and the trip's cities — none of
+// which live on Booking itself, so it's resolved as two ID lookups first
+// (users, then trips — a trip matches on its own cities or on having a
+// matching transporter) rather than an aggregation pipeline, to stay
+// consistent with the plain find().populate() style every other admin list
+// in this file uses.
 const listBookings = async (req, res) => {
   try {
+    const { page, limit, skip } = getPagination(req.query);
+    const { search } = req.query;
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const bookings = await Booking.find(filter)
-      .populate("shipper", "name mobile")
-      .populate({ path: "trip", populate: { path: "transporter", select: "name mobile" } })
-      .sort({ createdAt: -1 })
-      .limit(100);
+    if (search) {
+      const re = new RegExp(escapeRegex(search), "i");
+      const matchingUserIds = await User.find({ $or: [{ name: re }, { mobile: re }] }).distinct("_id");
+      const matchingTripIds = await Trip.find({
+        $or: [{ fromCity: re }, { toCity: re }, { transporter: { $in: matchingUserIds } }],
+      }).distinct("_id");
+      filter.$or = [{ goodsDescription: re }, { shipper: { $in: matchingUserIds } }, { trip: { $in: matchingTripIds } }];
+    }
 
-    res.status(200).json({ success: true, bookings });
+    const [bookings, total] = await Promise.all([
+      Booking.find(filter)
+        .populate("shipper", "name mobile")
+        .populate({ path: "trip", populate: { path: "transporter", select: "name mobile" } })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Booking.countDocuments(filter),
+    ]);
+
+    res.status(200).json({ success: true, ...paginatedResponse(bookings, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }

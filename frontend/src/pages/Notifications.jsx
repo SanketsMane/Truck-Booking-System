@@ -3,60 +3,14 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import * as notificationsApi from "../api/notifications";
+import { getSocket } from "../api/socket";
+import { useAuth } from "../context/AuthContext";
+import { describeNotification as describe } from "../utils/notificationCopy";
 import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Spinner";
 import { formatRelative } from "../utils/format";
-
-// Human-readable copy + a link target for each notification type, keyed off
-// the small payload the backend attaches. Falls back gracefully for any
-// type/payload shape we haven't special-cased.
-const describe = (n) => {
-  const p = n.payload || {};
-  switch (n.type) {
-    case "new_booking_request":
-      return { text: "New booking request on your trip", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "booking_confirmed":
-      return { text: "Your booking was confirmed", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "booking_rejected":
-      return {
-        text: `Your booking was rejected${p.reason ? ` — ${p.reason}` : ""}`,
-        to: p.bookingId && `/bookings/${p.bookingId}`,
-      };
-    case "booking_expired":
-      return { text: "A booking request expired", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "booking_cancelled":
-      return { text: "A booking was cancelled", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "booking_pickup_confirmed":
-      return { text: "Pickup was confirmed for your booking", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "booking_completed":
-      return { text: "Your booking is complete", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "rating_prompt":
-      return { text: "Rate how your recent trip went", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "new_rating":
-      return { text: `You received a ${p.stars}-star rating`, to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "new_chat_message":
-      return { text: "New message", to: p.bookingId && `/bookings/${p.bookingId}` };
-    case "saved_search_match":
-      return {
-        text: `New trip found: ${p.fromCity || "?"} → ${p.toCity || "?"}`,
-        to: p.tripId && `/trips/${p.tripId}`,
-      };
-    case "truck_status_changed":
-      return { text: `Truck ${p.regNumber || ""} is now ${p.status}`.trim(), to: "/trucks" };
-    case "verification_status_changed":
-      return { text: `Your ${p.type || ""} verification is now ${p.status}`.trim(), to: "/profile" };
-    case "account_status_changed":
-      return { text: `Your account status changed to ${p.status}`, to: "/profile" };
-    case "dispute_raised":
-      return { text: "A dispute was raised on one of your bookings", to: "/disputes" };
-    case "dispute_resolved":
-      return { text: `Your dispute was ${p.status || "resolved"}`, to: "/disputes" };
-    default:
-      return { text: n.type?.replace(/_/g, " ") || "Notification", to: null };
-  }
-};
 
 const Item = styled(Card)`
   cursor: pointer;
@@ -108,6 +62,7 @@ export const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
   const navigate = useNavigate();
+  const { clearUnreadCount, decrementUnreadCount } = useAuth();
 
   const load = async () => {
     try {
@@ -121,9 +76,24 @@ export const Notifications = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       await load();
     })();
+
+    // Live updates while this page is open — the same event the navbar
+    // badge listens for (see AuthContext) — rather than only reflecting
+    // what was true at mount time.
+    const socket = getSocket();
+    const handleNewNotification = () => {
+      if (!cancelled) load();
+    };
+    socket?.on("notification:new", handleNewNotification);
+
+    return () => {
+      cancelled = true;
+      socket?.off("notification:new", handleNewNotification);
+    };
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
@@ -134,6 +104,7 @@ export const Notifications = () => {
       setNotifications((prev) =>
         prev.map((x) => (x._id === n._id ? { ...x, readAt: new Date().toISOString() } : x))
       );
+      decrementUnreadCount();
       try {
         await notificationsApi.markNotificationRead(n._id);
       } catch {
@@ -148,6 +119,7 @@ export const Notifications = () => {
     try {
       await notificationsApi.markAllNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+      clearUnreadCount();
     } catch (error) {
       toast.error(error.message);
     } finally {

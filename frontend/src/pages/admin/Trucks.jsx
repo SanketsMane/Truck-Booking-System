@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { listAdminTrucks } from "../../api/admin";
@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/Spinner";
+import { Pagination } from "../../components/ui/Pagination";
 import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
 import { formatDateTime, formatTons } from "../../utils/format";
 
@@ -19,24 +20,39 @@ export const Trucks = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [trucks, setTrucks] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { trucks } = await listAdminTrucks({ search: search || undefined, status: status || undefined });
-      setTrucks(trucks);
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [search, status]);
-
   useEffect(() => {
-    const t = setTimeout(load, 350);
-    return () => clearTimeout(t);
-  }, [load]);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      setLoading(true);
+      listAdminTrucks({ page, limit: 20, search: search || undefined, status: status || undefined })
+        .then((res) => {
+          if (cancelled) return;
+          setTrucks(res.items || []);
+          setTotal(res.total || 0);
+          setPages(res.pages || 1);
+        })
+        .catch((error) => {
+          if (!cancelled) toast.error(error.message);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [page, search, status]);
+
+  const handleFilterChange = (setter) => (e) => {
+    setter(e.target.value);
+    setPage(1);
+  };
 
   return (
     <PageContainer style={{ maxWidth: 1180 }}>
@@ -47,10 +63,10 @@ export const Trucks = () => {
           <Input
             placeholder="Search by reg. number or truck type…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleFilterChange(setSearch)}
             style={{ maxWidth: 280 }}
           />
-          <Select value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 170 }}>
+          <Select value={status} onChange={handleFilterChange(setStatus)} style={{ maxWidth: 170 }}>
             <option value="">All statuses</option>
             <option value="pending">Pending</option>
             <option value="verified">Verified</option>
@@ -67,47 +83,50 @@ export const Trucks = () => {
             <Muted>No trucks match these filters.</Muted>
           </EmptyState>
         ) : (
-          <TableScroll>
-            <Table $minWidth="820px">
-              <thead>
-                <tr>
-                  <IndexTh>#</IndexTh>
-                  <Th>Reg. number</Th>
-                  <Th>Type</Th>
-                  <Th>Capacity</Th>
-                  <Th>Owner</Th>
-                  <Th>Registered</Th>
-                  <Th>Status</Th>
-                  <Th />
-                </tr>
-              </thead>
-              <tbody>
-                {trucks.map((t, i) => (
-                  <Tr key={t._id}>
-                    <IndexTd>{i + 1}</IndexTd>
-                    <Td>{t.regNumber}</Td>
-                    <Td>
-                      {t.truckType}
-                      {t.bodyType ? ` · ${t.bodyType}` : ""}
-                    </Td>
-                    <Td>{formatTons(t.totalCapacity)}</Td>
-                    <Td>{t.owner?.name || t.owner?.mobile || "—"}</Td>
-                    <Td>{formatDateTime(t.createdAt)}</Td>
-                    <Td>
-                      <StatusBadge status={t.status} />
-                    </Td>
-                    <Td>
-                      {t.owner && (
-                        <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
-                          View owner
-                        </Button>
-                      )}
-                    </Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableScroll>
+          <>
+            <TableScroll>
+              <Table $minWidth="820px">
+                <thead>
+                  <tr>
+                    <IndexTh>#</IndexTh>
+                    <Th>Reg. number</Th>
+                    <Th>Type</Th>
+                    <Th>Capacity</Th>
+                    <Th>Owner</Th>
+                    <Th>Registered</Th>
+                    <Th>Status</Th>
+                    <Th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {trucks.map((t, i) => (
+                    <Tr key={t._id}>
+                      <IndexTd>{(page - 1) * 20 + i + 1}</IndexTd>
+                      <Td>{t.regNumber}</Td>
+                      <Td>
+                        {t.truckType}
+                        {t.bodyType ? ` · ${t.bodyType}` : ""}
+                      </Td>
+                      <Td>{formatTons(t.totalCapacity)}</Td>
+                      <Td>{t.owner?.name || t.owner?.mobile || "—"}</Td>
+                      <Td>{formatDateTime(t.createdAt)}</Td>
+                      <Td>
+                        <StatusBadge status={t.status} />
+                      </Td>
+                      <Td>
+                        {t.owner && (
+                          <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
+                            View owner
+                          </Button>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableScroll>
+            <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+          </>
         )}
       </Card>
     </PageContainer>

@@ -9,17 +9,17 @@ const { signupUser, makeAdmin, submitVerification } = require("../helpers");
 // whole point is that each step's *output* is valid input for the next.
 it("walks the full shipper/transporter booking lifecycle", async () => {
   const { agent: transporterAgent, user: transporter } = await signupUser(app, {
-    mobile: "9111111111",
+    email: "transporter@happypath.test",
     name: "Test Transporter",
     roles: ["transporter"],
   });
   const { agent: shipperAgent, user: shipper } = await signupUser(app, {
-    mobile: "9222222222",
+    email: "shipper@happypath.test",
     name: "Test Shipper",
     roles: ["shipper"],
   });
   const { agent: adminAgent, user: adminUser } = await signupUser(app, {
-    mobile: "9333333333",
+    email: "admin@happypath.test",
     name: "Test Admin",
   });
   await makeAdmin(adminUser, "full");
@@ -60,8 +60,8 @@ it("walks the full shipper/transporter booking lifecycle", async () => {
     fromCity: "Pune",
     toCity: "Nashik",
     departureAt,
-    pickupPoint: "Pune warehouse",
-    dropPoint: "Nashik yard",
+    pickupPoint: { address: "Pune warehouse" },
+    dropPoint: { address: "Nashik yard" },
     totalCapacity: 20,
     availableCapacity: 20,
     pricePerTon: 1000,

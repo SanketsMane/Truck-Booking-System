@@ -45,6 +45,11 @@ export const useLocationBroadcaster = (tripId) => {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
+        // A successful fix proves GPS has recovered — clear any earlier
+        // "couldn't determine position" error even if this particular tick
+        // gets throttled below and never actually posts.
+        setError(null);
+
         const now = Date.now();
         if (now - lastSentAtRef.current < MIN_POST_INTERVAL_MS) return;
         lastSentAtRef.current = now;

@@ -93,6 +93,7 @@ const TopBarActions = styled.div`
 `;
 
 const IconLinkButton = styled(Link)`
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -105,6 +106,22 @@ const IconLinkButton = styled(Link)`
     background: ${({ theme }) => theme.color.surfaceRaised};
     color: ${({ theme }) => theme.color.text};
   }
+`;
+
+const UnreadBadge = styled.span`
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.color.danger};
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
 `;
 
 const UserName = styled.span`
@@ -246,7 +263,7 @@ const Content = styled.main`
 // list without duplicating ~250 lines of layout code per role.
 export const DashboardShell = ({ nav, storageKey, brandTo = "/", tag, navSectionLabel = "Menu" }) => {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, unreadCount } = useAuth();
   const navigate = useNavigate();
 
   const [collapsed, setCollapsed] = useState(() => {
@@ -294,8 +311,9 @@ export const DashboardShell = ({ nav, storageKey, brandTo = "/", tag, navSection
         <TopBarSpacer />
 
         <TopBarActions>
-          <IconLinkButton to="/notifications" aria-label="Notifications">
+          <IconLinkButton to="/notifications" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}>
             <Bell size={17} strokeWidth={2.2} />
+            {unreadCount > 0 && <UnreadBadge>{unreadCount > 9 ? "9+" : unreadCount}</UnreadBadge>}
           </IconLinkButton>
           <UserName>{user?.name || "Account"}</UserName>
           <LogoutButton type="button" onClick={handleLogout}>

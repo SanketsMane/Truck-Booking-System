@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const locationPointSchema = require("./locationPointSchema");
 
 const bookingSchema = new mongoose.Schema(
   {
@@ -38,11 +39,7 @@ const bookingSchema = new mongoose.Schema(
       trim: true,
     },
 
-    pickupPoint: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    pickupPoint: locationPointSchema(),
 
     priceEstimate: {
       type: Number,

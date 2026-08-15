@@ -413,7 +413,7 @@ export const BookingDetail = () => {
           <Grid $cols={2} $colsTablet={4} $gap={4} style={{ marginTop: 20 }}>
             <SummaryItem label="Capacity booked" value={`${booking.capacityRequested} tons`} />
             <SummaryItem label="Price estimate" value={`₹${booking.priceEstimate}`} />
-            <SummaryItem label="Pickup point" value={booking.pickupPoint || "—"} />
+            <SummaryItem label="Pickup point" value={booking.pickupPoint?.address || "—"} />
             <SummaryItem
               label="Truck"
               value={`${trip.truck?.truckType || "—"}${trip.truck?.regNumber ? ` · ${trip.truck.regNumber}` : ""}`}

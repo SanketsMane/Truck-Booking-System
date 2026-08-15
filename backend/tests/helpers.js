@@ -13,14 +13,14 @@ const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 // Signs up (or logs into) a user via the real OTP flow — MASTER_OTP bypass,
 // same as manual dev testing — and returns a supertest agent with the
 // session cookie already attached, so callers just do agent.get(...) etc.
-const signupUser = async (app, { mobile, name, roles = [] }) => {
+const signupUser = async (app, { email, name, roles = [] }) => {
   const agent = request.agent(app);
-  await agent.post("/auth/request-otp").send({ mobile });
-  const res = await agent.post("/auth/verify-otp").send({ mobile, otp: MASTER_OTP, name, roles });
+  await agent.post("/auth/request-otp").send({ email });
+  const res = await agent.post("/auth/verify-otp").send({ email, otp: MASTER_OTP, name, roles });
   if (!res.body.success) {
-    throw new Error(`signupUser(${mobile}) failed: ${res.body.msg}`);
+    throw new Error(`signupUser(${email}) failed: ${res.body.msg}`);
   }
-  const user = await User.findOne({ mobile });
+  const user = await User.findOne({ email });
   return { agent, user };
 };
 
@@ -91,8 +91,8 @@ const postTestTrip = async (transporterAgent, overrides = {}) => {
     fromCity: overrides.fromCity || "Pune",
     toCity: overrides.toCity || "Nashik",
     departureAt,
-    pickupPoint: overrides.pickupPoint || "Pune warehouse",
-    dropPoint: overrides.dropPoint || "Nashik yard",
+    pickupPoint: overrides.pickupPoint || { address: "Pune warehouse" },
+    dropPoint: overrides.dropPoint || { address: "Nashik yard" },
     totalCapacity: overrides.totalCapacity || 20,
     availableCapacity: overrides.availableCapacity ?? overrides.totalCapacity ?? 20,
     pricePerTon: overrides.pricePerTon || 1000,

@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
 const mongoose = require("mongoose");
+const sendServerError = require("./utils/sendServerError");
 
 // Must run before any route file below is required — several modules
 // (e.g. utils/webPush.js, transitively required via notify.js) read
@@ -41,6 +42,18 @@ const metaRoutes = require("./routes/metaRoutes");
 const pushRoutes = require("./routes/pushRoutes");
 
 const app = express();
+
+// Production runs behind exactly one reverse proxy (nginx — see
+// deploy/nginx/sharetruck.conf), which sets X-Forwarded-For. Without this,
+// req.ip resolves to the proxy's own address for every request, and every
+// rate limiter below ends up keyed on one shared bucket for the whole site
+// instead of per client. Trusting exactly one hop (not `true`, which trusts
+// the whole chain) means a client still can't spoof this header past the
+// proxy. Left unset in dev/test, where there's no proxy in front — trusting
+// a hop that doesn't exist would let a client set its own X-Forwarded-For.
+if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+}
 
 // Security headers. CSP is skipped — this is a pure JSON API, not an HTML
 // app, so a content policy has nothing meaningful to restrict here; CORP is
@@ -119,6 +132,18 @@ app.use("/wallet", walletRoutes);
 app.use("/webhooks", webhookRoutes);
 app.use("/meta", metaRoutes);
 app.use("/push", pushRoutes);
+
+// Global error handler — must be the last middleware. Covers errors that
+// happen before any controller's own try/catch can run (a malformed JSON
+// body throws inside express.json() itself, above), so they get this app's
+// normal JSON error shape instead of Express's default HTML error page.
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
+        return res.status(400).json({ success: false, msg: "Malformed request body" });
+    }
+    sendServerError(res, err, "unhandledError");
+});
 
 // No listen() / connectDB() / startScheduler() here — this module is
 // consumed two ways: server.js (real process — see there for those three

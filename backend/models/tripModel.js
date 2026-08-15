@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const locationPointSchema = require("./locationPointSchema");
 
 const tripSchema = new mongoose.Schema(
   {
@@ -35,17 +36,9 @@ const tripSchema = new mongoose.Schema(
       type: Date,
     },
 
-    pickupPoint: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    pickupPoint: locationPointSchema(),
 
-    dropPoint: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    dropPoint: locationPointSchema(),
 
     totalCapacity: {
       type: Number,

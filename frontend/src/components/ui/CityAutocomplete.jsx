@@ -132,6 +132,8 @@ export const CityAutocomplete = ({ id, value, onChange, placeholder, autoFocus }
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
+        aria-controls={`${id}-listbox`}
+        aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
         placeholder={placeholder}
         value={value}
         autoFocus={autoFocus}
@@ -140,7 +142,7 @@ export const CityAutocomplete = ({ id, value, onChange, placeholder, autoFocus }
         onKeyDown={handleKeyDown}
       />
       {open && (loading || suggestions.length > 0) && (
-        <Dropdown role="listbox">
+        <Dropdown role="listbox" id={`${id}-listbox`}>
           {loading && suggestions.length === 0 ? (
             <EmptyOption>Searching…</EmptyOption>
           ) : suggestions.length === 0 ? (
@@ -149,6 +151,7 @@ export const CityAutocomplete = ({ id, value, onChange, placeholder, autoFocus }
             suggestions.map((city, i) => (
               <Option
                 key={city}
+                id={`${id}-option-${i}`}
                 role="option"
                 aria-selected={i === activeIndex}
                 $active={i === activeIndex}

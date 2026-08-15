@@ -35,13 +35,6 @@ export const roadDash = keyframes`
   to { background-position: -48px 0; }
 `;
 
-// Puff of exhaust/dust rising and fading behind the truck.
-export const puff = keyframes`
-  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  35% { opacity: 0.5; }
-  100% { opacity: 0; transform: translate(-10px, -8px) scale(1.1); }
-`;
-
 export const pulseSoft = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
@@ -54,13 +47,6 @@ export const dashScroll = keyframes`
   to { stroke-dashoffset: -24; }
 `;
 
-// A truck driving fully across its container, left to right, on a loop —
-// used for the decorative hero banner rather than the compact loader.
-export const driveAcross = keyframes`
-  from { transform: translateX(-15%); }
-  to { transform: translateX(115%); }
-`;
-
 export default {
   fadeInUp,
   fadeIn,
@@ -68,8 +54,6 @@ export default {
   truckBob,
   wheelSpin,
   roadDash,
-  puff,
   pulseSoft,
   dashScroll,
-  driveAcross,
 };

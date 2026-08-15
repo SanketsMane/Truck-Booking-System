@@ -16,7 +16,12 @@ const registerChatHandlers = (io, socket) => {
     socket.leave(`thread:${threadId}`);
   });
 
+  // Room membership (not a DB re-check — this fires on every keystroke) is
+  // the authorization boundary here: chat:join above only puts a socket in
+  // this room after verifying it belongs to the thread, so a socket that
+  // was never a participant was never joined and can't reach this branch.
   socket.on("chat:typing", (threadId) => {
+    if (!socket.rooms.has(`thread:${threadId}`)) return;
     socket.to(`thread:${threadId}`).emit("chat:typing", { threadId, userId: socket.auth.id });
   });
 };

@@ -3,6 +3,7 @@ const Booking = require("../models/bookingModel");
 const Trip = require("../models/tripModel");
 const { createSupportRequestValidation } = require("../validators/supportValidation");
 const sendServerError = require("../utils/sendServerError");
+const { getPagination, paginatedResponse } = require("../utils/paginate");
 
 const createSupportRequest = async (req, res) => {
   try {
@@ -54,15 +55,21 @@ const listMySupportRequests = async (req, res) => {
 // FR-11.9 — admin's basic view of support requests, tied to a user/booking.
 const listAllSupportRequests = async (req, res) => {
   try {
+    const { page, limit, skip } = getPagination(req.query);
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const requests = await SupportRequest.find(filter)
-      .populate("user", "name mobile")
-      .populate("booking", "goodsDescription status")
-      .sort({ createdAt: -1 });
+    const [requests, total] = await Promise.all([
+      SupportRequest.find(filter)
+        .populate("user", "name mobile")
+        .populate("booking", "goodsDescription status")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      SupportRequest.countDocuments(filter),
+    ]);
 
-    res.status(200).json({ success: true, requests });
+    res.status(200).json({ success: true, ...paginatedResponse(requests, total, page, limit) });
   } catch (error) {
     sendServerError(res, error, "supportController");
   }

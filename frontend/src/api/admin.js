@@ -1,14 +1,19 @@
 import { api, downloadFile } from "./client";
 
+const withPaginationParams = (path, { page, limit, ...filters } = {}) => {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") params.set(key, value);
+  });
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
+};
+
 export const getAdminDashboard = () => api.get("/admin/dashboard");
 
-export const listAdminUsers = ({ search, role, status } = {}) => {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  if (role) params.set("role", role);
-  if (status) params.set("status", status);
-  return api.get(`/admin/users?${params}`);
-};
+export const listAdminUsers = (opts) => api.get(withPaginationParams("/admin/users", opts));
 
 export const getAdminUserDetail = (id) => api.get(`/admin/users/${id}`);
 
@@ -20,25 +25,14 @@ export const setAdminRole = (id, { isAdmin, adminScope, reason }) =>
 
 export const listLiveTrips = () => api.get("/admin/live-trips");
 
-export const listAdminTrucks = ({ search, status } = {}) => {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  if (status) params.set("status", status);
-  return api.get(`/admin/trucks?${params}`);
-};
+export const listAdminTrucks = (opts) => api.get(withPaginationParams("/admin/trucks", opts));
 
-export const listAdminTrips = ({ search, status } = {}) => {
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  if (status) params.set("status", status);
-  return api.get(`/admin/trips?${params}`);
-};
+export const listAdminTrips = (opts) => api.get(withPaginationParams("/admin/trips", opts));
 
 export const deactivateAdminTrip = (id, reason) =>
   api.put(`/admin/trips/${id}/deactivate`, { reason });
 
-export const listAdminBookings = ({ status } = {}) =>
-  api.get(`/admin/bookings${status ? `?status=${status}` : ""}`);
+export const listAdminBookings = (opts) => api.get(withPaginationParams("/admin/bookings", opts));
 
 export const forceCancelAdminBooking = (id, reason) =>
   api.put(`/admin/bookings/${id}/force-cancel`, { reason });
@@ -69,17 +63,6 @@ export const testRazorpayIntegration = () => api.post("/admin/integrations/razor
 
 export const updateCommission = (commissionPercent) =>
   api.put("/admin/settings/commission", { commissionPercent });
-
-const withPaginationParams = (path, { page, limit, ...filters } = {}) => {
-  const params = new URLSearchParams();
-  if (page) params.set("page", page);
-  if (limit) params.set("limit", limit);
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") params.set(key, value);
-  });
-  const qs = params.toString();
-  return qs ? `${path}?${qs}` : path;
-};
 
 export const listAdminPayments = (opts) => api.get(withPaginationParams("/admin/payments", opts));
 

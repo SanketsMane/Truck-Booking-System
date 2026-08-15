@@ -51,22 +51,28 @@ export const UserDetail = () => {
   const [scopeDraft, setScopeDraft] = useState("");
   const [savingRole, setSavingRole] = useState(false);
 
-  const load = async () => {
+  const load = async (cancelled) => {
     try {
       const detail = await getAdminUserDetail(id);
+      if (cancelled?.current) return;
       setData(detail);
       setScopeDraft(detail.user.adminScope || "");
     } catch (error) {
+      if (cancelled?.current) return;
       toast.error(error.message);
     } finally {
-      setLoading(false);
+      if (!cancelled?.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const cancelled = { current: false };
     (async () => {
-      await load();
+      await load(cancelled);
     })();
+    return () => {
+      cancelled.current = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -138,7 +144,7 @@ export const UserDetail = () => {
               <StatusBadge status={user.status} />
             </CardRow>
             <Grid $cols={1} $colsTablet={2} $gap={2}>
-              <Muted>Mobile: {user.mobile}</Muted>
+              <Muted>Mobile: {user.mobile || "—"}</Muted>
               <Muted>Email: {user.email || "—"}</Muted>
               <Muted>City: {user.city || "—"}</Muted>
               <Muted>Joined: {formatDate(user.createdAt)}</Muted>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { Truck } from "lucide-react";
 import { getTrip } from "../api/trips";
 import { createBooking } from "../api/bookings";
 import { BASE_URL } from "../api/client";
@@ -12,24 +13,57 @@ import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input, Textarea } from "../components/ui/Form";
+import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, formatINR, formatTons, formatCbm } from "../utils/format";
 
-const PhotoFrame = styled.div`
-  border-radius: ${({ theme }) => theme.radius.md};
+const HeroPhoto = styled.div`
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  border-radius: ${({ theme }) => theme.radius.lg};
   overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    ${({ theme }) => theme.color.accentSoft} 0%,
+    ${({ theme }) => theme.color.surfaceRaised} 100%
+  );
 `;
 
-const TruckPhoto = styled.img`
+const HeroPhotoImg = styled.img`
   width: 100%;
-  max-height: 320px;
+  height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.4s ease;
+`;
 
-  ${PhotoFrame}:hover & {
-    transform: scale(1.04);
-  }
+const HeroPhotoFallback = styled.div`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.color.accentStrong};
+`;
+
+const HeaderTop = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space(4)};
+  flex-wrap: wrap;
+`;
+
+const PriceTag = styled.div`
+  text-align: right;
+  flex-shrink: 0;
+`;
+
+const PriceValue = styled.div`
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: ${({ theme }) => theme.color.accent};
+  line-height: 1.2;
 `;
 
 const CapacityBarTrack = styled.div`
@@ -45,6 +79,68 @@ const CapacityBarFill = styled.div`
   background: ${({ theme }) => theme.color.accent};
   transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 `;
+
+const RouteTimeline = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const TimelineRow = styled.div`
+  display: flex;
+  gap: 14px;
+`;
+
+const TimelineMarker = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 4px;
+`;
+
+const TimelineDot = styled.div`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ theme, $variant }) => ($variant === "drop" ? theme.color.text : theme.color.accent)};
+`;
+
+const TimelineLine = styled.div`
+  width: 2px;
+  flex: 1;
+  min-height: 26px;
+  background: ${({ theme }) => theme.color.border};
+  margin: 4px 0;
+`;
+
+const TimelineContent = styled.div`
+  padding-bottom: ${({ theme }) => theme.space(4)};
+  flex: 1;
+  min-width: 0;
+`;
+
+const Avatar = styled.div`
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) => theme.color.accentSoft};
+  color: ${({ theme }) => theme.color.accentStrong};
+  font-weight: 700;
+  font-size: 15px;
+`;
+
+const initials = (name) =>
+  (name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("") || "?";
 
 const StatusNotice = {
   full: "This trip is fully booked — no spare capacity left.",
@@ -67,7 +163,7 @@ export const TripDetail = () => {
   const [volumeRequested, setVolumeRequested] = useState("");
   const [goodsDescription, setGoodsDescription] = useState("");
   const [handlingNotes, setHandlingNotes] = useState("");
-  const [pickupPoint, setPickupPoint] = useState("");
+  const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -122,7 +218,7 @@ export const TripDetail = () => {
       }
     }
     if (!goodsDescription.trim()) nextErrors.goodsDescription = "Describe what you're shipping";
-    if (!pickupPoint.trim()) nextErrors.pickupPoint = "Pickup point is required";
+    if (!pickupPoint.address.trim()) nextErrors.pickupPoint = "Pickup point is required";
     setFormErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -134,7 +230,7 @@ export const TripDetail = () => {
         volumeRequested: trip.volumeCbm != null && volumeRequested ? Number(volumeRequested) : undefined,
         goodsDescription: goodsDescription.trim(),
         handlingNotes: handlingNotes.trim() || undefined,
-        pickupPoint: pickupPoint.trim(),
+        pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
       });
       toast.success(res.msg || "Booking request sent");
       navigate(`/bookings/${res.booking._id}`);
@@ -171,32 +267,43 @@ export const TripDetail = () => {
   return (
     <PageContainer>
       <Stack $gap={5}>
-        <Stack $gap={2}>
-          <Row $gap={3} $wrap>
-            <PageTitle>
-              {trip.fromCity} → {trip.toCity}
-            </PageTitle>
-            <StatusBadge status={trip.status} />
-          </Row>
-          <Muted>Departs {formatDateTime(trip.departureAt)}</Muted>
-          {trip.estimatedArrivalAt && <Muted>Est. arrival {formatDateTime(trip.estimatedArrivalAt)}</Muted>}
-        </Stack>
+        <HeroPhoto>
+          {trip.truck?.photos?.[0]?.url ? (
+            <HeroPhotoImg src={`${BASE_URL}${trip.truck.photos[0].url}`} alt={trip.truck?.regNumber || "Truck"} />
+          ) : (
+            <HeroPhotoFallback>
+              <Truck size={40} strokeWidth={1.8} />
+            </HeroPhotoFallback>
+          )}
+        </HeroPhoto>
 
-        <Card>
-          <Stack $gap={4}>
-            <SectionTitle>Truck &amp; capacity</SectionTitle>
-            {trip.truck?.photos?.[0]?.url && (
-              <PhotoFrame>
-                <TruckPhoto src={`${BASE_URL}${trip.truck.photos[0].url}`} alt={trip.truck?.regNumber || "Truck"} />
-              </PhotoFrame>
-            )}
-            <Row $gap={4} $wrap>
+        <Stack $gap={2}>
+          <HeaderTop>
+            <Stack $gap={2}>
+              <Row $gap={3} $wrap>
+                <PageTitle>
+                  {trip.fromCity} → {trip.toCity}
+                </PageTitle>
+                <StatusBadge status={trip.status} />
+              </Row>
+              <Muted>Departs {formatDateTime(trip.departureAt)}</Muted>
+              {trip.estimatedArrivalAt && <Muted>Est. arrival {formatDateTime(trip.estimatedArrivalAt)}</Muted>}
               <Muted>
                 {trip.truck?.truckType}
                 {trip.truck?.bodyType ? ` · ${trip.truck.bodyType}` : ""}
+                {trip.truck?.regNumber ? ` · ${trip.truck.regNumber}` : ""}
               </Muted>
-              {trip.truck?.regNumber && <Muted>{trip.truck.regNumber}</Muted>}
-            </Row>
+            </Stack>
+            <PriceTag>
+              <PriceValue>{formatINR(trip.pricePerTon)}</PriceValue>
+              <Muted>per ton</Muted>
+            </PriceTag>
+          </HeaderTop>
+        </Stack>
+
+        <Card>
+          <Stack $gap={3}>
+            <SectionTitle>Capacity</SectionTitle>
             <Stack $gap={2}>
               <CardRow>
                 <Muted>Available capacity</Muted>
@@ -216,49 +323,50 @@ export const TripDetail = () => {
                 </strong>
               </CardRow>
             )}
-            <CardRow>
-              <Muted>Price</Muted>
-              <strong>{formatINR(trip.pricePerTon)} / ton</strong>
-            </CardRow>
           </Stack>
         </Card>
 
         <Card>
           <Stack $gap={3}>
             <SectionTitle>Route</SectionTitle>
-            <CardRow>
-              <Muted>Pickup point</Muted>
-              <span>{trip.pickupPoint}</span>
-            </CardRow>
-            <CardRow>
-              <Muted>Drop point</Muted>
-              <span>{trip.dropPoint}</span>
-            </CardRow>
+            <RouteTimeline>
+              <TimelineRow>
+                <TimelineMarker>
+                  <TimelineDot $variant="pickup" />
+                  <TimelineLine />
+                </TimelineMarker>
+                <TimelineContent>
+                  <Muted>Pickup point</Muted>
+                  <div>{trip.pickupPoint.address}</div>
+                </TimelineContent>
+              </TimelineRow>
+              <TimelineRow>
+                <TimelineMarker>
+                  <TimelineDot $variant="drop" />
+                </TimelineMarker>
+                <TimelineContent style={{ paddingBottom: 0 }}>
+                  <Muted>Drop point</Muted>
+                  <div>{trip.dropPoint.address}</div>
+                </TimelineContent>
+              </TimelineRow>
+            </RouteTimeline>
           </Stack>
         </Card>
 
         <Card>
-          <Stack $gap={3}>
-            <SectionTitle>Transporter</SectionTitle>
-            <CardRow>
-              <Muted>Name</Muted>
-              <span>{trip.transporter?.name || "—"}</span>
-            </CardRow>
-            {trip.transporter?.city && (
-              <CardRow>
-                <Muted>City</Muted>
-                <span>{trip.transporter.city}</span>
-              </CardRow>
-            )}
-            <CardRow>
-              <Muted>Rating</Muted>
-              <span>
+          <SectionTitle style={{ marginBottom: 14 }}>Transporter</SectionTitle>
+          <Row $gap={3}>
+            <Avatar>{initials(trip.transporter?.name)}</Avatar>
+            <Stack $gap={1}>
+              <div style={{ fontWeight: 700 }}>{trip.transporter?.name || "—"}</div>
+              <Muted>
+                {trip.transporter?.city ? `${trip.transporter.city} · ` : ""}
                 {trip.transporter?.ratingCount
                   ? `★ ${Number(trip.transporter.ratingAvg).toFixed(1)} (${trip.transporter.ratingCount} ratings)`
                   : "No ratings yet"}
-              </span>
-            </CardRow>
-          </Stack>
+              </Muted>
+            </Stack>
+          </Row>
         </Card>
 
         {trip.transporter?._id && <ReviewList userId={trip.transporter._id} title="Reviews for this transporter" />}
@@ -326,8 +434,12 @@ export const TripDetail = () => {
                     <Textarea value={handlingNotes} onChange={(e) => setHandlingNotes(e.target.value)} />
                   </Field>
 
-                  <Field label="Pickup point" error={formErrors.pickupPoint}>
-                    <Input value={pickupPoint} onChange={(e) => setPickupPoint(e.target.value)} />
+                  <Field
+                    label="Pickup point"
+                    error={formErrors.pickupPoint}
+                    help="Defaults to the trip's pickup point — change it if you need a different spot"
+                  >
+                    <LocationAutocomplete value={pickupPoint} onChange={setPickupPoint} />
                   </Field>
 
                   <Row $gap={3}>
