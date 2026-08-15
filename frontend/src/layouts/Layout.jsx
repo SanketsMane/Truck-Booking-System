@@ -4,6 +4,7 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import MobileTabBar from "./MobileTabBar";
 import ErrorBoundary from "../components/ErrorBoundary";
+import OrganizationSchema from "../components/OrganizationSchema";
 
 const PageShell = styled.div`
   display: flex;
@@ -20,6 +21,7 @@ export const Layout = () => {
 
   return (
     <PageShell>
+      <OrganizationSchema />
       <Navbar />
       <Main>
         <ErrorBoundary resetKey={pathname}>

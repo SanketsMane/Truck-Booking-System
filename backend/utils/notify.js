@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const { emitToUser } = require("../realtime/io");
 const { NOTIFICATION_CATEGORIES } = require("../config/notificationCategories");
 const { sendPushToUser } = require("./webPush");
+const { getBrandName } = require("./brandingCache");
 
 // Mirrors frontend/src/pages/Notifications.jsx's describe() copy exactly,
 // so a push notification's body/link matches what the in-app notification
@@ -84,7 +85,7 @@ const notify = async (userId, type, payload = {}) => {
     // Fire-and-forget — sendPushToUser never throws, and a caller awaiting
     // notify() shouldn't also wait on push-service network latency.
     const { body, url } = pushCopy(type, payload);
-    sendPushToUser(userId, { title: "ShareTruck", body, url });
+    sendPushToUser(userId, { title: getBrandName(), body, url });
 
     return notification;
   } catch (error) {

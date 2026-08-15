@@ -2,6 +2,7 @@ const axios = require("axios");
 const PlatformSetting = require("../models/platformSettingModel");
 const { encrypt, decrypt } = require("./crypto");
 const { PHONE_CALLING_CODE } = require("../config/marketplaceConfig");
+const { getBrandName } = require("./brandingCache");
 
 // Provider-specific field lists, used both to validate what an admin submits
 // and to know what to mask when echoing config back to the Settings UI.
@@ -90,7 +91,7 @@ const sendSms = async (mobile, message) => {
 // provider or bad credentials surface immediately with the actual error
 // instead of a generic failure — used by the Settings page's "test" button.
 const sendTestSms = async (mobile, provider, config) => {
-  const message = "This is a test message from ShareTruck — your SMS provider is configured correctly.";
+  const message = `This is a test message from ${getBrandName()} — your SMS provider is configured correctly.`;
   switch (provider) {
     case "twilio":
       return sendViaTwilio(mobile, message, config);

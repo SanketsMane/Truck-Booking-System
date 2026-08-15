@@ -4,11 +4,15 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const connectDB = require("./config/db");
 const checkNotificationProviders = require("./config/checkProviders");
+const { refreshBrandingCache } = require("./utils/brandingCache");
 const initSocket = require("./realtime/socket");
 const startScheduler = require("./jobs/scheduler");
 
 // Database Connection
-connectDB().then(checkNotificationProviders);
+connectDB().then(async () => {
+    await refreshBrandingCache();
+    await checkNotificationProviders();
+});
 
 // Realtime (chat + live notifications)
 const httpServer = http.createServer(app);

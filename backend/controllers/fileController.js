@@ -60,6 +60,15 @@ const getFile = async (req, res) => {
     const buffer = await objectStorage.readFile(file.storageKey);
     res.setHeader("Content-Type", file.mimeType);
     res.setHeader("Content-Disposition", `inline; filename="${file.originalName}"`);
+    // A given /files/:id is immutable once created (replacing an asset like
+    // the platform logo/favicon uploads a new file with a new id, see
+    // adminController.updateBranding) — safe to cache public files
+    // aggressively rather than decrypting from disk/S3 on every fetch,
+    // which matters once one of these is loaded on every page view
+    // site-wide (e.g. the navbar logo/favicon).
+    if (file.isPublic) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
     res.status(200).send(buffer);
   } catch (error) {
     sendServerError(res, error, "fileController");

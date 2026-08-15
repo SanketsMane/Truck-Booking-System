@@ -4,6 +4,7 @@ const Truck = require("../models/truckModel");
 const Booking = require("../models/bookingModel");
 const Verification = require("../models/verificationModel");
 const PlatformSetting = require("../models/platformSettingModel");
+const UploadedFile = require("../models/uploadedFileModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
@@ -12,6 +13,8 @@ const { accountStatusEmail } = require("../emailTemplates/templates");
 const { toCsv } = require("../utils/csv");
 const escapeRegex = require("../utils/escapeRegex");
 const sendServerError = require("../utils/sendServerError");
+const objectStorage = require("../utils/objectStorage");
+const { refreshBrandingCache } = require("../utils/brandingCache");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
 const {
   setUserStatusValidation,
@@ -19,6 +22,7 @@ const {
   deactivateTripValidation,
   updateSettingsValidation,
   updateCommissionValidation,
+  updateBrandingValidation,
   setAdminRoleValidation,
 } = require("../validators/adminValidation");
 
@@ -527,6 +531,94 @@ const getSettings = async (req, res) => {
   }
 };
 
+// A /files/:id URL's trailing segment is the UploadedFile's _id — used both
+// to best-effort clean up a superseded logo/favicon and to defensively mark
+// a newly-referenced file public (an admin who forgot isPublic on upload
+// shouldn't end up with a broken logo).
+const fileIdFromUrl = (url) => (url ? url.split("/").pop() : null);
+
+const reclaimSupersededFile = async (oldUrl, newUrl) => {
+  if (!oldUrl || oldUrl === newUrl) return;
+  const oldId = fileIdFromUrl(oldUrl);
+  if (!oldId) return;
+  try {
+    const oldFile = await UploadedFile.findById(oldId);
+    if (!oldFile) return;
+    await objectStorage.deleteFile(oldFile.storageKey);
+    await UploadedFile.deleteOne({ _id: oldId });
+  } catch (error) {
+    console.error("[adminController] failed to reclaim superseded branding file:", error.message);
+  }
+};
+
+const ensurePublic = async (url) => {
+  const id = fileIdFromUrl(url);
+  if (!id) return;
+  try {
+    await UploadedFile.updateOne({ _id: id, isPublic: false }, { $set: { isPublic: true } });
+  } catch {
+    // Not fatal — worst case the admin re-saves after fixing isPublic on
+    // the original upload, or the id doesn't resolve to a real file at all
+    // (a hand-crafted request), which the 404 on GET /files/:id will surface.
+  }
+};
+
+// One endpoint for the whole branding concern (name + logo + favicon +
+// contact email/mobile) rather than one per field — matches how the
+// razorpay/sms/email integration endpoints each cover several related
+// fields under one save. Public read is GET /meta/branding
+// (metaController.getBranding); this is the admin write side.
+const updateBranding = async (req, res) => {
+  try {
+    const { error, value } = updateBrandingValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const settings = await PlatformSetting.getSettings();
+    const before = {
+      platformName: settings.platformName,
+      logoUrl: settings.logoUrl,
+      faviconUrl: settings.faviconUrl,
+      contactEmail: settings.contactEmail,
+      contactMobile: settings.contactMobile,
+    };
+
+    await reclaimSupersededFile(settings.logoUrl, value.logoUrl);
+    await reclaimSupersededFile(settings.faviconUrl, value.faviconUrl);
+    if (value.logoUrl) await ensurePublic(value.logoUrl);
+    if (value.faviconUrl) await ensurePublic(value.faviconUrl);
+
+    settings.platformName = value.platformName;
+    settings.logoUrl = value.logoUrl || "";
+    settings.faviconUrl = value.faviconUrl || "";
+    settings.contactEmail = value.contactEmail || "";
+    settings.contactMobile = value.contactMobile || "";
+    await settings.save();
+    await refreshBrandingCache();
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "settings.branding.update",
+      targetType: "PlatformSetting",
+      targetId: settings._id,
+      before,
+      after: {
+        platformName: settings.platformName,
+        logoUrl: settings.logoUrl,
+        faviconUrl: settings.faviconUrl,
+        contactEmail: settings.contactEmail,
+        contactMobile: settings.contactMobile,
+      },
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, msg: "Branding updated", settings });
+  } catch (error) {
+    sendServerError(res, error, "adminController");
+  }
+};
+
 const sendCsv = (res, filename, rows, columns) => {
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -636,6 +728,7 @@ module.exports = {
   getSettings,
   updateSettings,
   updateCommission,
+  updateBranding,
   exportBookingsCsv,
   exportRevenueByRouteCsv,
   exportUserGrowthCsv,

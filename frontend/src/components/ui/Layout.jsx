@@ -53,6 +53,24 @@ export const Muted = styled.p`
   font-size: 14px;
 `;
 
+// Primary reading text — for long-form content (About/Help/Terms/Privacy),
+// where `Muted`'s small, deemphasized styling is the wrong tool since it's
+// meant for secondary/supporting text, not a page's main copy.
+export const Body = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.color.text};
+  font-size: ${({ theme }) => theme.font.size.md};
+  line-height: ${({ theme }) => theme.font.lineHeight.relaxed};
+`;
+
+// One tier below SectionTitle (h2) — for subsections within a long-form
+// page (e.g. "For shippers" / "For transporters" under a Help category).
+export const SubHeading = styled.h3`
+  font-size: ${({ theme }) => theme.font.size.lg};
+  font-weight: ${({ theme }) => theme.font.weight.semibold};
+  margin: 0;
+`;
+
 export const EmptyState = styled.div`
   text-align: center;
   padding: ${({ theme }) => theme.space(10)} ${({ theme }) => theme.space(4)};

@@ -61,8 +61,16 @@ export const updateRazorpayIntegration = (provider, config) =>
 
 export const testRazorpayIntegration = () => api.post("/admin/integrations/razorpay/test", {});
 
+export const updateKycIntegration = (provider, config) =>
+  api.put("/admin/integrations/kyc", { provider, config });
+
+export const updatePayoutIntegration = (provider, config) =>
+  api.put("/admin/integrations/payout", { provider, config });
+
 export const updateCommission = (commissionPercent) =>
   api.put("/admin/settings/commission", { commissionPercent });
+
+export const updateBranding = (branding) => api.put("/admin/settings/branding", branding);
 
 export const listAdminPayments = (opts) => api.get(withPaginationParams("/admin/payments", opts));
 

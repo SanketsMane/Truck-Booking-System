@@ -39,6 +39,7 @@ router.put("/bookings/:id/force-cancel", requireAdminScope("full"), adminControl
 router.get("/settings", adminController.getSettings);
 router.put("/settings", requireAdminScope("full"), adminController.updateSettings);
 router.put("/settings/commission", requireAdminScope("finance"), adminController.updateCommission);
+router.put("/settings/branding", requireAdminScope("full"), adminController.updateBranding);
 
 router.get("/payments", adminWalletController.listPayments);
 

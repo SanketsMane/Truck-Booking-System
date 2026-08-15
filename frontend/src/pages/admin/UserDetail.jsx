@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { getAdminUserDetail, setAdminUserStatus, setAdminRole } from "../../api/admin";
 import { getFileBlobUrl } from "../../api/files";
 import { useAuth } from "../../context/AuthContext";
+import { useBranding } from "../../context/BrandingContext";
 import { PageContainer, PageTitle, SectionTitle, Stack, Row, Grid, Muted } from "../../components/ui/Layout";
 import { Card, CardRow } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
@@ -43,6 +44,7 @@ export const UserDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user: viewer } = useAuth();
+  const { platformName } = useBranding();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -330,8 +332,8 @@ export const UserDetail = () => {
         }
         description={
           action === "reactivate"
-            ? "They'll regain full access to ShareTruck."
-            : "They'll be signed out and blocked from using ShareTruck until reactivated."
+            ? `They'll regain full access to ${platformName}.`
+            : `They'll be signed out and blocked from using ${platformName} until reactivated.`
         }
         requireReason={action !== "reactivate"}
         reasonLabel={action === "ban" ? "Reason for ban" : "Reason for suspension"}

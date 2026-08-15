@@ -27,6 +27,17 @@ const platformSettingSchema = new mongoose.Schema(
       default: true,
     },
 
+    // Admin-configurable branding — surfaced publicly via GET /meta/branding
+    // and mirrored into an in-memory cache (utils/brandingCache.js) for the
+    // backend's own synchronous call sites (email/SMS/push copy). logoUrl/
+    // faviconUrl hold a /files/:id URL from the existing upload pipeline
+    // (isPublic:true), not the file itself.
+    platformName: { type: String, trim: true, default: "ShareTruck" },
+    logoUrl: { type: String, trim: true, default: "" },
+    faviconUrl: { type: String, trim: true, default: "" },
+    contactEmail: { type: String, trim: true, lowercase: true, default: "" },
+    contactMobile: { type: String, trim: true, default: "" },
+
     sms: { type: integrationSchema, default: () => ({ provider: "console" }) },
     email: { type: integrationSchema, default: () => ({ provider: "console" }) },
     razorpay: { type: integrationSchema, default: () => ({ provider: "none" }) },

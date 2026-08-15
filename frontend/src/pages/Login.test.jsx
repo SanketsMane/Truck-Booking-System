@@ -15,6 +15,10 @@ vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ setUser }),
 }));
 
+vi.mock("../context/BrandingContext", () => ({
+  useBranding: () => ({ platformName: "ShareTruck" }),
+}));
+
 vi.mock("react-toastify", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
