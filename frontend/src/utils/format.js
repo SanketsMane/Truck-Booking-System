@@ -44,6 +44,23 @@ export const toDateTimeInputValue = (value) => {
   return new Date(d.getTime() - tz).toISOString().slice(0, 16);
 };
 
+// A pickup/drop point is always {address, lat, lng} in current data, but
+// trips/bookings created before that shape existed still have it stored as
+// a plain string — normalize either shape so callers can always trust
+// point.address without an extra guard at every call site.
+export const normalizePoint = (point) => {
+  if (typeof point === "string") return { address: point, lat: null, lng: null };
+  return point || { address: "", lat: null, lng: null };
+};
+
+// A saved bank account number is real financial PII — show only the last 4
+// digits by default (Profile's payout summary, Wallet's prefill hint).
+export const maskAccountNumber = (value) => {
+  const digits = String(value || "");
+  if (digits.length <= 4) return digits;
+  return `•••• ${digits.slice(-4)}`;
+};
+
 export const ratingLabel = (avg, count) => {
   if (!count) return "New";
   return `★ ${Number(avg).toFixed(1)} (${count})`;

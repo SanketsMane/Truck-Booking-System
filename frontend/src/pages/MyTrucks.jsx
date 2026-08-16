@@ -1,24 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { listMyTrucks, registerTruck, addTruckDocuments, addTruckPhotos } from "../api/trucks";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { BASE_URL } from "../api/client";
-import {
-  PageContainer,
-  PageTitle,
-  SectionTitle,
-  Muted,
-  Stack,
-  Row,
-  Grid,
-  EmptyState,
-} from "../components/ui/Layout";
-import { Card, CardRow } from "../components/ui/Card";
+import { PageContainer, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
+import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
 import { Field, Input } from "../components/ui/Form";
-import { Spinner } from "../components/ui/Spinner";
+import { Pagination } from "../components/ui/Pagination";
+import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../components/ui/Table";
+import { SkeletonTableRows } from "../components/ui/Skeleton";
+import {
+  Toolbar,
+  SearchInput,
+  ToolbarSelect,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../components/ui/Toolbar";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const TRUCK_TYPE_PRESETS = ["14ft", "17ft", "20ft", "22ft", "24ft", "32ft SXL", "32ft MXL"];
 const BODY_TYPE_PRESETS = ["Open", "Closed Container", "Flatbed", "Tanker", "Refrigerated"];
@@ -51,11 +54,9 @@ const PhotoThumb = styled.img`
   border-radius: ${({ theme }) => theme.radius.md};
 `;
 
-const CenteredSpinner = () => (
-  <Row style={{ justifyContent: "center", padding: "60px 0" }}>
-    <Spinner $size={28} />
-  </Row>
-);
+const DetailRow = styled.tr`
+  background: ${({ theme }) => theme.color.surfaceRaised};
+`;
 
 // Uploads the file immediately on selection (the backend needs a fileId to
 // reference before the truck/document record can be created), then hands
@@ -295,7 +296,11 @@ const RegisterTruckForm = ({ onRegistered }) => {
   );
 };
 
-const TruckCard = ({ truck, onUpdated }) => {
+// The full management panel for one truck — photos, documents, add-photos
+// form, rejected-truck resubmit form. Rendered inside an expanded table row
+// (see MyTrucks below) rather than its own Card, so the table stays the
+// primary at-a-glance view and this only takes up space once opened.
+const TruckDetailPanel = ({ truck, onUpdated }) => {
   const [showResubmit, setShowResubmit] = useState(false);
   const [docs, setDocs] = useState(emptyDocs);
   const [submitting, setSubmitting] = useState(false);
@@ -357,28 +362,17 @@ const TruckCard = ({ truck, onUpdated }) => {
   };
 
   return (
-    <Card>
-      <CardRow>
-        <Stack $gap={1}>
-          <SectionTitle>{truck.regNumber}</SectionTitle>
-          <Muted>
-            {truck.truckType}
-            {truck.bodyType ? ` · ${truck.bodyType}` : ""} · {truck.totalCapacity} tons
-          </Muted>
-        </Stack>
-        <StatusBadge status={truck.status} />
-      </CardRow>
-
+    <Stack $gap={3} style={{ padding: "12px 4px" }}>
       {truck.photos?.length > 0 && (
-        <Row $gap={2} $wrap style={{ marginTop: 16 }}>
+        <Row $gap={2} $wrap>
           {truck.photos.map((photo, i) => (
-            <PhotoThumb key={i} src={`${BASE_URL}${photo.url}`} alt={`${truck.regNumber} photo ${i + 1}`} />
+            <PhotoThumb key={i} src={`${BASE_URL}${photo.url}`} alt={`${truck.regNumber} photo ${i + 1}`} loading="lazy" />
           ))}
         </Row>
       )}
 
       {truck.documents?.length > 0 && (
-        <Stack $gap={0} style={{ marginTop: 16 }}>
+        <Stack $gap={0}>
           {truck.documents.map((doc, i) => (
             <DocRow key={`${doc.docType}-${i}`} $gap={3}>
               <Muted style={{ textTransform: "capitalize" }}>{doc.docType}</Muted>
@@ -390,7 +384,7 @@ const TruckCard = ({ truck, onUpdated }) => {
         </Stack>
       )}
 
-      <Stack $gap={3} style={{ marginTop: 16 }}>
+      <Stack $gap={3}>
         {!showAddPhotos ? (
           <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowAddPhotos(true)}>
             + Add photos
@@ -419,7 +413,7 @@ const TruckCard = ({ truck, onUpdated }) => {
       </Stack>
 
       {truck.status === "rejected" && (
-        <Stack $gap={3} style={{ marginTop: 16 }}>
+        <Stack $gap={3}>
           <Field label="Rejection reason">
             <Muted>{truck.rejectReason || "No reason given"}</Muted>
           </Field>
@@ -442,7 +436,7 @@ const TruckCard = ({ truck, onUpdated }) => {
           )}
         </Stack>
       )}
-    </Card>
+    </Stack>
   );
 };
 
@@ -450,6 +444,11 @@ export const MyTrucks = () => {
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     listMyTrucks()
@@ -467,10 +466,29 @@ export const MyTrucks = () => {
     setTrucks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
   };
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return trucks.filter((t) => {
+      if (status && t.status !== status) return false;
+      if (!q) return true;
+      return `${t.regNumber} ${t.truckType} ${t.bodyType || ""}`.toLowerCase().includes(q);
+    });
+  }, [trucks, search, status]);
+
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const hasFilters = Boolean(search || status);
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("");
+    setPage(1);
+  };
+
   return (
-    <PageContainer>
+    <PageContainer style={{ maxWidth: 1080 }}>
       <Header $gap={3} $wrap>
-        <PageTitle>My Trucks</PageTitle>
         <Button type="button" onClick={() => setShowForm((s) => !s)}>
           {showForm ? "Cancel" : "+ Register a truck"}
         </Button>
@@ -478,17 +496,119 @@ export const MyTrucks = () => {
 
       {showForm && <RegisterTruckForm onRegistered={handleRegistered} />}
 
-      {loading ? (
-        <CenteredSpinner />
-      ) : trucks.length === 0 ? (
-        <EmptyState>You haven't registered any trucks yet. Register one to start posting trips.</EmptyState>
-      ) : (
-        <Grid $cols={1} $colsTablet={2}>
-          {trucks.map((truck) => (
-            <TruckCard key={truck._id} truck={truck} onUpdated={handleTruckUpdated} />
-          ))}
-        </Grid>
-      )}
+      <Toolbar>
+        <SearchInput
+          placeholder="Search by reg number or type…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+        <ToolbarSelect
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="verified">Verified</option>
+          <option value="rejected">Rejected</option>
+        </ToolbarSelect>
+        <ToolbarSpacer />
+        {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+        {!loading && <ResultsCount>{total} truck{total === 1 ? "" : "s"}</ResultsCount>}
+      </Toolbar>
+
+      <Card $padding="0">
+        {!loading && paged.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
+            <Muted>
+              {trucks.length === 0
+                ? "You haven't registered any trucks yet. Register one to start posting trips."
+                : "No trucks match these filters."}
+            </Muted>
+          </EmptyState>
+        ) : (
+          <>
+            <TableScroll>
+              <Table $minWidth="760px">
+                <thead>
+                  <tr>
+                    <IndexTh>#</IndexTh>
+                    <Th>Reg number</Th>
+                    <Th>Type</Th>
+                    <Th>Capacity</Th>
+                    <Th>Docs</Th>
+                    <Th>Photos</Th>
+                    <Th>Status</Th>
+                    <Th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <SkeletonTableRows rows={pageSize > 10 ? 10 : pageSize} cols={8} />
+                  ) : (
+                    paged.map((truck, i) => (
+                      <Fragment key={truck._id}>
+                        <Tr>
+                          <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
+                          <Td>{truck.regNumber}</Td>
+                          <Td>
+                            {truck.truckType}
+                            {truck.bodyType ? ` · ${truck.bodyType}` : ""}
+                          </Td>
+                          <Td>{truck.totalCapacity} tons</Td>
+                          <Td>{truck.documents?.length || 0}</Td>
+                          <Td>{truck.photos?.length || 0}</Td>
+                          <Td>
+                            <StatusBadge status={truck.status} />
+                          </Td>
+                          <Td>
+                            <Button
+                              type="button"
+                              $variant="ghost"
+                              $size="sm"
+                              onClick={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
+                            >
+                              {expandedId === truck._id ? "Close" : "Manage"}
+                            </Button>
+                          </Td>
+                        </Tr>
+                        {expandedId === truck._id && (
+                          <DetailRow>
+                            <Td colSpan={8}>
+                              <TruckDetailPanel truck={truck} onUpdated={handleTruckUpdated} />
+                            </Td>
+                          </DetailRow>
+                        )}
+                      </Fragment>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </TableScroll>
+            <div style={{ padding: "0 20px 16px" }}>
+              {!loading && (
+                <Pagination
+                  page={page}
+                  pages={pages}
+                  total={total}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </Card>
     </PageContainer>
   );
 };

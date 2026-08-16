@@ -1,7 +1,7 @@
 const app = require("../../app");
 const { signupUser, makeAdmin, disableVerificationGate, postTestTrip } = require("../helpers");
 
-const mobileFor = (seed) => `9${String(seed).padStart(9, "0")}`;
+const emailFor = (seed) => `user${seed}@example.test`;
 
 // Drives a booking all the way to "completed" via the real API — a
 // dispute can only be raised on a completed booking — then returns the
@@ -9,12 +9,12 @@ const mobileFor = (seed) => `9${String(seed).padStart(9, "0")}`;
 const completedBooking = async (seed) => {
   await disableVerificationGate();
   const { agent: transporterAgent, user: transporter } = await signupUser(app, {
-    mobile: mobileFor(seed * 10 + 1),
+    email: emailFor(seed * 10 + 1),
     name: "T",
     roles: ["transporter"],
   });
   const { agent: shipperAgent, user: shipper } = await signupUser(app, {
-    mobile: mobileFor(seed * 10 + 2),
+    email: emailFor(seed * 10 + 2),
     name: "S",
     roles: ["shipper"],
   });
@@ -45,8 +45,8 @@ const completedBooking = async (seed) => {
 describe("dispute resolution", () => {
   it("blocks raising a dispute on a booking that isn't completed", async () => {
     await disableVerificationGate();
-    const { agent: transporterAgent } = await signupUser(app, { mobile: mobileFor(11), name: "T", roles: ["transporter"] });
-    const { agent: shipperAgent } = await signupUser(app, { mobile: mobileFor(12), name: "S", roles: ["shipper"] });
+    const { agent: transporterAgent } = await signupUser(app, { email: emailFor(11), name: "T", roles: ["transporter"] });
+    const { agent: shipperAgent } = await signupUser(app, { email: emailFor(12), name: "S", roles: ["shipper"] });
     const trip = await postTestTrip(transporterAgent);
     const bookingRes = await shipperAgent.post("/bookings").send({ tripId: trip._id, capacityRequested: 2, goodsDescription: "x" });
 
@@ -85,7 +85,7 @@ describe("dispute resolution", () => {
       .send({ bookingId, category: "other", description: "Something worth reporting here." });
     const disputeId = disputeRes.body.dispute._id;
 
-    const { agent: financeAgent, user: financeAdmin } = await signupUser(app, { mobile: mobileFor(49), name: "Fin" });
+    const { agent: financeAgent, user: financeAdmin } = await signupUser(app, { email: emailFor(49), name: "Fin" });
     await makeAdmin(financeAdmin, "finance");
 
     const res = await financeAgent
@@ -101,7 +101,7 @@ describe("dispute resolution", () => {
       .send({ bookingId, category: "damaged_goods", description: "Goods arrived damaged, requesting compensation." });
     const disputeId = disputeRes.body.dispute._id;
 
-    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { mobile: mobileFor(59), name: "Sup" });
+    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { email: emailFor(59), name: "Sup" });
     await makeAdmin(supportAdmin, "support");
 
     const balanceBefore = (await shipperAgent.get("/wallet/me")).body.wallet.balance;
@@ -126,7 +126,7 @@ describe("dispute resolution", () => {
       .send({ bookingId, category: "other", description: "Something worth reporting here too." });
     const disputeId = disputeRes.body.dispute._id;
 
-    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { mobile: mobileFor(69), name: "Sup" });
+    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { email: emailFor(69), name: "Sup" });
     await makeAdmin(supportAdmin, "support");
 
     await supportAgent
@@ -146,7 +146,7 @@ describe("dispute resolution", () => {
       .send({ bookingId, category: "other", description: "Yet another reportable issue here." });
     const disputeId = disputeRes.body.dispute._id;
 
-    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { mobile: mobileFor(79), name: "Sup" });
+    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { email: emailFor(79), name: "Sup" });
     await makeAdmin(supportAdmin, "support");
 
     const missingAmount = await supportAgent.put(`/admin/disputes/${disputeId}/resolve`).send({

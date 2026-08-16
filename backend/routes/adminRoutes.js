@@ -6,6 +6,8 @@ const adminController = require("../controllers/adminController");
 const integrationController = require("../controllers/integrationController");
 const adminWalletController = require("../controllers/adminWalletController");
 const disputeController = require("../controllers/disputeController");
+const chatController = require("../controllers/chatController");
+const auditLogController = require("../controllers/auditLogController");
 const authMiddleware = require("../middleWare/middleWare");
 const { requireAdmin, requireAdminScope } = require("../middleWare/middleWare");
 
@@ -56,6 +58,13 @@ router.put("/withdrawals/:id/mark-paid", requireAdminScope("finance"), adminWall
 
 router.get("/disputes", disputeController.listAllDisputes);
 router.put("/disputes/:id/resolve", requireAdminScope("support"), disputeController.resolveDispute);
+
+// SRS-06.1 — admin can read a booking's chat for moderation (e.g. reviewing
+// a dispute). Same scope dispute resolution requires, since that's the
+// primary reason an admin would need this.
+router.get("/bookings/:bookingId/chat", requireAdminScope("support"), chatController.adminGetThread);
+
+router.get("/audit-logs", auditLogController.listAuditLogs);
 
 router.get("/reports/bookings.csv", adminController.exportBookingsCsv);
 router.get("/reports/revenue-by-route.csv", adminController.exportRevenueByRouteCsv);

@@ -92,3 +92,9 @@ export const rejectAdminWithdrawal = (id, reason) => api.put(`/admin/withdrawals
 
 export const markAdminWithdrawalPaid = (id, payoutReference) =>
   api.put(`/admin/withdrawals/${id}/mark-paid`, { payoutReference });
+
+// SRS-06.1 — read-only, for moderation (e.g. reviewing a dispute's
+// conversation). Requires the "support" admin scope server-side.
+export const getAdminBookingChat = (bookingId) => api.get(`/admin/bookings/${bookingId}/chat`);
+
+export const listAuditLogs = (opts) => api.get(withPaginationParams("/admin/audit-logs", opts));

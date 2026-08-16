@@ -45,7 +45,9 @@ const createSupportRequest = async (req, res) => {
 
 const listMySupportRequests = async (req, res) => {
   try {
-    const requests = await SupportRequest.find({ user: req.auth.id }).sort({ createdAt: -1 });
+    const requests = await SupportRequest.find({ user: req.auth.id })
+      .populate("booking", "goodsDescription status")
+      .sort({ createdAt: -1 });
     res.status(200).json({ success: true, requests });
   } catch (error) {
     sendServerError(res, error, "supportController");
@@ -61,7 +63,7 @@ const listAllSupportRequests = async (req, res) => {
 
     const [requests, total] = await Promise.all([
       SupportRequest.find(filter)
-        .populate("user", "name mobile")
+        .populate("user", "name email mobile")
         .populate("booking", "goodsDescription status")
         .sort({ createdAt: -1 })
         .skip(skip)

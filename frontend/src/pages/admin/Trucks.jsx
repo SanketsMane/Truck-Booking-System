@@ -2,15 +2,32 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { listAdminTrucks } from "../../api/admin";
-import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../../components/ui/Layout";
-import { Card } from "../../components/ui/Card";
+import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
-import { Input, Select } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
-import { Spinner } from "../../components/ui/Spinner";
 import { Pagination } from "../../components/ui/Pagination";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
+import {
+  Toolbar,
+  AdminSearchInput,
+  AdminSelect,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../../components/ui/AdminToolbar";
+import {
+  TableScroll,
+  Table,
+  Th,
+  Td,
+  Tr,
+  IndexTh,
+  IndexTd,
+  AdminCard,
+  AdminSkeletonRows,
+} from "../../components/ui/AdminTable";
 import { formatDateTime, formatTons } from "../../utils/format";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 // FR-11.4 — browse/search every registered truck across the platform.
 // Deliberately no review action here (that lives on the verification
@@ -19,17 +36,20 @@ import { formatDateTime, formatTons } from "../../utils/format";
 export const Trucks = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [pageSize, setPageSize] = useState(20);
   const [trucks, setTrucks] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
+  const hasFilters = Boolean(search || status);
+
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       setLoading(true);
-      listAdminTrucks({ page, limit: 20, search: search || undefined, status: status || undefined })
+      listAdminTrucks({ page, limit: pageSize, search: search || undefined, status: status || undefined })
         .then((res) => {
           if (cancelled) return;
           setTrucks(res.items || []);
@@ -47,39 +67,41 @@ export const Trucks = () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [page, search, status]);
+  }, [page, pageSize, search, status]);
 
   const handleFilterChange = (setter) => (e) => {
     setter(e.target.value);
     setPage(1);
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("");
+    setPage(1);
+  };
+
   return (
-    <PageContainer style={{ maxWidth: 1180 }}>
-      <PageTitle>Trucks</PageTitle>
+    <PageContainer style={{ maxWidth: 1200 }}>
+      <Toolbar>
+        <AdminSearchInput
+          placeholder="Search by reg. number or truck type…"
+          value={search}
+          onChange={handleFilterChange(setSearch)}
+        />
+        <AdminSelect value={status} onChange={handleFilterChange(setStatus)}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="verified">Verified</option>
+          <option value="rejected">Rejected</option>
+        </AdminSelect>
+        <ToolbarSpacer />
+        {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+        {!loading && <ResultsCount>{total} truck{total === 1 ? "" : "s"}</ResultsCount>}
+      </Toolbar>
 
-      <Card style={{ marginTop: 20 }}>
-        <Row $gap={2} $wrap style={{ marginBottom: 16 }}>
-          <Input
-            placeholder="Search by reg. number or truck type…"
-            value={search}
-            onChange={handleFilterChange(setSearch)}
-            style={{ maxWidth: 280 }}
-          />
-          <Select value={status} onChange={handleFilterChange(setStatus)} style={{ maxWidth: 170 }}>
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="verified">Verified</option>
-            <option value="rejected">Rejected</option>
-          </Select>
-        </Row>
-
-        {loading ? (
-          <Row style={{ justifyContent: "center", padding: "50px 0" }}>
-            <Spinner $size={26} />
-          </Row>
-        ) : trucks.length === 0 ? (
-          <EmptyState>
+      <AdminCard $padding="0">
+        {!loading && trucks.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
             <Muted>No trucks match these filters.</Muted>
           </EmptyState>
         ) : (
@@ -99,36 +121,56 @@ export const Trucks = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {trucks.map((t, i) => (
-                    <Tr key={t._id}>
-                      <IndexTd>{(page - 1) * 20 + i + 1}</IndexTd>
-                      <Td>{t.regNumber}</Td>
-                      <Td>
-                        {t.truckType}
-                        {t.bodyType ? ` · ${t.bodyType}` : ""}
-                      </Td>
-                      <Td>{formatTons(t.totalCapacity)}</Td>
-                      <Td>{t.owner?.name || t.owner?.mobile || "—"}</Td>
-                      <Td>{formatDateTime(t.createdAt)}</Td>
-                      <Td>
-                        <StatusBadge status={t.status} />
-                      </Td>
-                      <Td>
-                        {t.owner && (
-                          <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
-                            View owner
-                          </Button>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))}
+                  {loading ? (
+                    <AdminSkeletonRows rows={pageSize > 10 ? 10 : pageSize} cols={8} />
+                  ) : (
+                    trucks.map((t, i) => (
+                      <Tr key={t._id}>
+                        <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
+                        <Td>{t.regNumber}</Td>
+                        <Td>
+                          {t.truckType}
+                          {t.bodyType ? ` · ${t.bodyType}` : ""}
+                        </Td>
+                        <Td>{formatTons(t.totalCapacity)}</Td>
+                        <Td>{t.owner?.name || t.owner?.email || "—"}</Td>
+                        <Td>{formatDateTime(t.createdAt)}</Td>
+                        <Td>
+                          <StatusBadge status={t.status} />
+                        </Td>
+                        <Td>
+                          {t.owner && (
+                            <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
+                              View owner
+                            </Button>
+                          )}
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
                 </tbody>
               </Table>
             </TableScroll>
-            <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+            <div style={{ padding: "0 20px 16px" }}>
+              {!loading && (
+                <Pagination
+                  variant="admin"
+                  page={page}
+                  pages={pages}
+                  total={total}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                />
+              )}
+            </div>
           </>
         )}
-      </Card>
+      </AdminCard>
     </PageContainer>
   );
 };

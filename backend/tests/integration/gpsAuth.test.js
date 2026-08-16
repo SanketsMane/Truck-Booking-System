@@ -2,7 +2,7 @@ const app = require("../../app");
 const Booking = require("../../models/bookingModel");
 const { signupUser, makeAdmin, disableVerificationGate, postTestTrip } = require("../helpers");
 
-const mobileFor = (seed) => `9${String(seed).padStart(9, "0")}`;
+const emailFor = (seed) => `user${seed}@example.test`;
 
 // canViewTripLocation (utils/tripLocationAuth.js) permutations, exercised
 // through the real GET /trips/:id/location endpoint rather than calling
@@ -14,12 +14,12 @@ describe("trip GPS location authorization", () => {
 
   const setup = async (seed) => {
     const { agent: transporterAgent, user: transporter } = await signupUser(app, {
-      mobile: mobileFor(seed * 10 + 1),
+      email: emailFor(seed * 10 + 1),
       name: "T",
       roles: ["transporter"],
     });
     const { agent: shipperAgent, user: shipper } = await signupUser(app, {
-      mobile: mobileFor(seed * 10 + 2),
+      email: emailFor(seed * 10 + 2),
       name: "S",
       roles: ["shipper"],
     });
@@ -35,7 +35,7 @@ describe("trip GPS location authorization", () => {
 
   it("lets an admin view any trip's location", async () => {
     const { trip } = await setup(2);
-    const { agent: adminAgent, user: adminUser } = await signupUser(app, { mobile: mobileFor(29), name: "Admin" });
+    const { agent: adminAgent, user: adminUser } = await signupUser(app, { email: emailFor(29), name: "Admin" });
     await makeAdmin(adminUser, "full");
 
     const res = await adminAgent.get(`/trips/${trip._id}/location`);
@@ -74,7 +74,7 @@ describe("trip GPS location authorization", () => {
       .send({ tripId: trip._id, capacityRequested: 2, goodsDescription: "x" });
     await transporterAgent.put(`/bookings/${bookingRes.body.booking._id}/accept`);
 
-    const { agent: strangerAgent } = await signupUser(app, { mobile: mobileFor(69), name: "Stranger", roles: ["shipper"] });
+    const { agent: strangerAgent } = await signupUser(app, { email: emailFor(69), name: "Stranger", roles: ["shipper"] });
     const res = await strangerAgent.get(`/trips/${trip._id}/location`);
     expect(res.status).toBe(403);
   });
@@ -97,7 +97,7 @@ describe("trip GPS location authorization", () => {
     expect(ok.status).toBe(200);
 
     const { agent: otherTransporterAgent } = await signupUser(app, {
-      mobile: mobileFor(79),
+      email: emailFor(79),
       name: "Other",
       roles: ["transporter"],
     });

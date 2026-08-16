@@ -13,7 +13,7 @@ const Wrap = styled.div`
   width: ${({ $size = 28 }) => $size * 1.7}px;
   height: ${({ $size = 28 }) => $size}px;
   color: ${({ theme, $color }) => $color ?? theme.color.text};
-  --truck-accent: ${({ theme }) => theme.color.accent};
+  --truck-accent: ${({ theme }) => theme.color.accentBright};
   --truck-bg: ${({ theme }) => theme.color.bg};
 `;
 

@@ -4,21 +4,32 @@ import styled from "styled-components";
 import { toast } from "react-toastify";
 import * as authApi from "../api/auth";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import AuthShell from "../layouts/AuthShell";
 import { Muted } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
-import { Field, Input } from "../components/ui/Form";
+import { Field, Input, PasswordInput } from "../components/ui/Form";
 
 const Title = styled.h1`
-  font-size: 1.7rem;
+  font-size: 1.5rem;
   letter-spacing: -0.01em;
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 `;
 
 const Subtitle = styled.p`
-  margin: 0 0 28px;
+  margin: 0 0 16px;
   color: ${({ theme }) => theme.color.textMuted};
-  font-size: 14.5px;
+  font-size: 13.5px;
+`;
+
+const FieldRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.phone}) {
+    grid-template-columns: 1fr 1fr;
+  }
 `;
 
 const RoleOptions = styled.div`
@@ -38,7 +49,7 @@ const RoleOption = styled.button`
 `;
 
 const SwitchRow = styled.p`
-  margin: 22px 0 0;
+  margin: 14px 0 0;
   text-align: center;
   font-size: 13.5px;
   color: ${({ theme }) => theme.color.textMuted};
@@ -62,6 +73,7 @@ export const Signup = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const { setUser } = useAuth();
+  const { platformName } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || "/";
@@ -75,8 +87,8 @@ export const Signup = () => {
       toast.error("Enter your name");
       return;
     }
-    if (!MOBILE_PATTERN.test(mobile)) {
-      toast.error("Enter a valid 10-digit Indian mobile number");
+    if (mobile && !MOBILE_PATTERN.test(mobile)) {
+      toast.error("Enter a valid 10-digit Indian mobile number, or leave it blank");
       return;
     }
     if (!EMAIL_PATTERN.test(email)) {
@@ -96,14 +108,14 @@ export const Signup = () => {
     try {
       const { user } = await authApi.signup({
         name: name.trim(),
-        mobile,
+        mobile: mobile || undefined,
         email: email.trim(),
         password,
         confirmPassword,
         roles: roles.length ? roles : undefined,
       });
       setUser(user);
-      toast.success("Welcome to ShareTruck");
+      toast.success(`Welcome to ${platformName}`);
       navigate(redirectTo, { replace: true });
     } catch (error) {
       toast.error(error.message);
@@ -116,20 +128,22 @@ export const Signup = () => {
     <AuthShell>
       <form onSubmit={handleSubmit}>
         <Title>Create your account</Title>
-        <Subtitle>Set a password now, or just use mobile OTP login instead — either works.</Subtitle>
+        <Subtitle>Set a password now, or just use email OTP login instead — either works.</Subtitle>
 
-        <Field label="Your name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </Field>
-        <Field label="Mobile number">
-          <Input
-            type="tel"
-            inputMode="numeric"
-            placeholder="98765 43210"
-            value={mobile}
-            onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
-          />
-        </Field>
+        <FieldRow>
+          <Field label="Your name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+          <Field label="Mobile (optional)">
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="98765 43210"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            />
+          </Field>
+        </FieldRow>
         <Field label="Email">
           <Input
             type="email"
@@ -138,17 +152,24 @@ export const Signup = () => {
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Password" help="At least 8 characters.">
-          <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </Field>
-        <Field label="Confirm password">
-          <Input
-            type="password"
-            placeholder="••••••••"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-        </Field>
+        <FieldRow>
+          <Field label="Password" help="At least 8 characters.">
+            <PasswordInput
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+          <Field label="Confirm password">
+            <PasswordInput
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+        </FieldRow>
         <Field label="I want to" help="You can add the other role later from your profile.">
           <RoleOptions>
             <RoleOption type="button" $active={roles.includes("shipper")} onClick={() => toggleRole("shipper")}>

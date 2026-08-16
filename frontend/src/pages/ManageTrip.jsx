@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import styled from "styled-components";
 import { toast } from "react-toastify";
 import { getTrip, editTrip, cancelTrip } from "../api/trips";
 import { listMyBookings, acceptBooking, rejectBooking } from "../api/bookings";
@@ -8,11 +9,31 @@ import LiveTruckMap from "../components/LiveTruckMap";
 import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
+import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Field, Input, ErrorText } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { Spinner } from "../components/ui/Spinner";
-import { formatDateTime, formatINR, formatTons, toDateTimeInputValue } from "../utils/format";
+import { formatDateTime, formatINR, formatTons, toDateTimeInputValue, normalizePoint } from "../utils/format";
+
+const CapacityBarTrack = styled.div`
+  height: 8px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.color.surfaceRaised};
+  overflow: hidden;
+`;
+
+const CapacityBarFill = styled.div`
+  height: 100%;
+  width: ${({ $pct }) => $pct}%;
+  background: ${({ theme }) => theme.color.accent};
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+`;
+
+const Price = styled.span`
+  font-weight: 800;
+  color: ${({ theme }) => theme.color.accent};
+`;
 
 const EDITABLE_STATUSES = ["published", "full"];
 
@@ -45,8 +66,8 @@ export const ManageTrip = () => {
         setTrip(trip);
         setDepartureAt(toDateTimeInputValue(trip.departureAt));
         setEstimatedArrivalAt(trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "");
-        setPickupPoint(trip.pickupPoint);
-        setDropPoint(trip.dropPoint);
+        setPickupPoint(normalizePoint(trip.pickupPoint));
+        setDropPoint(normalizePoint(trip.dropPoint));
         setTotalCapacity(String(trip.totalCapacity));
         setPricePerTon(String(trip.pricePerTon));
       })
@@ -114,10 +135,10 @@ export const ManageTrip = () => {
     const updates = {};
     if (Number(totalCapacity) !== trip.totalCapacity) updates.totalCapacity = Number(totalCapacity);
     if (Number(pricePerTon) !== trip.pricePerTon) updates.pricePerTon = Number(pricePerTon);
-    if (pickupPoint.address.trim() !== trip.pickupPoint.address) {
+    if (pickupPoint.address.trim() !== normalizePoint(trip.pickupPoint).address) {
       updates.pickupPoint = { ...pickupPoint, address: pickupPoint.address.trim() };
     }
-    if (dropPoint.address.trim() !== trip.dropPoint.address) {
+    if (dropPoint.address.trim() !== normalizePoint(trip.dropPoint).address) {
       updates.dropPoint = { ...dropPoint, address: dropPoint.address.trim() };
     }
     if (departureAt !== toDateTimeInputValue(trip.departureAt)) {
@@ -215,6 +236,7 @@ export const ManageTrip = () => {
 
   const canEdit = EDITABLE_STATUSES.includes(trip.status);
   const canCancel = !["completed", "cancelled"].includes(trip.status);
+  const capacityPct = trip.totalCapacity ? Math.min(100, Math.round((bookedCapacity / trip.totalCapacity) * 100)) : 0;
 
   return (
     <PageContainer>
@@ -242,23 +264,28 @@ export const ManageTrip = () => {
                   <span>{formatDateTime(trip.estimatedArrivalAt)}</span>
                 </CardRow>
               )}
-              <CardRow>
-                <Muted>Capacity</Muted>
-                <span>
-                  {formatTons(bookedCapacity)} booked / {formatTons(trip.totalCapacity)} total
-                </span>
-              </CardRow>
+              <Stack $gap={2}>
+                <CardRow>
+                  <Muted>Capacity booked</Muted>
+                  <strong>
+                    {formatTons(bookedCapacity)} / {formatTons(trip.totalCapacity)}
+                  </strong>
+                </CardRow>
+                <CapacityBarTrack>
+                  <CapacityBarFill $pct={capacityPct} />
+                </CapacityBarTrack>
+              </Stack>
               <CardRow>
                 <Muted>Price</Muted>
-                <span>{formatINR(trip.pricePerTon)} / ton</span>
+                <Price>{formatINR(trip.pricePerTon)} / ton</Price>
               </CardRow>
               <CardRow>
                 <Muted>Pickup</Muted>
-                <span>{trip.pickupPoint.address}</span>
+                <span>{normalizePoint(trip.pickupPoint).address}</span>
               </CardRow>
               <CardRow>
                 <Muted>Drop</Muted>
-                <span>{trip.dropPoint.address}</span>
+                <span>{normalizePoint(trip.dropPoint).address}</span>
               </CardRow>
 
               <Row $gap={3} $wrap>
@@ -363,21 +390,24 @@ export const ManageTrip = () => {
                 <Card key={booking._id}>
                   <Stack $gap={3}>
                     <CardRow>
-                      <Stack $gap={1}>
-                        <strong>{booking.shipper?.name || "Shipper"}</strong>
-                        <Muted>
-                          {booking.shipper?.city ? `${booking.shipper.city} · ` : ""}
-                          {booking.shipper?.ratingAvg
-                            ? `★ ${Number(booking.shipper.ratingAvg).toFixed(1)}`
-                            : "No ratings yet"}
-                        </Muted>
-                      </Stack>
+                      <Row $gap={3}>
+                        <Avatar name={booking.shipper?.name} size={38} />
+                        <Stack $gap={1}>
+                          <strong>{booking.shipper?.name || "Shipper"}</strong>
+                          <Muted>
+                            {booking.shipper?.city ? `${booking.shipper.city} · ` : ""}
+                            {booking.shipper?.ratingAvg
+                              ? `★ ${Number(booking.shipper.ratingAvg).toFixed(1)}`
+                              : "No ratings yet"}
+                          </Muted>
+                        </Stack>
+                      </Row>
                       <StatusBadge status={booking.status} />
                     </CardRow>
 
                     <Row $gap={4} $wrap>
                       <Muted>{formatTons(booking.capacityRequested)} requested</Muted>
-                      <Muted>{formatINR(booking.priceEstimate)}</Muted>
+                      <Price>{formatINR(booking.priceEstimate)}</Price>
                     </Row>
 
                     <Muted>{booking.goodsDescription}</Muted>

@@ -2,22 +2,39 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { listAdminBookings, forceCancelAdminBooking } from "../../api/admin";
-import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../../components/ui/Layout";
-import { Card } from "../../components/ui/Card";
+import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
-import { Input, Select } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
-import { Spinner } from "../../components/ui/Spinner";
 import { Pagination } from "../../components/ui/Pagination";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
+import {
+  Toolbar,
+  AdminSearchInput,
+  AdminSelect,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../../components/ui/AdminToolbar";
+import {
+  TableScroll,
+  Table,
+  Th,
+  Td,
+  Tr,
+  IndexTh,
+  IndexTd,
+  AdminCard,
+  AdminSkeletonRows,
+} from "../../components/ui/AdminTable";
 import { formatDateTime, formatINR } from "../../utils/format";
 
 const NON_CANCELLABLE = ["cancelled", "completed", "rejected", "expired"];
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export const Bookings = () => {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(20);
   const [bookings, setBookings] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
@@ -26,12 +43,16 @@ export const Bookings = () => {
   const [target, setTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const hasFilters = Boolean(search || status);
+
   const load = () =>
-    listAdminBookings({ page, limit: 20, status: status || undefined, search: search || undefined }).then((res) => {
-      setBookings(res.items || []);
-      setTotal(res.total || 0);
-      setPages(res.pages || 1);
-    });
+    listAdminBookings({ page, limit: pageSize, status: status || undefined, search: search || undefined }).then(
+      (res) => {
+        setBookings(res.items || []);
+        setTotal(res.total || 0);
+        setPages(res.pages || 1);
+      }
+    );
 
   useEffect(() => {
     let cancelled = false;
@@ -50,10 +71,16 @@ export const Bookings = () => {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, status, search]);
+  }, [page, pageSize, status, search]);
 
   const handleFilterChange = (setter) => (e) => {
     setter(e.target.value);
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("");
     setPage(1);
   };
 
@@ -72,35 +99,31 @@ export const Bookings = () => {
   };
 
   return (
-    <PageContainer style={{ maxWidth: 1220 }}>
-      <PageTitle>Bookings</PageTitle>
+    <PageContainer style={{ maxWidth: 1260 }}>
+      <Toolbar>
+        <AdminSearchInput
+          placeholder="Search by shipper, transporter, route, goods…"
+          value={search}
+          onChange={handleFilterChange(setSearch)}
+        />
+        <AdminSelect value={status} onChange={handleFilterChange(setStatus)}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="ongoing">Ongoing</option>
+          <option value="completed">Completed</option>
+          <option value="rejected">Rejected</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="expired">Expired</option>
+        </AdminSelect>
+        <ToolbarSpacer />
+        {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+        {!loading && <ResultsCount>{total} booking{total === 1 ? "" : "s"}</ResultsCount>}
+      </Toolbar>
 
-      <Card style={{ marginTop: 20 }}>
-        <Row $gap={2} $wrap style={{ marginBottom: 16 }}>
-          <Input
-            placeholder="Search by shipper, transporter, route, goods…"
-            value={search}
-            onChange={handleFilterChange(setSearch)}
-            style={{ maxWidth: 300 }}
-          />
-          <Select value={status} onChange={handleFilterChange(setStatus)} style={{ maxWidth: 170 }}>
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
-            <option value="rejected">Rejected</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="expired">Expired</option>
-          </Select>
-        </Row>
-
-        {loading ? (
-          <Row style={{ justifyContent: "center", padding: "50px 0" }}>
-            <Spinner $size={26} />
-          </Row>
-        ) : bookings.length === 0 ? (
-          <EmptyState>
+      <AdminCard $padding="0">
+        {!loading && bookings.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
             <Muted>No bookings match these filters.</Muted>
           </EmptyState>
         ) : (
@@ -122,50 +145,70 @@ export const Bookings = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b, i) => (
-                    <Tr key={b._id}>
-                      <IndexTd>{(page - 1) * 20 + i + 1}</IndexTd>
-                      <Td>{b.trip ? `${b.trip.fromCity} → ${b.trip.toCity}` : "—"}</Td>
-                      <Td>
-                        {b.shipper ? (
-                          <Link to={`/admin/users/${b.shipper._id}`}>{b.shipper.name}</Link>
-                        ) : (
-                          "—"
-                        )}
-                      </Td>
-                      <Td>
-                        {b.trip?.transporter ? (
-                          <Link to={`/admin/users/${b.trip.transporter._id}`}>{b.trip.transporter.name}</Link>
-                        ) : (
-                          "—"
-                        )}
-                      </Td>
-                      <Td>{b.goodsDescription || "—"}</Td>
-                      <Td>{b.capacityRequested}t</Td>
-                      <Td>{formatINR(b.priceEstimate)}</Td>
-                      <Td>
-                        <StatusBadge status={b.status} />
-                      </Td>
-                      <Td>{formatDateTime(b.createdAt)}</Td>
-                      <Td>
-                        <Button
-                          $variant="danger"
-                          $size="sm"
-                          disabled={NON_CANCELLABLE.includes(b.status)}
-                          onClick={() => setTarget(b)}
-                        >
-                          Force cancel
-                        </Button>
-                      </Td>
-                    </Tr>
-                  ))}
+                  {loading ? (
+                    <AdminSkeletonRows rows={pageSize > 10 ? 10 : pageSize} cols={10} />
+                  ) : (
+                    bookings.map((b, i) => (
+                      <Tr key={b._id}>
+                        <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
+                        <Td>{b.trip ? `${b.trip.fromCity} → ${b.trip.toCity}` : "—"}</Td>
+                        <Td>
+                          {b.shipper ? (
+                            <Link to={`/admin/users/${b.shipper._id}`}>{b.shipper.name}</Link>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
+                        <Td>
+                          {b.trip?.transporter ? (
+                            <Link to={`/admin/users/${b.trip.transporter._id}`}>{b.trip.transporter.name}</Link>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
+                        <Td>{b.goodsDescription || "—"}</Td>
+                        <Td>{b.capacityRequested}t</Td>
+                        <Td>{formatINR(b.priceEstimate)}</Td>
+                        <Td>
+                          <StatusBadge status={b.status} />
+                        </Td>
+                        <Td>{formatDateTime(b.createdAt)}</Td>
+                        <Td>
+                          <Button
+                            $variant="danger"
+                            $size="sm"
+                            disabled={NON_CANCELLABLE.includes(b.status)}
+                            onClick={() => setTarget(b)}
+                          >
+                            Force cancel
+                          </Button>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
                 </tbody>
               </Table>
             </TableScroll>
-            <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+            <div style={{ padding: "0 20px 16px" }}>
+              {!loading && (
+                <Pagination
+                  variant="admin"
+                  page={page}
+                  pages={pages}
+                  total={total}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                />
+              )}
+            </div>
           </>
         )}
-      </Card>
+      </AdminCard>
 
       <ConfirmModal
         open={!!target}

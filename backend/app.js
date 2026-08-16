@@ -21,6 +21,7 @@ require("./config/validateEnv")();
 
 const csrfOriginCheck = require("./middleWare/csrf");
 const { apiLimiter } = require("./middleWare/rateLimit");
+const sanitizeInput = require("./middleWare/sanitize");
 
 // Routes
 const authRoutes = require("./routes/authRoutes");
@@ -91,6 +92,7 @@ app.use(
 
 app.use(csrfOriginCheck);
 app.use(apiLimiter);
+app.use(sanitizeInput);
 
 // Default Route
 app.get("/", (req, res) => {

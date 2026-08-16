@@ -28,23 +28,23 @@ describe("Login — OTP flow", () => {
     vi.clearAllMocks();
   });
 
-  it("requests an OTP for a valid mobile number and advances to the OTP step", async () => {
+  it("requests an OTP for a valid email and advances to the OTP step", async () => {
     authApi.requestOtp.mockResolvedValue({ success: true });
     const user = userEvent.setup();
     renderWithProviders(<Login />);
 
-    await user.type(screen.getByLabelText("Mobile number"), "9876543210");
+    await user.type(screen.getByLabelText("Email"), "shipper@example.com");
     await user.click(screen.getByRole("button", { name: "Send OTP" }));
 
-    expect(authApi.requestOtp).toHaveBeenCalledWith("9876543210");
+    expect(authApi.requestOtp).toHaveBeenCalledWith("shipper@example.com");
     expect(await screen.findByLabelText("OTP")).toBeInTheDocument();
   });
 
-  it("does not call the API for an invalid mobile number", async () => {
+  it("does not call the API for an invalid email", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Login />);
 
-    await user.type(screen.getByLabelText("Mobile number"), "12345");
+    await user.type(screen.getByLabelText("Email"), "not-an-email");
     await user.click(screen.getByRole("button", { name: "Send OTP" }));
 
     expect(authApi.requestOtp).not.toHaveBeenCalled();
@@ -56,7 +56,7 @@ describe("Login — OTP flow", () => {
     const user = userEvent.setup();
     renderWithProviders(<Login />);
 
-    await user.type(screen.getByLabelText("Mobile number"), "9876543210");
+    await user.type(screen.getByLabelText("Email"), "shipper@example.com");
     await user.click(screen.getByRole("button", { name: "Send OTP" }));
     await screen.findByLabelText("OTP");
 
@@ -64,7 +64,7 @@ describe("Login — OTP flow", () => {
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(authApi.verifyOtp).toHaveBeenCalledWith(
-      expect.objectContaining({ mobile: "9876543210", otp: "123456" })
+      expect.objectContaining({ email: "shipper@example.com", otp: "123456" })
     );
     expect(setUser).toHaveBeenCalledWith({ id: "u1", name: "Test" });
   });
@@ -75,7 +75,7 @@ describe("Login — OTP flow", () => {
     const user = userEvent.setup();
     renderWithProviders(<Login />);
 
-    await user.type(screen.getByLabelText("Mobile number"), "9876543210");
+    await user.type(screen.getByLabelText("Email"), "shipper@example.com");
     await user.click(screen.getByRole("button", { name: "Send OTP" }));
     await screen.findByLabelText("OTP");
     await user.type(screen.getByLabelText("OTP"), "123456");

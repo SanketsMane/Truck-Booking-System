@@ -40,7 +40,7 @@ const listPayments = async (req, res) => {
 
     const [items, total] = await Promise.all([
       Payment.find(filter)
-        .populate("user", "name mobile")
+        .populate("user", "name email mobile")
         .populate("booking", "priceEstimate status")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -94,7 +94,7 @@ const listWallets = async (req, res) => {
     const filter = { ownerType: "user" };
 
     const [items, total] = await Promise.all([
-      Wallet.find(filter).populate("user", "name mobile roles").sort({ balance: -1 }).skip(skip).limit(limit),
+      Wallet.find(filter).populate("user", "name email mobile roles").sort({ balance: -1 }).skip(skip).limit(limit),
       Wallet.countDocuments(filter),
     ]);
 
@@ -113,7 +113,7 @@ const listWithdrawals = async (req, res) => {
 
     const [items, total] = await Promise.all([
       WithdrawalRequest.find(filter)
-        .populate("transporter", "name mobile")
+        .populate("transporter", "name email mobile")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

@@ -4,8 +4,10 @@ const jwt = require("jsonwebtoken");
 const sendServerError = require("../utils/sendServerError");
 
 const User = require("../models/userModel");
+const Verification = require("../models/verificationModel");
 const otpProvider = require("../utils/otpProvider");
 const emailProvider = require("../utils/emailProvider");
+const { shouldBlockUnconfiguredOtp } = require("../utils/notificationGuard");
 const { welcomeEmail, passwordResetEmail } = require("../emailTemplates/templates");
 const {
   requestOtpValidation,
@@ -67,10 +69,10 @@ const issueSession = (res, user) => {
 
 const publicProfile = (user) => ({
   id: user._id,
-  mobile: user.mobile,
-  mobileVerified: user.mobileVerified,
-  name: user.name,
   email: user.email,
+  emailVerified: user.emailVerified,
+  mobile: user.mobile,
+  name: user.name,
   city: user.city,
   profilePhoto: user.profilePhoto,
   roles: user.roles,
@@ -80,6 +82,9 @@ const publicProfile = (user) => ({
   notificationPreferences: user.notificationPreferences,
   hasPassword: Boolean(user.passwordHash),
   createdAt: user.createdAt,
+  // SRS-09.1 — profile display includes rating and join-date summary.
+  ratingAvg: user.ratingAvg,
+  ratingCount: user.ratingCount,
 });
 
 // Request OTP (signup or login — same entry point per FR-01.1)
@@ -90,12 +95,20 @@ const requestOtp = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { mobile } = req.body;
+    const email = req.body.email.trim().toLowerCase();
+
+    if (await shouldBlockUnconfiguredOtp(email)) {
+      return res.status(503).json({
+        success: false,
+        msg: "Sign-in is temporarily unavailable while the platform finishes setup — please try again shortly.",
+      });
+    }
+
     const now = new Date();
 
-    let user = await User.findOne({ mobile });
+    let user = await User.findOne({ email });
     if (!user) {
-      user = new User({ mobile });
+      user = new User({ email });
     }
 
     const otpState = user.otp || {};
@@ -150,7 +163,7 @@ const requestOtp = async (req, res) => {
     };
     await user.save();
 
-    await otpProvider.sendOtp(mobile, otp);
+    await otpProvider.sendOtp(email, otp);
 
     res.status(200).json({
       success: true,
@@ -162,7 +175,7 @@ const requestOtp = async (req, res) => {
   }
 };
 
-// Verify OTP — completes signup for a new mobile number, or logs in an existing one
+// Verify OTP — completes signup for a new email, or logs in an existing one
 const verifyOtp = async (req, res) => {
   try {
     const { error } = verifyOtpValidation.validate(req.body);
@@ -170,10 +183,11 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { mobile, otp, name, email, city, roles } = req.body;
+    const { otp, name, mobile, city, roles } = req.body;
+    const email = req.body.email.trim().toLowerCase();
     const now = new Date();
 
-    const user = await User.findOne({ mobile }).select("+passwordHash");
+    const user = await User.findOne({ email }).select("+passwordHash");
     if (!user || !user.otp || !user.otp.codeHash) {
       return res.status(400).json({ success: false, msg: "Request an OTP first" });
     }
@@ -195,7 +209,7 @@ const verifyOtp = async (req, res) => {
     // going live with real users.
     const isMasterOtp = Boolean(process.env.MASTER_OTP) && otp === process.env.MASTER_OTP;
     if (isMasterOtp) {
-      console.warn(`[MASTER_OTP] Bypassed real OTP check for ${mobile}`);
+      console.warn(`[MASTER_OTP] Bypassed real OTP check for ${email}`);
     }
 
     const isMatch = isMasterOtp || (await bcrypt.compare(otp, user.otp.codeHash));
@@ -209,26 +223,26 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, msg: "Invalid OTP" });
     }
 
-    if (!user.mobileVerified && !name && !user.name) {
+    if (!user.emailVerified && !name && !user.name) {
       return res.status(400).json({ success: false, msg: "Name is required to complete signup" });
     }
 
     if (name) user.name = name;
-    if (email && email !== user.email) {
-      const emailTaken = await User.findOne({ email, _id: { $ne: user._id } });
-      if (emailTaken) {
-        return res.status(409).json({ success: false, msg: "That email is already in use by another account" });
+    if (mobile && mobile !== user.mobile) {
+      const mobileTaken = await User.findOne({ mobile, _id: { $ne: user._id } });
+      if (mobileTaken) {
+        return res.status(409).json({ success: false, msg: "That mobile number is already in use by another account" });
       }
-      user.email = email;
+      user.mobile = mobile;
     }
     if (city) user.city = city;
     if (roles && roles.length) {
       user.roles = Array.from(new Set([...(user.roles || []), ...roles]));
     }
 
-    const isNewSignup = !user.mobileVerified;
+    const isNewSignup = !user.emailVerified;
 
-    user.mobileVerified = true;
+    user.emailVerified = true;
     user.otp.codeHash = undefined;
     user.otp.expiresAt = undefined;
     user.otp.verifyAttempts = 0;
@@ -237,9 +251,7 @@ const verifyOtp = async (req, res) => {
 
     issueSession(res, user);
 
-    // Email is optional on the OTP signup path (unlike the email+password
-    // `signup` endpoint below) — only send if they actually gave one.
-    if (isNewSignup && user.email) {
+    if (isNewSignup) {
       const { subject, html } = welcomeEmail({ name: user.name });
       emailProvider.sendEmail({ to: user.email, subject, html }).catch((err) => console.error("[verifyOtp] welcome email failed:", err.message));
     }
@@ -250,7 +262,7 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-// Add a role (shipper/transporter) to the current account without re-verifying the mobile number
+// Add a role (shipper/transporter) to the current account without re-verifying the account
 const addRole = async (req, res) => {
   try {
     const { error } = addRoleValidation.validate(req.body);
@@ -324,21 +336,56 @@ const updateProfile = async (req, res) => {
 
     const updates = req.body;
     delete updates.roles;
-    delete updates.mobile;
     delete updates.isAdmin;
     delete updates.status;
+    // Email is the account's login identity now — changing it here (with no
+    // re-verification step) would let a user lock themselves out or, worse,
+    // race another account's email. Same treatment mobile used to get when
+    // it was the identifier.
+    delete updates.email;
 
-    if (updates.email) {
-      const emailTaken = await User.findOne({ email: updates.email, _id: { $ne: req.auth.id } });
-      if (emailTaken) {
-        return res.status(409).json({ success: false, msg: "That email is already in use by another account" });
+    // SRS-09.2 — name is the one field KYC verification actually attests to
+    // (it's what's checked against the submitted ID documents), so once any
+    // verification has been approved it locks, the same way the SRS expects
+    // "verified-identity fields" to. Unlocking it goes through the admin
+    // rejecting that verification (existing capability, with a reason) —
+    // which both re-opens this field and, per submitVerification, puts the
+    // record back in Pending for the user to resubmit. That reject-then-
+    // resubmit round trip *is* the "admin-assisted flow that re-triggers
+    // verification" the spec asks for, not a separate mechanism.
+    if (typeof updates.name === "string") {
+      const currentUser = await User.findById(req.auth.id).select("name");
+      if (currentUser && updates.name.trim() !== currentUser.name) {
+        const hasVerifiedIdentity = await Verification.exists({ user: req.auth.id, status: "verified" });
+        if (hasVerifiedIdentity) {
+          return res.status(403).json({
+            success: false,
+            msg: "Your name is locked after verification and matches your approved documents. Contact support to have your verification reopened before changing it.",
+          });
+        }
       }
     }
 
-    const user = await User.findByIdAndUpdate(req.auth.id, updates, {
-      new: true,
-      runValidators: true,
-    }).select("-otp +passwordHash");
+    // An empty string means "clear it" — stored as an actually-missing field
+    // (via $unset), not "", since mobile's sparse unique index only ignores
+    // documents where the field is absent; two users both saving mobile: ""
+    // would otherwise collide on that index.
+    let unsetMobile = false;
+    if (updates.mobile === "") {
+      delete updates.mobile;
+      unsetMobile = true;
+    } else if (updates.mobile) {
+      const mobileTaken = await User.findOne({ mobile: updates.mobile, _id: { $ne: req.auth.id } });
+      if (mobileTaken) {
+        return res.status(409).json({ success: false, msg: "That mobile number is already in use by another account" });
+      }
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.auth.id,
+      unsetMobile ? { $set: updates, $unset: { mobile: "" } } : updates,
+      { new: true, runValidators: true }
+    ).select("-otp +passwordHash");
 
     if (!user) {
       return res.status(404).json({ success: false, msg: "User not found" });
@@ -351,11 +398,11 @@ const updateProfile = async (req, res) => {
 };
 
 // Creates a brand-new account with a password. Deliberately does NOT attach
-// a password to an existing mobile/email match — an unauthenticated
-// endpoint that could do that would let anyone "sign up" with a mobile
-// number they don't own and take over that account. Adding a password to
-// an existing (e.g. OTP-created) account goes through setPassword instead,
-// which requires an active session.
+// a password to an existing email match — an unauthenticated endpoint that
+// could do that would let anyone "sign up" with an email they don't own and
+// take over that account. Adding a password to an existing (e.g. OTP-
+// created) account goes through setPassword instead, which requires an
+// active session.
 const signup = async (req, res) => {
   try {
     const { error } = signupValidation.validate(req.body);
@@ -363,22 +410,30 @@ const signup = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { name, mobile, email, password, roles } = req.body;
+    const { name, password, roles } = req.body;
+    const email = req.body.email.trim().toLowerCase();
+    const mobile = req.body.mobile || undefined;
 
-    const existing = await User.findOne({ $or: [{ mobile }, { email }] });
+    // Only include mobile in the conflict check when one was actually
+    // given — an unset $or clause would match every other mobile-less
+    // account (mobile: undefined) and false-positive on the very first
+    // signup after this one.
+    const orConditions = [{ email }];
+    if (mobile) orConditions.push({ mobile });
+    const existing = await User.findOne({ $or: orConditions });
     if (existing) {
-      const field = existing.mobile === mobile ? "mobile number" : "email";
+      const field = existing.email === email ? "email" : "mobile number";
       return res.status(409).json({ success: false, msg: `An account with this ${field} already exists` });
     }
 
     const passwordHash = await bcrypt.hash(password, saltRounds);
     const user = await User.create({
       name,
-      mobile,
       email,
+      mobile,
       passwordHash,
       roles: roles && roles.length ? roles : [],
-      mobileVerified: false,
+      emailVerified: false,
     });
 
     issueSession(res, user);
@@ -392,8 +447,8 @@ const signup = async (req, res) => {
   }
 };
 
-// Login via either identifier — same account, same session shape as the
-// OTP path, just a different way in for users who set a password.
+// Login via email — same account, same session shape as the OTP path, just
+// a different way in for users who set a password.
 const loginPassword = async (req, res) => {
   try {
     const { error } = loginPasswordValidation.validate(req.body);
@@ -401,23 +456,21 @@ const loginPassword = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { identifier, password } = req.body;
-    const normalized = identifier.trim().toLowerCase();
+    const { password } = req.body;
+    const email = req.body.email.trim().toLowerCase();
 
-    const user = await User.findOne({
-      $or: [{ email: normalized }, { mobile: identifier.trim() }],
-    }).select("+passwordHash");
+    const user = await User.findOne({ email }).select("+passwordHash");
 
     // Same generic message whether the account doesn't exist or the
     // password is wrong — don't let this endpoint be used to enumerate
-    // which emails/mobiles have accounts.
+    // which emails have accounts.
     if (!user || !user.passwordHash) {
-      return res.status(400).json({ success: false, msg: "Incorrect email/mobile or password" });
+      return res.status(400).json({ success: false, msg: "Incorrect email or password" });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(400).json({ success: false, msg: "Incorrect email/mobile or password" });
+      return res.status(400).json({ success: false, msg: "Incorrect email or password" });
     }
 
     if (user.status !== "active") {
@@ -444,7 +497,7 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { email } = req.body;
+    const email = req.body.email.trim().toLowerCase();
     const user = await User.findOne({ email });
 
     if (user) {

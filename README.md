@@ -11,7 +11,7 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 ## Key Features
 
 ### For Shippers
-- Mobile OTP-based signup and login (no passwords)
+- Email OTP-based signup and login, or email + password — mobile number is optional (used only for contact, not login)
 - Search trips by origin city, destination city, and date
 - Book capacity on a matching trip, with a server-computed price estimate
 - Pay for a confirmed booking from an in-app wallet or via Razorpay
@@ -174,7 +174,7 @@ Full templates with explanatory comments live in `backend/.env.example` and `fro
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web push keypair |
 | `STORAGE_PROVIDER` | `local` (dev) or `s3` (required in production) |
 | `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Object storage credentials, used when `STORAGE_PROVIDER=s3` |
-| `SEED_ADMIN_MOBILE` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` | First admin account, used by `scripts/seedAdmin.js` |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_MOBILE` / `SEED_ADMIN_NAME` | First admin account, used by `scripts/seedAdmin.js` (mobile optional) |
 
 Razorpay and SMS/email provider credentials are configured at runtime from the admin Settings page, not via environment variables.
 

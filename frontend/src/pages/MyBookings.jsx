@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
 import { listMyBookings } from "../api/bookings";
 import { getTrip } from "../api/trips";
-import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
-import { Card, CardRow } from "../components/ui/Card";
+import { PageContainer, Muted, Row, EmptyState } from "../components/ui/Layout";
+import { Card } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
-import { Spinner } from "../components/ui/Spinner";
+import { Pagination } from "../components/ui/Pagination";
+import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../components/ui/Table";
+import { SkeletonTableRows } from "../components/ui/Skeleton";
+import { Toolbar, SearchInput, ToolbarSpacer, ResultsCount, ClearFiltersButton } from "../components/ui/Toolbar";
+import { formatINR, formatTons } from "../utils/format";
 
 const ROLE_TABS = [
   { key: "shipper", label: "As Shipper" },
@@ -22,6 +26,8 @@ const STATUS_TABS = [
   { key: "cancelled", label: "Cancelled", statuses: ["cancelled", "rejected", "expired"] },
 ];
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 const TabButton = styled.button`
   padding: 8px 16px;
   border-radius: ${({ theme }) => theme.radius.pill};
@@ -31,12 +37,6 @@ const TabButton = styled.button`
   font-weight: 600;
   font-size: 13.5px;
   white-space: nowrap;
-`;
-
-const RowLink = styled(Link)`
-  text-decoration: none;
-  color: inherit;
-  display: block;
 `;
 
 const formatDateTime = (value) =>
@@ -50,45 +50,23 @@ const formatDateTime = (value) =>
       })
     : "—";
 
-const BookingRow = ({ booking, role, counterparty }) => {
-  const trip = booking.trip;
-  const counterpartyLabel = counterparty === undefined ? "Loading…" : counterparty?.name || "—";
-
-  return (
-    <RowLink to={`/bookings/${booking._id}`}>
-      <Card>
-        <CardRow>
-          <Stack $gap={1}>
-            <SectionTitle>
-              {trip?.fromCity} → {trip?.toCity}
-            </SectionTitle>
-            <Muted>{formatDateTime(trip?.departureAt)}</Muted>
-          </Stack>
-          <StatusBadge status={booking.status} />
-        </CardRow>
-        <Row $gap={4} $wrap style={{ marginTop: 12 }}>
-          <Muted>{booking.capacityRequested} tons</Muted>
-          <Muted>₹{booking.priceEstimate}</Muted>
-          <Muted>
-            {role === "shipper" ? "Transporter" : "Shipper"}: {counterpartyLabel}
-          </Muted>
-        </Row>
-      </Card>
-    </RowLink>
-  );
-};
-
 export const MyBookings = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const availableRoles = user?.roles || [];
   const [role, setRole] = useState(availableRoles[0] || "shipper");
   const [statusTab, setStatusTab] = useState("upcoming");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [transporters, setTransporters] = useState({});
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
     listMyBookings({ role })
       .then(({ bookings }) => {
         if (!cancelled) setBookings(bookings);
@@ -119,62 +97,175 @@ export const MyBookings = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookings, role]);
 
+  const withCounterparty = useMemo(
+    () =>
+      bookings.map((b) => ({
+        ...b,
+        counterparty: role === "shipper" ? transporters[b.trip?._id] : b.shipper,
+      })),
+    [bookings, role, transporters]
+  );
+
   const grouped = useMemo(() => {
     const buckets = { upcoming: [], ongoing: [], completed: [], cancelled: [] };
-    for (const b of bookings) {
+    for (const b of withCounterparty) {
       const tab = STATUS_TABS.find((t) => t.statuses.includes(b.status));
       if (tab) buckets[tab.key].push(b);
     }
     return buckets;
-  }, [bookings]);
+  }, [withCounterparty]);
 
   const visible = grouped[statusTab];
   const activeStatusTab = STATUS_TABS.find((t) => t.key === statusTab);
 
-  return (
-    <PageContainer>
-      <PageTitle style={{ marginBottom: 20 }}>My Bookings</PageTitle>
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return visible;
+    return visible.filter((b) => {
+      const trip = b.trip;
+      const haystack = [trip?.fromCity, trip?.toCity, b.counterparty?.name, b.goodsDescription]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [visible, search]);
 
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  return (
+    <PageContainer style={{ maxWidth: 1080 }}>
       {availableRoles.length > 1 && (
         <Row $gap={2} $wrap style={{ marginBottom: 16 }}>
           {ROLE_TABS.filter((t) => availableRoles.includes(t.key)).map((t) => (
-            <TabButton key={t.key} type="button" $active={role === t.key} onClick={() => setRole(t.key)}>
+            <TabButton
+              key={t.key}
+              type="button"
+              $active={role === t.key}
+              onClick={() => {
+                setRole(t.key);
+                setPage(1);
+              }}
+            >
               {t.label}
             </TabButton>
           ))}
         </Row>
       )}
 
-      <Row $gap={2} $wrap style={{ marginBottom: 24 }}>
+      <Row $gap={2} $wrap style={{ marginBottom: 20 }}>
         {STATUS_TABS.map((t) => (
-          <TabButton key={t.key} type="button" $active={statusTab === t.key} onClick={() => setStatusTab(t.key)}>
+          <TabButton
+            key={t.key}
+            type="button"
+            $active={statusTab === t.key}
+            onClick={() => {
+              setStatusTab(t.key);
+              setPage(1);
+            }}
+          >
             {t.label}
             {grouped[t.key].length ? ` (${grouped[t.key].length})` : ""}
           </TabButton>
         ))}
       </Row>
 
-      {loading ? (
-        <Row style={{ justifyContent: "center", padding: "60px 0" }}>
-          <Spinner $size={28} />
-        </Row>
-      ) : visible.length === 0 ? (
-        <EmptyState>
-          No {activeStatusTab.label.toLowerCase()} bookings {role === "shipper" ? "as a shipper" : "as a transporter"}
-          .
-        </EmptyState>
-      ) : (
-        <Stack $gap={3}>
-          {visible.map((b) => (
-            <BookingRow
-              key={b._id}
-              booking={b}
-              role={role}
-              counterparty={role === "shipper" ? transporters[b.trip?._id] : b.shipper}
-            />
-          ))}
-        </Stack>
-      )}
+      <Toolbar>
+        <SearchInput
+          placeholder="Search by route or name…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+        <ToolbarSpacer />
+        {search && (
+          <ClearFiltersButton
+            onClick={() => {
+              setSearch("");
+              setPage(1);
+            }}
+          />
+        )}
+        {!loading && <ResultsCount>{total} booking{total === 1 ? "" : "s"}</ResultsCount>}
+      </Toolbar>
+
+      <Card $padding="0">
+        {!loading && paged.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
+            <Muted>
+              No {activeStatusTab.label.toLowerCase()} bookings {role === "shipper" ? "as a shipper" : "as a transporter"}
+              {search ? " match this search" : ""}.
+            </Muted>
+          </EmptyState>
+        ) : (
+          <>
+            <TableScroll>
+              <Table $minWidth="820px">
+                <thead>
+                  <tr>
+                    <IndexTh>#</IndexTh>
+                    <Th>Route</Th>
+                    <Th>Departure</Th>
+                    <Th>Capacity</Th>
+                    <Th>Price</Th>
+                    <Th>{role === "shipper" ? "Transporter" : "Shipper"}</Th>
+                    <Th>Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <SkeletonTableRows rows={pageSize > 10 ? 10 : pageSize} cols={7} />
+                  ) : (
+                    paged.map((b, i) => {
+                      const trip = b.trip;
+                      const counterpartyLabel = b.counterparty === undefined ? "Loading…" : b.counterparty?.name || "—";
+                      return (
+                        <Tr
+                          key={b._id}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => navigate(`/bookings/${b._id}`)}
+                        >
+                          <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
+                          <Td>
+                            {trip?.fromCity} → {trip?.toCity}
+                          </Td>
+                          <Td>{formatDateTime(trip?.departureAt)}</Td>
+                          <Td>{formatTons(b.capacityRequested)}</Td>
+                          <Td>{formatINR(b.priceEstimate)}</Td>
+                          <Td>{counterpartyLabel}</Td>
+                          <Td>
+                            <StatusBadge status={b.status} />
+                          </Td>
+                        </Tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </Table>
+            </TableScroll>
+            <div style={{ padding: "0 20px 16px" }}>
+              {!loading && (
+                <Pagination
+                  page={page}
+                  pages={pages}
+                  total={total}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </Card>
     </PageContainer>
   );
 };

@@ -2,6 +2,7 @@ const Wallet = require("../models/walletModel");
 const WalletTransaction = require("../models/walletTransactionModel");
 const Payment = require("../models/paymentModel");
 const WithdrawalRequest = require("../models/withdrawalRequestModel");
+const User = require("../models/userModel");
 const razorpayProvider = require("../utils/razorpayProvider");
 const { applyWalletEntry, withWalletSession, InsufficientBalanceError } = require("../utils/walletService");
 const { finalizePayment } = require("../utils/paymentFinalizer");
@@ -13,7 +14,33 @@ const {
   rechargeOrderValidation,
   razorpayVerifyValidation,
   withdrawalRequestValidation,
+  payoutMethodValidation,
 } = require("../validators/walletValidation");
+
+// User.payoutMethod's discriminator key is `method` (to avoid the awkward
+// `payoutMethod.payoutMethod`), but encryptPayoutDetails/decryptPayoutDetails
+// (shared with WithdrawalRequest) expect `payoutMethod` — this builds a
+// fresh plain object in that shape rather than passing the live Mongoose
+// subdocument through, since decryptPayoutDetails mutates whatever
+// bankDetails object it's given in place.
+const toCryptoShape = (saved) => ({
+  payoutMethod: saved.method,
+  bankDetails: saved.bankDetails
+    ? {
+        accountHolderName: saved.bankDetails.accountHolderName,
+        accountNumber: saved.bankDetails.accountNumber,
+        ifscCode: saved.bankDetails.ifscCode,
+        bankName: saved.bankDetails.bankName,
+      }
+    : undefined,
+  upiId: saved.upiId,
+});
+
+const getSavedPayoutMethod = (user) => {
+  if (!user.payoutMethod?.method) return null;
+  const decrypted = decryptPayoutDetails(toCryptoShape(user.payoutMethod));
+  return { method: decrypted.payoutMethod, bankDetails: decrypted.bankDetails, upiId: decrypted.upiId };
+};
 
 const getMyWallet = async (req, res) => {
   try {
@@ -28,6 +55,7 @@ const listMyTransactions = async (req, res) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
     const filter = { user: req.auth.id };
+    if (req.query.type) filter.type = req.query.type;
 
     const [items, total] = await Promise.all([
       WalletTransaction.find(filter)
@@ -138,6 +166,22 @@ const requestWithdrawal = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
+    // No payout method in the request body -> fall back to whatever the
+    // transporter has saved on their profile (Profile.jsx's payout card).
+    if (!value.payoutMethod) {
+      const user = await User.findById(req.auth.id).select("payoutMethod");
+      const saved = getSavedPayoutMethod(user);
+      if (!saved) {
+        return res.status(400).json({
+          success: false,
+          msg: "No payout method provided and none saved on your profile",
+        });
+      }
+      value.payoutMethod = saved.method;
+      value.bankDetails = saved.bankDetails;
+      value.upiId = saved.upiId;
+    }
+
     const request = await withWalletSession(async (session) => {
       const { transaction } = await applyWalletEntry({
         walletFilter: { ownerType: "user", user: req.auth.id },
@@ -201,6 +245,45 @@ const listMyWithdrawals = async (req, res) => {
   }
 };
 
+// The transporter's own saved default (Profile.jsx's payout card) — not to
+// be confused with a specific WithdrawalRequest's payout snapshot.
+const getMyPayoutMethod = async (req, res) => {
+  try {
+    const user = await User.findById(req.auth.id).select("payoutMethod");
+    res.status(200).json({ success: true, payoutMethod: getSavedPayoutMethod(user) });
+  } catch (error) {
+    sendServerError(res, error, "walletController");
+  }
+};
+
+const savePayoutMethod = async (req, res) => {
+  try {
+    const { error, value } = payoutMethodValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const encrypted = encryptPayoutDetails(value);
+    const user = await User.findByIdAndUpdate(
+      req.auth.id,
+      {
+        $set: {
+          payoutMethod: {
+            method: value.payoutMethod,
+            bankDetails: encrypted.bankDetails,
+            upiId: encrypted.upiId,
+          },
+        },
+      },
+      { new: true, select: "payoutMethod" }
+    );
+
+    res.status(200).json({ success: true, msg: "Payout method saved", payoutMethod: getSavedPayoutMethod(user) });
+  } catch (error) {
+    sendServerError(res, error, "walletController");
+  }
+};
+
 module.exports = {
   getMyWallet,
   listMyTransactions,
@@ -208,4 +291,6 @@ module.exports = {
   verifyRecharge,
   requestWithdrawal,
   listMyWithdrawals,
+  getMyPayoutMethod,
+  savePayoutMethod,
 };

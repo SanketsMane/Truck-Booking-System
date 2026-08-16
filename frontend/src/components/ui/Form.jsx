@@ -1,5 +1,6 @@
-import { useId, isValidElement, cloneElement, Children } from "react";
+import { useId, useState, isValidElement, cloneElement, Children } from "react";
 import styled from "styled-components";
+import { Eye, EyeOff } from "lucide-react";
 
 const fieldStyles = `
   width: 100%;
@@ -35,6 +36,64 @@ export const Textarea = styled.textarea`
 export const Select = styled.select`
   ${fieldStyles}
 `;
+
+const PasswordWrap = styled.div`
+  position: relative;
+`;
+
+const PasswordField = styled(Input)`
+  padding-right: 42px;
+`;
+
+const ToggleVisibility = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  color: var(--field-placeholder);
+  transition: color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: var(--field-text);
+    background: rgba(0, 0, 0, 0.04);
+  }
+`;
+
+// Wraps a text input with a show/hide toggle so users can verify what
+// they typed — same control on every password field in the app (signup,
+// login, reset) instead of each page rolling its own eye icon.
+export const PasswordInput = ({ id, value, onChange, placeholder, autoFocus, autoComplete, ...props }) => {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <PasswordWrap>
+      <PasswordField
+        id={id}
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        {...props}
+      />
+      <ToggleVisibility
+        type="button"
+        tabIndex={-1}
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Hide password" : "Show password"}
+      >
+        {visible ? <EyeOff size={17} strokeWidth={2.2} /> : <Eye size={17} strokeWidth={2.2} />}
+      </ToggleVisibility>
+    </PasswordWrap>
+  );
+};
 
 export const FieldTokens = styled.div`
   --field-bg: ${({ theme }) => theme.color.surfaceRaised};

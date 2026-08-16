@@ -11,33 +11,101 @@ import {
   MapPin,
   Star,
   LifeBuoy,
-  ScrollText,
+  AlertTriangle,
   Settings as SettingsIcon,
+  FileClock,
 } from "lucide-react";
 import DashboardShell from "./DashboardShell";
 
+// Grouped the way an operator actually thinks about the platform — not an
+// alphabetical dump of every route. Each item's `description` becomes the
+// admin top header's contextual subtitle (DashboardShell derives the page
+// title/description by matching the current route against this config, so
+// no admin page needs to know about the shell at all).
 const NAV = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/verification", label: "Verification", icon: ShieldCheck },
-  { to: "/admin/users", label: "Users", icon: UsersIcon },
-  { to: "/admin/trucks", label: "Trucks", icon: TruckIcon },
-  { to: "/admin/trips", label: "Trips", icon: RouteIcon },
-  { to: "/admin/bookings", label: "Bookings", icon: Package },
-  { to: "/admin/payments", label: "Payments", icon: CreditCard },
-  { to: "/admin/platform-wallet", label: "Platform Wallet", icon: WalletIcon },
-  { to: "/admin/withdrawals", label: "Withdrawals", icon: Banknote },
-  { to: "/admin/live-tracking", label: "Live Tracking", icon: MapPin },
-  { to: "/admin/reviews", label: "Reviews", icon: Star },
-  { to: "/admin/support", label: "Support", icon: LifeBuoy },
-  { to: "/admin/disputes", label: "Disputes", icon: ScrollText },
-  { to: "/admin/settings", label: "Settings", icon: SettingsIcon },
+  {
+    label: "Main",
+    items: [
+      {
+        to: "/admin",
+        label: "Dashboard",
+        description: "Platform overview and key metrics",
+        icon: LayoutDashboard,
+        end: true,
+      },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      {
+        to: "/admin/verification",
+        label: "Verification",
+        description: "KYC and document review queue",
+        icon: ShieldCheck,
+      },
+      { to: "/admin/users", label: "Users", description: "Shippers and transporters", icon: UsersIcon },
+      { to: "/admin/trucks", label: "Trucks", description: "Registered fleet vehicles", icon: TruckIcon },
+      { to: "/admin/trips", label: "Trips", description: "Posted capacity across the network", icon: RouteIcon },
+      { to: "/admin/bookings", label: "Bookings", description: "Shipment bookings and status", icon: Package },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { to: "/admin/payments", label: "Payments", description: "Booking and wallet transactions", icon: CreditCard },
+      {
+        to: "/admin/platform-wallet",
+        label: "Platform Wallet",
+        description: "Commission balance and ledger",
+        icon: WalletIcon,
+      },
+      {
+        to: "/admin/withdrawals",
+        label: "Withdrawals",
+        description: "Transporter payout requests",
+        icon: Banknote,
+      },
+    ],
+  },
+  {
+    label: "Monitoring",
+    items: [
+      {
+        to: "/admin/live-tracking",
+        label: "Live Tracking",
+        description: "Trucks currently on the road",
+        icon: MapPin,
+      },
+      { to: "/admin/reviews", label: "Reviews", description: "Flagged ratings and moderation", icon: Star },
+      { to: "/admin/support", label: "Support", description: "Open support requests", icon: LifeBuoy },
+      { to: "/admin/disputes", label: "Disputes", description: "Booking disputes awaiting resolution", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      {
+        to: "/admin/settings",
+        label: "Settings",
+        description: "Platform configuration and integrations",
+        icon: SettingsIcon,
+      },
+      {
+        to: "/admin/audit-logs",
+        label: "Audit Log",
+        description: "Admin action history",
+        icon: FileClock,
+      },
+    ],
+  },
 ];
 
 // Admin gets its own dedicated shell — no consumer navbar, no shipper/
 // transporter nav links, no marketing footer. An admin account manages the
 // platform; it isn't also acting as a shipper or transporter.
 export const AdminLayout = () => (
-  <DashboardShell nav={NAV} storageKey="admin-sidebar-collapsed" brandTo="/admin" tag="Admin" />
+  <DashboardShell nav={NAV} storageKey="admin-sidebar-collapsed" brandTo="/admin" variant="admin" />
 );
 
 export default AdminLayout;

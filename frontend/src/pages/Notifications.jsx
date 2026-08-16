@@ -6,7 +6,7 @@ import * as notificationsApi from "../api/notifications";
 import { getSocket } from "../api/socket";
 import { useAuth } from "../context/AuthContext";
 import { describeNotification as describe } from "../utils/notificationCopy";
-import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../components/ui/Layout";
+import { PageContainer, Row, Muted, EmptyState } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Spinner";
@@ -130,7 +130,6 @@ export const Notifications = () => {
   return (
     <PageContainer>
       <Row style={{ justifyContent: "space-between" }} $wrap>
-        <PageTitle>Notifications</PageTitle>
         {unreadCount > 0 && (
           <Button $variant="secondary" $size="sm" onClick={handleMarkAllRead} disabled={markingAll}>
             {markingAll ? "Marking…" : `Mark all read (${unreadCount})`}

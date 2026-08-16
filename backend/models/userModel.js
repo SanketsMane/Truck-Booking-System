@@ -2,16 +2,29 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    mobile: {
+    // The account identifier and sole login credential. Required+unique
+    // (not sparse) — every account has exactly one email, going in.
+    email: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
+      lowercase: true,
+      unique: true,
     },
 
-    mobileVerified: {
+    emailVerified: {
       type: Boolean,
       default: false,
+    },
+
+    // Optional secondary contact field — no longer used for auth or account
+    // lookup. sparse so any number of accounts can leave it unset without
+    // colliding on the unique index.
+    mobile: {
+      type: String,
+      trim: true,
+      sparse: true,
+      unique: true,
     },
 
     // Not required at the schema level: a shell record is created on the
@@ -20,14 +33,6 @@ const userSchema = new mongoose.Schema(
     name: {
       type: String,
       trim: true,
-    },
-
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      sparse: true,
-      unique: true,
     },
 
     // Optional second credential — most accounts are created via mobile+OTP
@@ -107,6 +112,25 @@ const userSchema = new mongoose.Schema(
       type: Map,
       of: Boolean,
       default: {},
+    },
+
+    // A transporter's default withdrawal destination, saved once from
+    // Profile so it doesn't have to be retyped on every withdrawal request
+    // (see walletController.requestWithdrawal, which falls back to this
+    // when the request body omits payoutMethod). Same shape as
+    // WithdrawalRequest's payout fields, and encrypted at rest the same
+    // way via utils/withdrawalCrypto.js — accountNumber/ifscCode/upiId are
+    // ciphertext strings, accountHolderName/bankName stay plaintext.
+    payoutMethod: {
+      _id: false,
+      method: { type: String, enum: ["bank", "upi"] },
+      bankDetails: {
+        accountHolderName: { type: String, trim: true },
+        accountNumber: { type: String, trim: true },
+        ifscCode: { type: String, trim: true },
+        bankName: { type: String, trim: true },
+      },
+      upiId: { type: String, trim: true },
     },
 
     otp: {

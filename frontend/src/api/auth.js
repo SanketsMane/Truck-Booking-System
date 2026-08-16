@@ -1,9 +1,9 @@
 import { api } from "./client";
 
-export const requestOtp = (mobile) => api.post("/auth/request-otp", { mobile });
+export const requestOtp = (email) => api.post("/auth/request-otp", { email });
 
-export const verifyOtp = ({ mobile, otp, name, email, city, roles }) =>
-  api.post("/auth/verify-otp", { mobile, otp, name, email, city, roles });
+export const verifyOtp = ({ email, otp, name, mobile, city, roles }) =>
+  api.post("/auth/verify-otp", { email, otp, name, mobile, city, roles });
 
 export const logout = () => api.post("/auth/logout");
 
@@ -18,8 +18,8 @@ export const updateProfile = (updates) => api.put("/auth/profile", updates);
 export const signup = ({ name, mobile, email, password, confirmPassword, roles }) =>
   api.post("/auth/signup", { name, mobile, email, password, confirmPassword, roles });
 
-export const loginPassword = ({ identifier, password }) =>
-  api.post("/auth/login-password", { identifier, password });
+export const loginPassword = ({ email, password }) =>
+  api.post("/auth/login-password", { email, password });
 
 export const forgotPassword = (email) => api.post("/auth/forgot-password", { email });
 

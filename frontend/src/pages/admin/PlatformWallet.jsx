@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { getPlatformWallet, listPlatformWalletTransactions } from "../../api/admin";
-import { PageContainer, PageTitle, SectionTitle, Stack, Row, Muted, EmptyState } from "../../components/ui/Layout";
+import { PageContainer, SectionTitle, Stack, Muted, EmptyState } from "../../components/ui/Layout";
 import { Card, CardRow } from "../../components/ui/Card";
-import { Spinner } from "../../components/ui/Spinner";
+import { SkeletonBlock, SkeletonText, SkeletonTableRows } from "../../components/ui/Skeleton";
 import { Pagination } from "../../components/ui/Pagination";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
+import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/AdminTable";
 import { formatINR, formatDateTime } from "../../utils/format";
 
 const TX_LABELS = {
@@ -61,14 +61,17 @@ export const PlatformWallet = () => {
 
   return (
     <PageContainer style={{ maxWidth: 1080 }}>
-      <PageTitle>Platform wallet</PageTitle>
 
       <Stack $gap={4} style={{ marginTop: 20 }}>
         <Card>
           {loadingWallet ? (
-            <Row style={{ justifyContent: "center", padding: "20px 0" }}>
-              <Spinner $size={24} />
-            </Row>
+            <CardRow>
+              <Stack $gap={1}>
+                <SkeletonBlock $width="180px" $height="14px" />
+                <SkeletonBlock $width="320px" $height="12px" />
+              </Stack>
+              <SkeletonText $width="110px" $size="28px" />
+            </CardRow>
           ) : (
             <CardRow>
               <Stack $gap={1}>
@@ -82,11 +85,7 @@ export const PlatformWallet = () => {
 
         <Card>
           <SectionTitle style={{ marginBottom: 16 }}>Ledger</SectionTitle>
-          {loadingTx ? (
-            <Row style={{ justifyContent: "center", padding: "40px 0" }}>
-              <Spinner $size={24} />
-            </Row>
-          ) : items.length === 0 ? (
+          {!loadingTx && items.length === 0 ? (
             <EmptyState>
               <Muted>No platform wallet activity yet.</Muted>
             </EmptyState>
@@ -104,7 +103,10 @@ export const PlatformWallet = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((tx, i) => (
+                    {loadingTx ? (
+                      <SkeletonTableRows rows={6} cols={5} />
+                    ) : (
+                      items.map((tx, i) => (
                       <Tr key={tx._id}>
                         <IndexTd>{(page - 1) * 20 + i + 1}</IndexTd>
                         <Td>{formatDateTime(tx.createdAt)}</Td>
@@ -115,11 +117,12 @@ export const PlatformWallet = () => {
                         </Td>
                         <Td>{formatINR(tx.balanceAfter)}</Td>
                       </Tr>
-                    ))}
+                      ))
+                    )}
                   </tbody>
                 </Table>
               </TableScroll>
-              <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+              {!loadingTx && <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />}
             </>
           )}
         </Card>

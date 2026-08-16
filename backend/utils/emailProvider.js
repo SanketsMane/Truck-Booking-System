@@ -1,6 +1,8 @@
 const nodemailer = require("nodemailer");
 const PlatformSetting = require("../models/platformSettingModel");
 const { encrypt, decrypt } = require("./crypto");
+const { renderEmail, escapeHtml } = require("../emailTemplates/base");
+const { getBrandName } = require("./brandingCache");
 
 const EMAIL_PROVIDER_FIELDS = {
   console: [],
@@ -69,12 +71,20 @@ const sendTestEmail = async (to, provider, config) => {
     console.log(`[EMAIL:console] test email to=${to}`);
     return;
   }
+  const brand = getBrandName();
   const transport = buildTransport(config);
   await transport.sendMail({
     from: config.fromName ? `"${config.fromName}" <${config.fromAddress}>` : config.fromAddress,
     to,
-    subject: "ShareTruck test email",
-    html: "<p>This is a test email from ShareTruck — your email provider is configured correctly.</p>",
+    subject: `${brand} test email`,
+    html: renderEmail({
+      title: "Test email",
+      preheader: `Your ${brand} email provider is configured correctly.`,
+      bodyHtml: `
+        <p style="margin:0 0 16px;">Hi there,</p>
+        <p style="margin:0;">This is a test email from ${escapeHtml(brand)} — your email provider is configured correctly.</p>
+      `,
+    }),
   });
 };
 

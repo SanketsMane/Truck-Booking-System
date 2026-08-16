@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { toast } from "react-toastify";
 import { postTrip } from "../api/trips";
 import { listMyTrucks } from "../api/trucks";
-import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
+import { PageContainer, Stack, Row, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -30,6 +30,11 @@ const StepPill = styled.button`
   border: 1px solid ${({ theme, $active }) => (($active) ? theme.color.accent : theme.color.border)};
   background: ${({ theme, $active }) => ($active ? theme.color.accentSoft : "transparent")};
   color: ${({ theme, $active }) => ($active ? theme.color.accent : theme.color.textMuted)};
+`;
+
+const Price = styled.span`
+  font-weight: 800;
+  color: ${({ theme }) => theme.color.accent};
 `;
 
 const TruckOption = styled.button`
@@ -168,7 +173,6 @@ export const PostTrip = () => {
   return (
     <PageContainer>
       <Stack $gap={5}>
-        <PageTitle>Post Your Trip</PageTitle>
 
         <StepRow $gap={2}>
           {STEPS.map((label, i) => (
@@ -425,7 +429,7 @@ export const PostTrip = () => {
                 )}
                 <CardRow>
                   <Muted>Price</Muted>
-                  <span>{formatINR(pricePerTon)} / ton</span>
+                  <Price>{formatINR(pricePerTon)} / ton</Price>
                 </CardRow>
                 <CardRow>
                   <Muted>Pickup</Muted>

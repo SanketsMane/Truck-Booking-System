@@ -56,6 +56,16 @@ export const fetchBlobUrl = async (path) => {
   return URL.createObjectURL(blob);
 };
 
+// Same fetch as fetchBlobUrl, but also returns the blob's MIME type — an
+// inline previewer needs this to decide <img> vs <iframe> vs a fallback
+// "download" link before it has anywhere to point a <src> at.
+export const fetchBlob = async (path) => {
+  const res = await fetch(`${BASE_URL}${path}`, { credentials: "include" });
+  if (!res.ok) throw new ApiError("Could not load file", res.status);
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), type: blob.type };
+};
+
 // For CSV report downloads — triggers a normal browser download using the
 // credentialed session (a plain <a href> wouldn't carry the auth cookie
 // cross-origin in all browsers, so we fetch + save via an object URL).

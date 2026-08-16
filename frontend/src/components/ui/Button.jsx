@@ -5,14 +5,14 @@ const variants = {
     background: ${({ theme }) => theme.color.accent};
     color: ${({ theme }) => theme.color.onAccent};
     border: 1px solid transparent;
-    box-shadow: 0 2px 6px rgba(255, 106, 26, 0.22);
+    box-shadow: 0 2px 6px rgba(29, 78, 216, 0.22);
     &:hover:not(:disabled) {
       background: ${({ theme }) => theme.color.accentStrong};
       box-shadow: ${({ theme }) => theme.shadow.accentGlow};
       transform: translateY(-1px);
     }
     &:active:not(:disabled) {
-      box-shadow: 0 2px 6px rgba(255, 106, 26, 0.22);
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.22);
     }
   `,
   secondary: css`

@@ -1,73 +1,175 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
+import styled from "styled-components";
 import Layout from "../layouts/Layout";
 import DashboardLayout from "../layouts/DashboardLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import { RequireAuth, RequireRole, RequireAdmin } from "./guards";
+import { TruckLoader } from "../components/ui/TruckLoader";
 
+// Home is eager — it's the app's entry point/LCP page, so it should never
+// wait on a lazy-chunk round trip. Every other route is code-split by
+// shell: each shell already wraps its routes with its own chrome (navbar,
+// dashboard sidebar, admin sidebar), so one Suspense boundary per shell is
+// the natural place to show a loading state without the chrome itself
+// flashing/remounting between route transitions.
 import Home from "../pages/Home";
-import SearchResults from "../pages/SearchResults";
-import TripDetail from "../pages/TripDetail";
-import Login from "../pages/Login";
-import Signup from "../pages/Signup";
-import ForgotPassword from "../pages/ForgotPassword";
-import ResetPassword from "../pages/ResetPassword";
-import About from "../pages/About";
-import Help from "../pages/Help";
-import Terms from "../pages/Terms";
-import Privacy from "../pages/Privacy";
-import NotFound from "../pages/NotFound";
 
-import Profile from "../pages/Profile";
-import Notifications from "../pages/Notifications";
-import MyBookings from "../pages/MyBookings";
-import BookingDetail from "../pages/BookingDetail";
-import Support from "../pages/Support";
-import Disputes from "../pages/Disputes";
-import Wallet from "../pages/Wallet";
+const SuspenseFallback = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 0;
+`;
 
-import MyTrucks from "../pages/MyTrucks";
-import PostTrip from "../pages/PostTrip";
-import MyTrips from "../pages/MyTrips";
-import ManageTrip from "../pages/ManageTrip";
+const RouteFallback = () => (
+  <SuspenseFallback>
+    <TruckLoader $size={40} />
+  </SuspenseFallback>
+);
 
-import AdminDashboard from "../pages/admin/Dashboard";
-import AdminVerificationQueue from "../pages/admin/VerificationQueue";
-import AdminUsers from "../pages/admin/Users";
-import AdminUserDetail from "../pages/admin/UserDetail";
-import AdminTrucks from "../pages/admin/Trucks";
-import AdminTrips from "../pages/admin/Trips";
-import AdminBookings from "../pages/admin/Bookings";
-import AdminPayments from "../pages/admin/Payments";
-import AdminPlatformWallet from "../pages/admin/PlatformWallet";
-import AdminWithdrawals from "../pages/admin/Withdrawals";
-import AdminLiveTracking from "../pages/admin/LiveTracking";
-import AdminReviews from "../pages/admin/Reviews";
-import AdminSupport from "../pages/admin/Support";
-import AdminDisputes from "../pages/admin/Disputes";
-import AdminSettings from "../pages/admin/Settings";
+const SearchResults = lazy(() => import("../pages/SearchResults"));
+const TripDetail = lazy(() => import("../pages/TripDetail"));
+const About = lazy(() => import("../pages/About"));
+const Help = lazy(() => import("../pages/Help"));
+const Terms = lazy(() => import("../pages/Terms"));
+const Privacy = lazy(() => import("../pages/Privacy"));
+const NotFound = lazy(() => import("../pages/NotFound"));
+
+const Login = lazy(() => import("../pages/Login"));
+const Signup = lazy(() => import("../pages/Signup"));
+const ForgotPassword = lazy(() => import("../pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("../pages/ResetPassword"));
+
+const Profile = lazy(() => import("../pages/Profile"));
+const Notifications = lazy(() => import("../pages/Notifications"));
+const MyBookings = lazy(() => import("../pages/MyBookings"));
+const BookingDetail = lazy(() => import("../pages/BookingDetail"));
+const Support = lazy(() => import("../pages/Support"));
+const Disputes = lazy(() => import("../pages/Disputes"));
+const Wallet = lazy(() => import("../pages/Wallet"));
+
+const MyTrucks = lazy(() => import("../pages/MyTrucks"));
+const PostTrip = lazy(() => import("../pages/PostTrip"));
+const MyTrips = lazy(() => import("../pages/MyTrips"));
+const ManageTrip = lazy(() => import("../pages/ManageTrip"));
+
+const AdminDashboard = lazy(() => import("../pages/admin/Dashboard"));
+const AdminVerificationQueue = lazy(() => import("../pages/admin/VerificationQueue"));
+const AdminUsers = lazy(() => import("../pages/admin/Users"));
+const AdminUserDetail = lazy(() => import("../pages/admin/UserDetail"));
+const AdminTrucks = lazy(() => import("../pages/admin/Trucks"));
+const AdminTrips = lazy(() => import("../pages/admin/Trips"));
+const AdminBookings = lazy(() => import("../pages/admin/Bookings"));
+const AdminPayments = lazy(() => import("../pages/admin/Payments"));
+const AdminPlatformWallet = lazy(() => import("../pages/admin/PlatformWallet"));
+const AdminWithdrawals = lazy(() => import("../pages/admin/Withdrawals"));
+const AdminLiveTracking = lazy(() => import("../pages/admin/LiveTracking"));
+const AdminReviews = lazy(() => import("../pages/admin/Reviews"));
+const AdminSupport = lazy(() => import("../pages/admin/Support"));
+const AdminDisputes = lazy(() => import("../pages/admin/Disputes"));
+const AdminSettings = lazy(() => import("../pages/admin/Settings"));
+const AdminAuditLog = lazy(() => import("../pages/admin/AuditLog"));
 
 export const Routing = () => (
   <Routes>
     <Route element={<Layout />}>
       <Route path="/" element={<Home />} />
-      <Route path="/search" element={<SearchResults />} />
-      <Route path="/trips/:id" element={<TripDetail />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/help" element={<Help />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="/privacy" element={<Privacy />} />
+      <Route
+        path="/search"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <SearchResults />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/trips/:id"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <TripDetail />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/about"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <About />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/help"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <Help />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/terms"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <Terms />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/privacy"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <Privacy />
+          </Suspense>
+        }
+      />
 
-      <Route path="*" element={<NotFound />} />
+      <Route
+        path="*"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <NotFound />
+          </Suspense>
+        }
+      />
     </Route>
 
     {/* Auth pages get their own full-screen shell (AuthShell) — same
         "not nested under the consumer Layout" reasoning as everything
         else below: a login form belongs on its own deliberate screen, not
         squeezed between the marketing navbar and footer. */}
-    <Route path="/login" element={<Login />} />
-    <Route path="/signup" element={<Signup />} />
-    <Route path="/forgot-password" element={<ForgotPassword />} />
-    <Route path="/reset-password" element={<ResetPassword />} />
+    <Route
+      path="/login"
+      element={
+        <Suspense fallback={<RouteFallback />}>
+          <Login />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/signup"
+      element={
+        <Suspense fallback={<RouteFallback />}>
+          <Signup />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/forgot-password"
+      element={
+        <Suspense fallback={<RouteFallback />}>
+          <ForgotPassword />
+        </Suspense>
+      }
+    />
+    <Route
+      path="/reset-password"
+      element={
+        <Suspense fallback={<RouteFallback />}>
+          <ResetPassword />
+        </Suspense>
+      }
+    />
 
     {/* Shipper/transporter private pages get their own dashboard shell
         (DashboardLayout) — same "not nested under the consumer Layout"
@@ -76,22 +178,99 @@ export const Routing = () => (
         marketing navbar/footer/mobile tab bar too. */}
     <Route element={<RequireAuth />}>
       <Route element={<DashboardLayout />}>
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/bookings" element={<MyBookings />} />
-        <Route path="/bookings/:id" element={<BookingDetail />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/disputes" element={<Disputes />} />
-        <Route path="/wallet" element={<Wallet />} />
+        <Route
+          path="/profile"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Profile />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Notifications />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/bookings"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <MyBookings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/bookings/:id"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <BookingDetail />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/support"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Support />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/disputes"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Disputes />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/wallet"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <Wallet />
+            </Suspense>
+          }
+        />
       </Route>
     </Route>
 
     <Route element={<RequireRole role="transporter" />}>
       <Route element={<DashboardLayout />}>
-        <Route path="/trucks" element={<MyTrucks />} />
-        <Route path="/trips/new" element={<PostTrip />} />
-        <Route path="/trips/mine" element={<MyTrips />} />
-        <Route path="/trips/:id/manage" element={<ManageTrip />} />
+        <Route
+          path="/trucks"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <MyTrucks />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/trips/new"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <PostTrip />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/trips/mine"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <MyTrips />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/trips/:id/manage"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <ManageTrip />
+            </Suspense>
+          }
+        />
       </Route>
     </Route>
 
@@ -101,21 +280,134 @@ export const Routing = () => (
         manages the platform; it isn't also a shipper or transporter. */}
     <Route element={<RequireAdmin />}>
       <Route element={<AdminLayout />}>
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/verification" element={<AdminVerificationQueue />} />
-        <Route path="/admin/users" element={<AdminUsers />} />
-        <Route path="/admin/users/:id" element={<AdminUserDetail />} />
-        <Route path="/admin/trucks" element={<AdminTrucks />} />
-        <Route path="/admin/trips" element={<AdminTrips />} />
-        <Route path="/admin/bookings" element={<AdminBookings />} />
-        <Route path="/admin/payments" element={<AdminPayments />} />
-        <Route path="/admin/platform-wallet" element={<AdminPlatformWallet />} />
-        <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
-        <Route path="/admin/live-tracking" element={<AdminLiveTracking />} />
-        <Route path="/admin/reviews" element={<AdminReviews />} />
-        <Route path="/admin/support" element={<AdminSupport />} />
-        <Route path="/admin/disputes" element={<AdminDisputes />} />
-        <Route path="/admin/settings" element={<AdminSettings />} />
+        <Route
+          path="/admin"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminDashboard />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/verification"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminVerificationQueue />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminUsers />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/users/:id"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminUserDetail />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/trucks"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminTrucks />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/trips"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminTrips />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/bookings"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminBookings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/payments"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminPayments />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/platform-wallet"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminPlatformWallet />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/withdrawals"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminWithdrawals />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/live-tracking"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminLiveTracking />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/reviews"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminReviews />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/support"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminSupport />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/disputes"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminDisputes />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminSettings />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminAuditLog />
+            </Suspense>
+          }
+        />
       </Route>
     </Route>
   </Routes>

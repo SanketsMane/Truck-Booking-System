@@ -2,6 +2,7 @@ const UploadedFile = require("../models/uploadedFileModel");
 const objectStorage = require("../utils/objectStorage");
 const detectFileType = require("../utils/detectFileType");
 const sendServerError = require("../utils/sendServerError");
+const { logAdminAction } = require("../utils/audit");
 
 const uploadFile = async (req, res) => {
   try {
@@ -52,8 +53,22 @@ const getFile = async (req, res) => {
       if (!req.auth) {
         return res.status(401).json({ success: false, msg: "Unauthorized" });
       }
-      if (String(file.owner) !== req.auth.id && !req.auth.isAdmin) {
+      const isOwner = String(file.owner) === req.auth.id;
+      if (!isOwner && !req.auth.isAdmin) {
         return res.status(403).json({ success: false, msg: "Forbidden" });
+      }
+      // SRS §5.3 — "all admin document views logged". Only the admin-viewing-
+      // someone-else's-document case counts; a user viewing their own file
+      // isn't an access worth auditing.
+      if (!isOwner && req.auth.isAdmin) {
+        await logAdminAction({
+          actor: req.auth.id,
+          action: "file.view",
+          targetType: "UploadedFile",
+          targetId: file._id,
+          reason: undefined,
+          scope: req.auth.adminScope,
+        });
       }
     }
 

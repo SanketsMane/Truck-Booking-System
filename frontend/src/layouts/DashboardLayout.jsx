@@ -14,39 +14,63 @@ import {
 import { useAuth } from "../context/AuthContext";
 import DashboardShell from "./DashboardShell";
 
-const BASE_NAV = [
-  { to: "/", label: "Find Space", icon: Search, end: true },
-  { to: "/bookings", label: "My Bookings", icon: Package },
-  { to: "/wallet", label: "Wallet", icon: WalletIcon },
-  { to: "/profile", label: "Profile", icon: User },
-  { to: "/support", label: "Support", icon: LifeBuoy },
-  { to: "/disputes", label: "Disputes", icon: ScrollText },
-];
-
-const TRANSPORTER_NAV = [
-  { to: "/trucks", label: "My Trucks", icon: Truck },
-  { to: "/trips/new", label: "Post a Trip", icon: Plus },
-  { to: "/trips/mine", label: "My Trips", icon: RouteIcon },
-];
-
-const ADMIN_NAV = [{ to: "/admin", label: "Admin panel", icon: ShieldCheck }];
-
 // Shipper/transporter dashboard shell — same DashboardShell as admin, but
-// with an adaptive nav list rather than a fixed one: `roles` is an array,
-// so a dual-role user needs both sections at once rather than picking a
-// separate ShipperLayout vs TransporterLayout. MyBookings.jsx already
-// internally tabs "As Shipper"/"As Transporter", so the nav only ever
-// needs one /bookings entry either way. An admin who is also a shipper/
-// transporter otherwise has no way back to /admin from inside this shell
-// (the public Navbar's "Admin" link isn't rendered here) — one extra entry
-// closes that dead end.
+// with an adaptive, grouped nav rather than a fixed one: `roles` is an
+// array, so a dual-role user needs both sections at once rather than
+// picking a separate ShipperLayout vs TransporterLayout. MyBookings.jsx
+// already internally tabs "As Shipper"/"As Transporter", so the nav only
+// ever needs one /bookings entry either way. An admin who is also a
+// shipper/transporter otherwise has no way back to /admin from inside this
+// shell (the public Navbar's "Admin" link isn't rendered here) — one extra
+// entry closes that dead end.
 export const DashboardLayout = () => {
   const { user } = useAuth();
   const isTransporter = Boolean(user?.roles?.includes("transporter"));
 
   const nav = useMemo(() => {
-    const base = isTransporter ? [...TRANSPORTER_NAV, ...BASE_NAV] : BASE_NAV;
-    return user?.isAdmin ? [...base, ...ADMIN_NAV] : base;
+    const sections = [
+      {
+        label: "Marketplace",
+        items: [{ to: "/", label: "Find Space", description: "Search truck capacity", icon: Search, end: true }],
+      },
+    ];
+
+    if (isTransporter) {
+      sections.push({
+        label: "Fleet",
+        items: [
+          { to: "/trucks", label: "My Trucks", description: "Registered vehicles", icon: Truck },
+          { to: "/trips/new", label: "Post a Trip", description: "List spare capacity", icon: Plus },
+          { to: "/trips/mine", label: "My Trips", description: "Trips you've posted", icon: RouteIcon },
+        ],
+      });
+    }
+
+    sections.push({
+      label: "Account",
+      items: [
+        { to: "/bookings", label: "My Bookings", description: "Your booking history", icon: Package },
+        { to: "/wallet", label: "Wallet", description: "Balance and transactions", icon: WalletIcon },
+        { to: "/profile", label: "Profile", description: "Account details", icon: User },
+      ],
+    });
+
+    sections.push({
+      label: "Support",
+      items: [
+        { to: "/support", label: "Support", description: "Get help from our team", icon: LifeBuoy },
+        { to: "/disputes", label: "Disputes", description: "Booking disputes", icon: ScrollText },
+      ],
+    });
+
+    if (user?.isAdmin) {
+      sections.push({
+        label: "System",
+        items: [{ to: "/admin", label: "Admin panel", description: "Platform administration", icon: ShieldCheck }],
+      });
+    }
+
+    return sections;
   }, [isTransporter, user?.isAdmin]);
 
   return <DashboardShell nav={nav} storageKey="dashboard-sidebar-collapsed" brandTo="/" />;

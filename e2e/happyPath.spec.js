@@ -15,17 +15,17 @@ const { test, expect, request } = require("@playwright/test");
 // form — that's the one genuine "does the real auth UI work" proof this
 // suite needs. Every other actor session (transporter, and the shipper
 // again in test 3) reuses an already-authenticated cookie jar instead of
-// requesting a fresh OTP, since OTP requests for the same mobile number
-// have a real 30s resend cooldown (authConfig.OTP_RESEND_COOLDOWN_SECONDS)
-// that repeated UI logins within one short test run would otherwise hit.
+// requesting a fresh OTP, since OTP requests for the same email have a
+// real 30s resend cooldown (authConfig.OTP_RESEND_COOLDOWN_SECONDS) that
+// repeated UI logins within one short test run would otherwise hit.
 
 const API_URL = process.env.E2E_API_URL || "http://localhost:3000";
 const MASTER_OTP = "123456";
-const ADMIN_MOBILE = "9999999999"; // seeded by backend/scripts/seedAdmin.js
+const ADMIN_EMAIL = "contactsanket1@gmail.com"; // seeded by backend/scripts/seedAdmin.js
 
 const run = Date.now().toString().slice(-8);
-const TRANSPORTER_MOBILE = `70${run}`;
-const SHIPPER_MOBILE = `71${run}`;
+const TRANSPORTER_EMAIL = `e2e-transporter-${run}@example.test`;
+const SHIPPER_EMAIL = `e2e-shipper-${run}@example.test`;
 // Distinctive, not real cities — this app does exact-string route matching
 // (no geocoding, see marketplaceConfig), so any string works, and a unique
 // one guarantees this spec's search can't collide with leftover trips from
@@ -43,8 +43,8 @@ let shipperStorageState;
 
 test.beforeAll(async () => {
   adminApi = await request.newContext({ baseURL: API_URL });
-  await adminApi.post("/auth/request-otp", { data: { mobile: ADMIN_MOBILE } });
-  await adminApi.post("/auth/verify-otp", { data: { mobile: ADMIN_MOBILE, otp: MASTER_OTP } });
+  await adminApi.post("/auth/request-otp", { data: { email: ADMIN_EMAIL } });
+  await adminApi.post("/auth/verify-otp", { data: { email: ADMIN_EMAIL, otp: MASTER_OTP } });
 
   // Verification gate off — this spec proves the booking lifecycle UI, not
   // the KYC-review UI, which is a simple list+approve screen already
@@ -52,9 +52,9 @@ test.beforeAll(async () => {
   await adminApi.put("/admin/settings", { data: { verificationGateEnabled: false } });
 
   transporterApi = await request.newContext({ baseURL: API_URL });
-  await transporterApi.post("/auth/request-otp", { data: { mobile: TRANSPORTER_MOBILE } });
+  await transporterApi.post("/auth/request-otp", { data: { email: TRANSPORTER_EMAIL } });
   await transporterApi.post("/auth/verify-otp", {
-    data: { mobile: TRANSPORTER_MOBILE, otp: MASTER_OTP, name: "E2E Transporter", roles: ["transporter"] },
+    data: { email: TRANSPORTER_EMAIL, otp: MASTER_OTP, name: "E2E Transporter", roles: ["transporter"] },
   });
 
   const truckRes = await transporterApi.post("/trucks", {
@@ -69,8 +69,8 @@ test.beforeAll(async () => {
       fromCity: FROM_CITY,
       toCity: TO_CITY,
       departureAt,
-      pickupPoint: "Warehouse A",
-      dropPoint: "Yard B",
+      pickupPoint: { address: "Warehouse A" },
+      dropPoint: { address: "Yard B" },
       totalCapacity: 20,
       availableCapacity: 20,
       pricePerTon: 1000,
@@ -84,9 +84,9 @@ test.afterAll(async () => {
   await transporterApi.dispose();
 });
 
-const signUpViaUi = async (page, { mobile, name, roleButtonLabel }) => {
+const signUpViaUi = async (page, { email, name, roleButtonLabel }) => {
   await page.goto("/login");
-  await page.getByLabel("Mobile number").fill(mobile);
+  await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Send OTP" }).click();
   await page.getByLabel("OTP").waitFor();
   await page.getByLabel("OTP").fill(MASTER_OTP);
@@ -113,7 +113,7 @@ const openAuthenticatedPage = async (browser, apiContext) => {
 };
 
 test("shipper signs up, searches, and books capacity through the real UI", async ({ page }) => {
-  await signUpViaUi(page, { mobile: SHIPPER_MOBILE, name: "E2E Shipper", roleButtonLabel: "Ship goods" });
+  await signUpViaUi(page, { email: SHIPPER_EMAIL, name: "E2E Shipper", roleButtonLabel: "Ship goods" });
 
   const meRes = await page.request.get(`${API_URL}/auth/profile`);
   shipperId = (await meRes.json()).user.id;

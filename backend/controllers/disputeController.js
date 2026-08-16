@@ -82,11 +82,12 @@ const listAllDisputes = async (req, res) => {
     const { page, limit, skip } = getPagination(req.query);
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
+    if (req.query.category) filter.category = req.query.category;
 
     const [items, total] = await Promise.all([
       Dispute.find(filter)
-        .populate("raisedBy", "name mobile")
-        .populate("againstUser", "name mobile")
+        .populate("raisedBy", "name email mobile")
+        .populate("againstUser", "name email mobile")
         .populate("booking", "goodsDescription status priceEstimate")
         .sort({ createdAt: -1 })
         .skip(skip)

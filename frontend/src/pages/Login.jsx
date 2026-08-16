@@ -4,10 +4,11 @@ import styled from "styled-components";
 import { toast } from "react-toastify";
 import * as authApi from "../api/auth";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import AuthShell from "../layouts/AuthShell";
 import { Muted } from "../components/ui/Layout";
 import { Button } from "../components/ui/Button";
-import { Field, Input } from "../components/ui/Form";
+import { Field, Input, PasswordInput } from "../components/ui/Form";
 
 const Title = styled.h1`
   font-size: 1.7rem;
@@ -78,12 +79,12 @@ const SwitchRow = styled.p`
   }
 `;
 
-const MOBILE_PATTERN = /^[6-9]\d{9}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const Login = () => {
-  const [method, setMethod] = useState("mobile"); // "mobile" | "password"
-  const [step, setStep] = useState("mobile"); // "mobile" | "otp" — only for the OTP method
-  const [mobile, setMobile] = useState("");
+  const [method, setMethod] = useState("otp"); // "otp" | "password"
+  const [step, setStep] = useState("email"); // "email" | "otp" — only for the OTP method
+  const [otpEmail, setOtpEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -91,10 +92,11 @@ export const Login = () => {
   const [isNewUser, setIsNewUser] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const { setUser } = useAuth();
+  const { platformName } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || "/";
@@ -104,14 +106,14 @@ export const Login = () => {
 
   const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!MOBILE_PATTERN.test(mobile)) {
-      toast.error("Enter a valid 10-digit Indian mobile number");
+    if (!EMAIL_PATTERN.test(otpEmail)) {
+      toast.error("Enter a valid email address");
       return;
     }
     setSubmitting(true);
     try {
-      await authApi.requestOtp(mobile);
-      toast.success("OTP sent");
+      await authApi.requestOtp(otpEmail.trim());
+      toast.success("OTP sent to your email");
       setStep("otp");
     } catch (error) {
       toast.error(error.message);
@@ -129,15 +131,15 @@ export const Login = () => {
     setSubmitting(true);
     try {
       const { user } = await authApi.verifyOtp({
-        mobile,
+        email: otpEmail.trim(),
         otp,
         name: name.trim() || undefined,
         city: city.trim() || undefined,
         roles: roles.length ? roles : undefined,
       });
       setUser(user);
-      toast.success("Welcome to ShareTruck");
-      navigate(redirectTo, { replace: true });
+      toast.success(`Welcome to ${platformName}`);
+      navigate(user.isAdmin ? "/admin" : redirectTo, { replace: true });
     } catch (error) {
       if (/name is required/i.test(error.message)) {
         setIsNewUser(true);
@@ -152,16 +154,16 @@ export const Login = () => {
 
   const handlePasswordLogin = async (e) => {
     e.preventDefault();
-    if (!identifier.trim() || !password) {
-      toast.error("Enter your email/mobile number and password");
+    if (!email.trim() || !password) {
+      toast.error("Enter your email and password");
       return;
     }
     setSubmitting(true);
     try {
-      const { user } = await authApi.loginPassword({ identifier: identifier.trim(), password });
+      const { user } = await authApi.loginPassword({ email: email.trim(), password });
       setUser(user);
       toast.success("Welcome back");
-      navigate(redirectTo, { replace: true });
+      navigate(user.isAdmin ? "/admin" : redirectTo, { replace: true });
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -171,24 +173,23 @@ export const Login = () => {
 
   return (
     <AuthShell>
-      {method === "mobile" ? (
-        step === "mobile" ? (
+      {method === "otp" ? (
+        step === "email" ? (
           <form onSubmit={handleRequestOtp}>
             <Title>Welcome back</Title>
-            <Subtitle>We'll text you a one-time code — no password needed.</Subtitle>
+            <Subtitle>We'll email you a one-time code — no password needed.</Subtitle>
             <MethodSwitch>
               Prefer a password?{" "}
               <button type="button" onClick={() => setMethod("password")}>
                 Use email &amp; password
               </button>
             </MethodSwitch>
-            <Field label="Mobile number">
+            <Field label="Email">
               <Input
-                type="tel"
-                inputMode="numeric"
-                placeholder="98765 43210"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                type="email"
+                placeholder="you@example.com"
+                value={otpEmail}
+                onChange={(e) => setOtpEmail(e.target.value)}
                 autoFocus
               />
             </Field>
@@ -199,7 +200,7 @@ export const Login = () => {
         ) : (
           <form onSubmit={handleVerifyOtp}>
             <Title>Enter the code</Title>
-            <Subtitle>Sent to {mobile}.</Subtitle>
+            <Subtitle>Sent to {otpEmail}.</Subtitle>
             <Field label="OTP">
               <Input
                 type="tel"
@@ -255,11 +256,11 @@ export const Login = () => {
               $variant="ghost"
               $fullWidth
               onClick={() => {
-                setStep("mobile");
+                setStep("email");
                 setOtp("");
               }}
             >
-              Use a different number
+              Use a different email
             </Button>
           </form>
         )
@@ -269,25 +270,25 @@ export const Login = () => {
           <Subtitle>Use the password you set for your account.</Subtitle>
           <MethodSwitch>
             Or{" "}
-            <button type="button" onClick={() => setMethod("mobile")}>
-              sign in with mobile OTP
+            <button type="button" onClick={() => setMethod("otp")}>
+              sign in with email OTP
             </button>
           </MethodSwitch>
-          <Field label="Email or mobile number">
+          <Field label="Email">
             <Input
-              type="text"
-              placeholder="you@example.com or 98765 43210"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               autoFocus
             />
           </Field>
           <Field label="Password">
-            <Input
-              type="password"
+            <PasswordInput
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
             />
           </Field>
           <ForgotLink to="/forgot-password">Forgot password?</ForgotLink>

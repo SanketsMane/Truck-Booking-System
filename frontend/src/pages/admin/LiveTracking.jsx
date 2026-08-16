@@ -1,22 +1,37 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import styled from "styled-components";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { listLiveTrips } from "../../api/admin";
-import { PageContainer, PageTitle, Row, Muted, EmptyState } from "../../components/ui/Layout";
+import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Card } from "../../components/ui/Card";
-import { Spinner } from "../../components/ui/Spinner";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
+import {
+  Toolbar,
+  AdminSearchInput,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../../components/ui/AdminToolbar";
+import {
+  TableScroll,
+  Table,
+  Th,
+  Td,
+  Tr,
+  IndexTh,
+  IndexTd,
+  AdminCard,
+  AdminSkeletonRows,
+} from "../../components/ui/AdminTable";
 import { formatRelative } from "../../utils/format";
 import { theme } from "../../theme/theme";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "";
 const MAP_UNAVAILABLE = !mapboxgl.accessToken;
 
-const MapFrame = styled(Card)`
-  padding: 0;
+const MapFrame = styled(Card).attrs({ $variant: "admin", $padding: "0" })`
   overflow: hidden;
   margin-bottom: 20px;
 `;
@@ -37,21 +52,24 @@ const createMarkerEl = () => {
   el.style.width = "16px";
   el.style.height = "16px";
   el.style.borderRadius = "50%";
-  el.style.background = theme.color.accent;
-  el.style.boxShadow = "0 0 0 3px rgba(255,106,26,0.25), 0 1px 4px rgba(20,21,15,0.3)";
+  el.style.background = theme.color.accentBright;
+  el.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.25), 0 1px 4px rgba(17,19,24,0.3)";
   return el;
 };
 
 // Fleet overview: every trip that's reported a GPS ping in the last 5
 // minutes, plotted on one map plus a list. Simpler than the single-trip
 // LiveTruckMap — no Socket.IO subscription per marker, just a periodic
-// refetch (REFRESH_MS), which is plenty for an admin dashboard glance.
+// refetch (REFRESH_MS), which is plenty for an admin dashboard glance. The
+// live window naturally bounds this to a small dataset, so filtering is
+// client-side and there's no pagination.
 export const LiveTracking = () => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const load = () =>
     listLiveTrips()
@@ -130,13 +148,18 @@ export const LiveTracking = () => {
     }
   }, [trips]);
 
-  return (
-    <PageContainer style={{ maxWidth: 1180 }}>
-      <PageTitle>Live tracking</PageTitle>
-      <Row $gap={2} style={{ marginTop: 6, marginBottom: 20 }}>
-        <Muted>Trips that reported a GPS position in the last 5 minutes. Refreshes automatically.</Muted>
-      </Row>
+  const filteredTrips = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return trips;
+    return trips.filter((trip) =>
+      [trip.fromCity, trip.toCity, trip.transporter?.name, trip.transporter?.email, trip.truck?.regNumber]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(q))
+    );
+  }, [search, trips]);
 
+  return (
+    <PageContainer style={{ maxWidth: 1220 }}>
       {MAP_UNAVAILABLE ? (
         <EmptyState style={{ marginBottom: 20 }}>
           <Muted>Live map isn't configured yet.</Muted>
@@ -147,14 +170,29 @@ export const LiveTracking = () => {
         </MapFrame>
       )}
 
-      <Card>
-        {loading ? (
-          <Row style={{ justifyContent: "center", padding: "40px 0" }}>
-            <Spinner $size={26} />
-          </Row>
-        ) : trips.length === 0 ? (
-          <EmptyState>
-            <Muted>No trucks are currently sharing their location.</Muted>
+      <Toolbar>
+        <AdminSearchInput
+          placeholder="Search by route, transporter, or reg. number…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <ToolbarSpacer />
+        {search && <ClearFiltersButton onClick={() => setSearch("")} />}
+        {!loading && (
+          <ResultsCount>
+            {filteredTrips.length} of {trips.length} active · refreshes every 15s
+          </ResultsCount>
+        )}
+      </Toolbar>
+
+      <AdminCard $padding="0">
+        {!loading && filteredTrips.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
+            <Muted>
+              {trips.length === 0
+                ? "No trucks are currently sharing their location."
+                : "No active trips match this search."}
+            </Muted>
           </EmptyState>
         ) : (
           <TableScroll>
@@ -169,27 +207,31 @@ export const LiveTracking = () => {
                 </tr>
               </thead>
               <tbody>
-                {trips.map((trip, i) => (
-                  <Tr key={trip._id}>
-                    <IndexTd>{i + 1}</IndexTd>
-                    <Td>
-                      <Link to={`/trips/${trip._id}`}>
-                        {trip.fromCity} → {trip.toCity}
-                      </Link>
-                    </Td>
-                    <Td>{trip.transporter?.name || trip.transporter?.mobile || "—"}</Td>
-                    <Td>
-                      {trip.truck?.truckType || "—"}
-                      {trip.truck?.regNumber ? ` · ${trip.truck.regNumber}` : ""}
-                    </Td>
-                    <Td>{formatRelative(trip.currentLocation?.updatedAt)}</Td>
-                  </Tr>
-                ))}
+                {loading ? (
+                  <AdminSkeletonRows rows={6} cols={5} />
+                ) : (
+                  filteredTrips.map((trip, i) => (
+                    <Tr key={trip._id}>
+                      <IndexTd>{i + 1}</IndexTd>
+                      <Td>
+                        <Link to={`/trips/${trip._id}`}>
+                          {trip.fromCity} → {trip.toCity}
+                        </Link>
+                      </Td>
+                      <Td>{trip.transporter?.name || trip.transporter?.email || "—"}</Td>
+                      <Td>
+                        {trip.truck?.truckType || "—"}
+                        {trip.truck?.regNumber ? ` · ${trip.truck.regNumber}` : ""}
+                      </Td>
+                      <Td>{formatRelative(trip.currentLocation?.updatedAt)}</Td>
+                    </Tr>
+                  ))
+                )}
               </tbody>
             </Table>
           </TableScroll>
         )}
-      </Card>
+      </AdminCard>
     </PageContainer>
   );
 };

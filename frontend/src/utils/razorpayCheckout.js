@@ -42,7 +42,7 @@ export const openRazorpayCheckout = async ({ orderId, amount, currency, keyId, n
       name: name || "ShareTruck",
       description,
       prefill,
-      theme: { color: "#ff6a1a" },
+      theme: { color: "#1d4ed8" },
       handler: (response) => resolve(response),
       modal: {
         ondismiss: () => reject(new Error("Payment cancelled")),

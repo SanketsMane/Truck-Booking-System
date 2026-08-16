@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { fadeIn } from "../../theme/animations";
 
 export const PageContainer = styled.div`
   max-width: 960px;
@@ -72,9 +73,21 @@ export const SubHeading = styled.h3`
 `;
 
 export const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: ${({ theme }) => theme.space(2)};
   text-align: center;
   padding: ${({ theme }) => theme.space(10)} ${({ theme }) => theme.space(4)};
   color: ${({ theme }) => theme.color.textMuted};
+  font-size: ${({ theme }) => theme.font.size.md};
+  background: ${({ theme }) => theme.color.surfaceRaised};
   border: 1px dashed ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.md};
+  animation: ${fadeIn} ${({ theme }) => theme.motion.base} ${({ theme }) => theme.motion.easing} both;
+
+  svg {
+    color: ${({ theme }) => theme.color.textFaint};
+    margin-bottom: ${({ theme }) => theme.space(1)};
+  }
 `;

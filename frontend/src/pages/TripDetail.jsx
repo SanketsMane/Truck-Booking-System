@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Truck } from "lucide-react";
+import { Truck, ShieldCheck } from "lucide-react";
 import { getTrip } from "../api/trips";
 import { createBooking } from "../api/bookings";
 import { BASE_URL } from "../api/client";
@@ -11,11 +11,12 @@ import ReviewList from "../components/ReviewList";
 import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
+import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Field, Input, Textarea } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { Spinner } from "../components/ui/Spinner";
-import { formatDateTime, formatINR, formatTons, formatCbm } from "../utils/format";
+import { formatDate, formatDateTime, formatINR, formatTons, formatCbm, normalizePoint } from "../utils/format";
 
 const HeroPhoto = styled.div`
   position: relative;
@@ -120,28 +121,6 @@ const TimelineContent = styled.div`
   min-width: 0;
 `;
 
-const Avatar = styled.div`
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: ${({ theme }) => theme.color.accentSoft};
-  color: ${({ theme }) => theme.color.accentStrong};
-  font-weight: 700;
-  font-size: 15px;
-`;
-
-const initials = (name) =>
-  (name || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("") || "?";
-
 const StatusNotice = {
   full: "This trip is fully booked — no spare capacity left.",
   cancelled: "This trip was cancelled by the transporter.",
@@ -173,7 +152,7 @@ export const TripDetail = () => {
       .then(({ trip }) => {
         if (cancelled) return;
         setTrip(trip);
-        setPickupPoint(trip.pickupPoint);
+        setPickupPoint(normalizePoint(trip.pickupPoint));
       })
       .catch(() => {
         if (!cancelled) setTrip(null);
@@ -337,7 +316,7 @@ export const TripDetail = () => {
                 </TimelineMarker>
                 <TimelineContent>
                   <Muted>Pickup point</Muted>
-                  <div>{trip.pickupPoint.address}</div>
+                  <div>{normalizePoint(trip.pickupPoint).address}</div>
                 </TimelineContent>
               </TimelineRow>
               <TimelineRow>
@@ -346,7 +325,7 @@ export const TripDetail = () => {
                 </TimelineMarker>
                 <TimelineContent style={{ paddingBottom: 0 }}>
                   <Muted>Drop point</Muted>
-                  <div>{trip.dropPoint.address}</div>
+                  <div>{normalizePoint(trip.dropPoint).address}</div>
                 </TimelineContent>
               </TimelineRow>
             </RouteTimeline>
@@ -354,9 +333,20 @@ export const TripDetail = () => {
         </Card>
 
         <Card>
-          <SectionTitle style={{ marginBottom: 14 }}>Transporter</SectionTitle>
+          <Row style={{ justifyContent: "space-between" }}>
+            <SectionTitle style={{ marginBottom: 14 }}>Transporter</SectionTitle>
+            {/* A trip only ever reaches this page once it's published, and
+                publishing is gated on the transporter's KYC being verified
+                (SRS-03.3) — so any transporter shown here is, by that
+                system-enforced invariant, always verified. No extra
+                verification lookup needed to show this badge honestly. */}
+            <StatusBadge status="verified">
+              <ShieldCheck size={12} strokeWidth={2.4} style={{ marginRight: 4, verticalAlign: -2 }} />
+              Verified
+            </StatusBadge>
+          </Row>
           <Row $gap={3}>
-            <Avatar>{initials(trip.transporter?.name)}</Avatar>
+            <Avatar name={trip.transporter?.name} />
             <Stack $gap={1}>
               <div style={{ fontWeight: 700 }}>{trip.transporter?.name || "—"}</div>
               <Muted>
@@ -365,6 +355,7 @@ export const TripDetail = () => {
                   ? `★ ${Number(trip.transporter.ratingAvg).toFixed(1)} (${trip.transporter.ratingCount} ratings)`
                   : "No ratings yet"}
               </Muted>
+              {trip.transporter?.createdAt && <Muted>On ShareTruck since {formatDate(trip.transporter.createdAt)}</Muted>}
             </Stack>
           </Row>
         </Card>

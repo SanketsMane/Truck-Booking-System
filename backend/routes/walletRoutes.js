@@ -15,4 +15,7 @@ router.post("/recharge/verify", authMiddleware, walletController.verifyRecharge)
 router.post("/withdrawals", authMiddleware, requireRole("transporter"), walletController.requestWithdrawal);
 router.get("/withdrawals", authMiddleware, requireRole("transporter"), walletController.listMyWithdrawals);
 
+router.get("/payout-method", authMiddleware, requireRole("transporter"), walletController.getMyPayoutMethod);
+router.put("/payout-method", authMiddleware, requireRole("transporter"), walletController.savePayoutMethod);
+
 module.exports = router;

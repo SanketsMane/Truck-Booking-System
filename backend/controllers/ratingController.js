@@ -87,14 +87,17 @@ const listRatingsForUser = async (req, res) => {
 const listFlaggedRatings = async (req, res) => {
   try {
     const { page, limit, skip } = getPagination(req.query);
+    const { stars } = req.query;
+    const filter = { flagged: true };
+    if (stars) filter.stars = Number(stars);
     const [ratings, total] = await Promise.all([
-      Rating.find({ flagged: true })
-        .populate("rater", "name mobile")
-        .populate("ratee", "name mobile")
+      Rating.find(filter)
+        .populate("rater", "name email mobile")
+        .populate("ratee", "name email mobile")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Rating.countDocuments({ flagged: true }),
+      Rating.countDocuments(filter),
     ]);
     res.status(200).json({ success: true, ...paginatedResponse(ratings, total, page, limit) });
   } catch (error) {

@@ -111,7 +111,7 @@ const listQueue = async (req, res) => {
     if (type) filter.type = type;
 
     const verifications = await Verification.find(filter)
-      .populate("user", "name mobile city")
+      .populate("user", "name email mobile city")
       .sort({ createdAt: 1 });
 
     res.status(200).json({ success: true, verifications });

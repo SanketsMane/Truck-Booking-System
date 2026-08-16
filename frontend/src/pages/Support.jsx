@@ -1,16 +1,33 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import styled from "styled-components";
 import { toast } from "react-toastify";
 import * as supportApi from "../api/support";
 import { listMyBookings } from "../api/bookings";
 import { useAuth } from "../context/AuthContext";
-import { PageContainer, PageTitle, SectionTitle, Stack, Row, Muted, EmptyState } from "../components/ui/Layout";
-import { Card, CardRow } from "../components/ui/Card";
+import { PageContainer, SectionTitle, Stack, Row, Muted, EmptyState } from "../components/ui/Layout";
+import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Field, Input, Select, Textarea } from "../components/ui/Form";
 import { StatusBadge } from "../components/ui/Badge";
-import { Spinner } from "../components/ui/Spinner";
+import { Pagination } from "../components/ui/Pagination";
+import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../components/ui/Table";
+import { SkeletonTableRows } from "../components/ui/Skeleton";
+import {
+  Toolbar,
+  SearchInput,
+  ToolbarSelect,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../components/ui/Toolbar";
 import { formatDate, formatDateTime } from "../utils/format";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+const DetailRow = styled.tr`
+  background: ${({ theme }) => theme.color.surfaceRaised};
+`;
 
 // e.g. "Delhi → Jaipur · 14 Aug 2026 · confirmed"
 const bookingLabel = (b) => {
@@ -30,6 +47,11 @@ export const Support = () => {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [expandedId, setExpandedId] = useState(null);
 
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
@@ -89,6 +111,26 @@ export const Support = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return requests.filter((r) => {
+      if (status && r.status !== status) return false;
+      if (!q) return true;
+      return `${r.subject} ${r.message}`.toLowerCase().includes(q);
+    });
+  }, [requests, status, search]);
+
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const hasFilters = Boolean(status || search);
+
+  const clearFilters = () => {
+    setStatus("");
+    setSearch("");
+    setPage(1);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!subject.trim() || !message.trim()) {
@@ -117,7 +159,6 @@ export const Support = () => {
   return (
     <PageContainer>
       <Stack $gap={5}>
-        <PageTitle>Support</PageTitle>
 
         <Card>
           <Stack $gap={3}>
@@ -170,32 +211,108 @@ export const Support = () => {
 
         <Stack $gap={3}>
           <SectionTitle>Your requests</SectionTitle>
-          {loading ? (
-            <Row style={{ justifyContent: "center", padding: "40px 0" }}>
-              <Spinner $size={26} />
-            </Row>
-          ) : requests.length === 0 ? (
-            <EmptyState>
-              <Muted>You haven't raised any support requests yet.</Muted>
-            </EmptyState>
-          ) : (
-            <Stack $gap={2}>
-              {requests.map((r) => (
-                <Card key={r._id}>
-                  <Stack $gap={2}>
-                    <CardRow>
-                      <strong>{r.subject}</strong>
-                      <StatusBadge status={r.status === "resolved" ? "completed" : "pending"}>
-                        {r.status}
-                      </StatusBadge>
-                    </CardRow>
-                    <Muted>{r.message}</Muted>
-                    <Muted>Raised {formatDateTime(r.createdAt)}</Muted>
-                  </Stack>
-                </Card>
-              ))}
-            </Stack>
-          )}
+
+          <Toolbar>
+            <ToolbarSelect
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All statuses</option>
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+            </ToolbarSelect>
+            <SearchInput
+              placeholder="Search subject or message…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+            <ToolbarSpacer />
+            {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+            {!loading && <ResultsCount>{total} request{total === 1 ? "" : "s"}</ResultsCount>}
+          </Toolbar>
+
+          <Card $padding="0">
+            {!loading && paged.length === 0 ? (
+              <EmptyState style={{ margin: 20 }}>
+                <Muted>
+                  {requests.length === 0
+                    ? "You haven't raised any support requests yet."
+                    : "No requests match these filters."}
+                </Muted>
+              </EmptyState>
+            ) : (
+              <>
+                <TableScroll>
+                  <Table $minWidth="680px">
+                    <thead>
+                      <tr>
+                        <IndexTh>#</IndexTh>
+                        <Th>Subject</Th>
+                        <Th>Related booking</Th>
+                        <Th>Status</Th>
+                        <Th>Raised</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <SkeletonTableRows rows={pageSize > 10 ? 10 : pageSize} cols={5} />
+                      ) : (
+                        paged.map((r, i) => (
+                          <Fragment key={r._id}>
+                            <Tr
+                              style={{ cursor: "pointer" }}
+                              onClick={() => setExpandedId(expandedId === r._id ? null : r._id)}
+                            >
+                              <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
+                              <Td>{r.subject}</Td>
+                              <Td>
+                                <Muted>{r.booking?.goodsDescription || "—"}</Muted>
+                              </Td>
+                              <Td>
+                                <StatusBadge status={r.status === "resolved" ? "completed" : "pending"}>
+                                  {r.status}
+                                </StatusBadge>
+                              </Td>
+                              <Td>{formatDateTime(r.createdAt)}</Td>
+                            </Tr>
+                            {expandedId === r._id && (
+                              <DetailRow>
+                                <Td colSpan={5}>
+                                  <Muted style={{ whiteSpace: "pre-wrap" }}>{r.message}</Muted>
+                                </Td>
+                              </DetailRow>
+                            )}
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                  </Table>
+                </TableScroll>
+                <div style={{ padding: "0 20px 16px" }}>
+                  {!loading && (
+                    <Pagination
+                      page={page}
+                      pages={pages}
+                      total={total}
+                      onPageChange={setPage}
+                      pageSize={pageSize}
+                      onPageSizeChange={(n) => {
+                        setPageSize(n);
+                        setPage(1);
+                      }}
+                      pageSizeOptions={PAGE_SIZE_OPTIONS}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
         </Stack>
       </Stack>
     </PageContainer>

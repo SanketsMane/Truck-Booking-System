@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { MapPin, Loader2, CircleCheck } from "lucide-react";
 import { Input } from "./Form";
+import { useOnClickOutside } from "../../hooks/useOnClickOutside";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 const GEOCODING_UNAVAILABLE = !MAPBOX_TOKEN;
@@ -119,7 +120,7 @@ const splitPlaceName = (placeName) => {
 };
 
 const staticPreviewUrl = (lat, lng) =>
-  `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+ff6a1a(${lng},${lat})/${lng},${lat},14,0/640x220@2x?access_token=${MAPBOX_TOKEN}`;
+  `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+1d4ed8(${lng},${lat})/${lng},${lat},14,0/640x220@2x?access_token=${MAPBOX_TOKEN}`;
 
 // Address-level autocomplete for a pickup/drop point — the specific spot
 // within a city, as opposed to CityAutocomplete's city-level search. Backed
@@ -145,15 +146,7 @@ export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFoc
   const requestIdRef = useRef(0);
   const skipNextFetch = useRef(false);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  useOnClickOutside(wrapRef, () => setOpen(false));
 
   useEffect(() => {
     if (GEOCODING_UNAVAILABLE) return undefined;

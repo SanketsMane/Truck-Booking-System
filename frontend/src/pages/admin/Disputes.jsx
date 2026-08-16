@@ -2,14 +2,30 @@ import { Fragment, useEffect, useState } from "react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { listAdminDisputes, resolveAdminDispute } from "../../api/disputes";
-import { PageContainer, PageTitle, Stack, Row, Muted, EmptyState } from "../../components/ui/Layout";
-import { Card } from "../../components/ui/Card";
+import { getAdminBookingChat } from "../../api/admin";
+import { PageContainer, Stack, Row, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
 import { Field, Select, Input, Textarea } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
-import { Spinner } from "../../components/ui/Spinner";
 import { Pagination } from "../../components/ui/Pagination";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../../components/ui/Table";
+import {
+  Toolbar,
+  AdminSelect,
+  ToolbarSpacer,
+  ResultsCount,
+  ClearFiltersButton,
+} from "../../components/ui/AdminToolbar";
+import {
+  TableScroll,
+  Table,
+  Th,
+  Td,
+  Tr,
+  IndexTh,
+  IndexTd,
+  AdminCard,
+  AdminSkeletonRows,
+} from "../../components/ui/AdminTable";
 import { formatDateTime, formatINR } from "../../utils/format";
 
 const CATEGORY_LABELS = {
@@ -23,14 +39,123 @@ const CATEGORY_LABELS = {
 const badgeStatus = (status) => (status === "resolved" ? "completed" : status === "rejected" ? "rejected" : "pending");
 
 const MONEY_ACTIONS = ["refund_shipper", "payout_transporter"];
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const TopTd = styled(Td)`
   vertical-align: top;
 `;
 
 const ResolveRow = styled.tr`
-  background: ${({ theme }) => theme.color.surfaceRaised};
+  background: ${({ theme }) => theme.admin.color.bg};
 `;
+
+const ChatScroll = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 2px;
+`;
+
+const ChatBubble = styled.div`
+  max-width: 78%;
+  align-self: flex-start;
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  background: ${({ theme }) => theme.admin.color.surface};
+  border: 1px solid ${({ theme }) => theme.admin.color.border};
+  color: ${({ theme }) => theme.admin.color.text};
+`;
+
+const ChatSender = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.admin.color.textSecondary};
+  margin-bottom: 3px;
+`;
+
+const ChatTime = styled.div`
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.admin.color.textMuted};
+  margin-top: 4px;
+`;
+
+// Read-only view of a booking's chat thread, for moderation (SRS-06.1) —
+// same expand-a-row pattern as ResolutionForm below, kept as a separate
+// panel/state since an admin may want to read the conversation without
+// necessarily resolving the dispute in the same moment.
+const ChatPanel = ({ dispute, onClose }) => {
+  const bookingId = dispute.booking?._id;
+  const [messages, setMessages] = useState(null);
+  const [loading, setLoading] = useState(Boolean(bookingId));
+  const [error, setError] = useState(bookingId ? "" : "This dispute isn't linked to a booking.");
+
+  // The dispute's booking is only populated with goodsDescription/status/
+  // priceEstimate (see disputeController.listAllDisputes) — no participant
+  // roles. raisedBy/againstUser are already populated with name/email
+  // though, and between them cover both participants in every dispute, so
+  // matching a message's sender against those two (rather than guessing
+  // "shipper"/"transporter") shows the actual person's name and works
+  // regardless of which side raised the dispute.
+  const senderName = (senderId) => {
+    if (String(senderId) === String(dispute.raisedBy?._id)) return dispute.raisedBy?.name || "Sender";
+    if (String(senderId) === String(dispute.againstUser?._id)) return dispute.againstUser?.name || "Sender";
+    return "Sender";
+  };
+
+  useEffect(() => {
+    if (!bookingId) return undefined;
+    let cancelled = false;
+    getAdminBookingChat(bookingId)
+      .then(({ messages }) => {
+        if (!cancelled) setMessages(messages || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId]);
+
+  return (
+    <ResolveRow>
+      <Td colSpan={8}>
+        <Stack $gap={3} style={{ padding: "12px 4px" }}>
+          <Row style={{ justifyContent: "space-between" }}>
+            <strong style={{ fontSize: 13.5 }}>Conversation</strong>
+            <Button type="button" $variant="ghost" $size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </Row>
+          {loading ? (
+            <Muted>Loading…</Muted>
+          ) : error ? (
+            <Muted>{error}</Muted>
+          ) : messages.length === 0 ? (
+            <Muted>No messages in this conversation yet.</Muted>
+          ) : (
+            <ChatScroll>
+              {messages.map((m) => (
+                <ChatBubble key={m._id}>
+                  <ChatSender>{senderName(m.sender)}</ChatSender>
+                  {m.text}
+                  <ChatTime>{new Date(m.createdAt).toLocaleString("en-IN")}</ChatTime>
+                </ChatBubble>
+              ))}
+            </ChatScroll>
+          )}
+        </Stack>
+      </Td>
+    </ResolveRow>
+  );
+};
 
 // Resolution needs several correlated fields (status + action + amount +
 // note) — more structure than ConfirmModal's single reason string, so it's
@@ -123,17 +248,24 @@ export const Disputes = () => {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [status, setStatus] = useState("open");
+  const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [chatExpandedId, setChatExpandedId] = useState(null);
   const [submittingId, setSubmittingId] = useState(null);
 
+  const hasFilters = Boolean(category) || status !== "open";
+
   const load = () =>
-    listAdminDisputes({ page, limit: 20, status: status || undefined }).then((res) => {
-      setItems(res.items || []);
-      setTotal(res.total || 0);
-      setPages(res.pages || 1);
-    });
+    listAdminDisputes({ page, limit: pageSize, status: status || undefined, category: category || undefined }).then(
+      (res) => {
+        setItems(res.items || []);
+        setTotal(res.total || 0);
+        setPages(res.pages || 1);
+      }
+    );
 
   useEffect(() => {
     let cancelled = false;
@@ -150,7 +282,13 @@ export const Disputes = () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, status]);
+  }, [page, pageSize, status, category]);
+
+  const clearFilters = () => {
+    setStatus("open");
+    setCategory("");
+    setPage(1);
+  };
 
   const handleResolve = async (id, payload) => {
     setSubmittingId(id);
@@ -167,33 +305,43 @@ export const Disputes = () => {
   };
 
   return (
-    <PageContainer style={{ maxWidth: 1180 }}>
-      <PageTitle>Disputes</PageTitle>
+    <PageContainer style={{ maxWidth: 1220 }}>
+      <Toolbar>
+        <AdminSelect
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="under_review">Under review</option>
+          <option value="resolved">Resolved</option>
+          <option value="rejected">Rejected</option>
+        </AdminSelect>
+        <AdminSelect
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All categories</option>
+          {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </AdminSelect>
+        <ToolbarSpacer />
+        {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+        {!loading && <ResultsCount>{total} dispute{total === 1 ? "" : "s"}</ResultsCount>}
+      </Toolbar>
 
-      <Card style={{ marginTop: 20 }}>
-        <Row $gap={2} $wrap style={{ marginBottom: 16 }}>
-          <Select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-            style={{ maxWidth: 190 }}
-          >
-            <option value="">All statuses</option>
-            <option value="open">Open</option>
-            <option value="under_review">Under review</option>
-            <option value="resolved">Resolved</option>
-            <option value="rejected">Rejected</option>
-          </Select>
-        </Row>
-
-        {loading ? (
-          <Row style={{ justifyContent: "center", padding: "50px 0" }}>
-            <Spinner $size={26} />
-          </Row>
-        ) : items.length === 0 ? (
-          <EmptyState>
+      <AdminCard $padding="0">
+        {!loading && items.length === 0 ? (
+          <EmptyState style={{ margin: 20 }}>
             <Muted>No disputes match this filter.</Muted>
           </EmptyState>
         ) : (
@@ -213,63 +361,90 @@ export const Disputes = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((d, i) => (
-                    <Fragment key={d._id}>
-                      <Tr>
-                        <IndexTd style={{ verticalAlign: "top" }}>{(page - 1) * 20 + i + 1}</IndexTd>
-                        <TopTd>{formatDateTime(d.createdAt)}</TopTd>
-                        <TopTd>
-                          <strong>{CATEGORY_LABELS[d.category] || d.category}</strong>
-                          <br />
-                          <Muted style={{ maxWidth: 240, display: "inline-block" }}>{d.description}</Muted>
-                        </TopTd>
-                        <TopTd>
-                          {d.raisedBy?.name || "—"}
-                          <br />
-                          <Muted>{d.raisedBy?.mobile || ""}</Muted>
-                        </TopTd>
-                        <TopTd>
-                          {d.againstUser?.name || "—"}
-                          <br />
-                          <Muted>{d.againstUser?.mobile || ""}</Muted>
-                        </TopTd>
-                        <TopTd>
-                          <Muted>
-                            {d.booking?.goodsDescription || d.booking?._id || "—"}
-                            {d.booking?.priceEstimate ? ` · ${formatINR(d.booking.priceEstimate)}` : ""}
-                          </Muted>
-                        </TopTd>
-                        <TopTd>
-                          <StatusBadge status={badgeStatus(d.status)}>{d.status.replace(/_/g, " ")}</StatusBadge>
-                        </TopTd>
-                        <TopTd>
-                          {!["resolved", "rejected"].includes(d.status) && (
-                            <Button
-                              $size="sm"
-                              onClick={() => setExpandedId(expandedId === d._id ? null : d._id)}
-                            >
-                              {expandedId === d._id ? "Close" : "Resolve"}
-                            </Button>
-                          )}
-                        </TopTd>
-                      </Tr>
-                      {expandedId === d._id && (
-                        <ResolutionForm
-                          dispute={d}
-                          submitting={submittingId === d._id}
-                          onCancel={() => setExpandedId(null)}
-                          onSubmit={handleResolve}
-                        />
-                      )}
-                    </Fragment>
-                  ))}
+                  {loading ? (
+                    <AdminSkeletonRows rows={pageSize > 10 ? 10 : pageSize} cols={8} />
+                  ) : (
+                    items.map((d, i) => (
+                      <Fragment key={d._id}>
+                        <Tr>
+                          <IndexTd style={{ verticalAlign: "top" }}>{(page - 1) * pageSize + i + 1}</IndexTd>
+                          <TopTd>{formatDateTime(d.createdAt)}</TopTd>
+                          <TopTd>
+                            <strong>{CATEGORY_LABELS[d.category] || d.category}</strong>
+                            <br />
+                            <Muted style={{ maxWidth: 240, display: "inline-block" }}>{d.description}</Muted>
+                          </TopTd>
+                          <TopTd>
+                            {d.raisedBy?.name || "—"}
+                            <br />
+                            <Muted>{d.raisedBy?.email || ""}</Muted>
+                          </TopTd>
+                          <TopTd>
+                            {d.againstUser?.name || "—"}
+                            <br />
+                            <Muted>{d.againstUser?.email || ""}</Muted>
+                          </TopTd>
+                          <TopTd>
+                            <Muted>
+                              {d.booking?.goodsDescription || d.booking?._id || "—"}
+                              {d.booking?.priceEstimate ? ` · ${formatINR(d.booking.priceEstimate)}` : ""}
+                            </Muted>
+                          </TopTd>
+                          <TopTd>
+                            <StatusBadge status={badgeStatus(d.status)}>{d.status.replace(/_/g, " ")}</StatusBadge>
+                          </TopTd>
+                          <TopTd>
+                            <Row $gap={2} $wrap>
+                              <Button
+                                $size="sm"
+                                $variant="secondary"
+                                onClick={() => setChatExpandedId(chatExpandedId === d._id ? null : d._id)}
+                              >
+                                {chatExpandedId === d._id ? "Hide chat" : "View chat"}
+                              </Button>
+                              {!["resolved", "rejected"].includes(d.status) && (
+                                <Button $size="sm" onClick={() => setExpandedId(expandedId === d._id ? null : d._id)}>
+                                  {expandedId === d._id ? "Close" : "Resolve"}
+                                </Button>
+                              )}
+                            </Row>
+                          </TopTd>
+                        </Tr>
+                        {chatExpandedId === d._id && <ChatPanel dispute={d} onClose={() => setChatExpandedId(null)} />}
+                        {expandedId === d._id && (
+                          <ResolutionForm
+                            dispute={d}
+                            submitting={submittingId === d._id}
+                            onCancel={() => setExpandedId(null)}
+                            onSubmit={handleResolve}
+                          />
+                        )}
+                      </Fragment>
+                    ))
+                  )}
                 </tbody>
               </Table>
             </TableScroll>
-            <Pagination page={page} pages={pages} total={total} onPageChange={setPage} />
+            <div style={{ padding: "0 20px 16px" }}>
+              {!loading && (
+                <Pagination
+                  variant="admin"
+                  page={page}
+                  pages={pages}
+                  total={total}
+                  onPageChange={setPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                  pageSizeOptions={PAGE_SIZE_OPTIONS}
+                />
+              )}
+            </div>
           </>
         )}
-      </Card>
+      </AdminCard>
     </PageContainer>
   );
 };

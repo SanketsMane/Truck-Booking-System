@@ -4,12 +4,35 @@
 // clients (Gmail, Outlook, Apple Mail) rather than getting silently
 // stripped or mis-rendered.
 
-const BRAND_NAME = "ShareTruck";
-const BRAND_COLOR = "#ff6a1a";
-const TEXT_COLOR = "#14150f";
-const MUTED_COLOR = "#63645a";
-const BORDER_COLOR = "#e8e8e5";
-const BG_COLOR = "#f5f5f3";
+const { getBranding } = require("../utils/brandingCache");
+
+// Mirrors frontend/src/theme/theme.js's consumer palette (blue accent, cool
+// neutrals) so transactional email reads as the same product as the app
+// rather than a leftover from the earlier orange brand.
+const BRAND_COLOR = "#1d4ed8";
+const BRAND_COLOR_STRONG = "#1e40af";
+const BRAND_SOFT = "#eef2ff";
+const TEXT_COLOR = "#111318";
+const MUTED_COLOR = "#4b5563";
+const BORDER_COLOR = "#e5e7eb";
+const BG_COLOR = "#f3f4f6";
+
+const SUCCESS_COLOR = "#16a34a";
+const SUCCESS_SOFT = "#ecfdf3";
+const DANGER_COLOR = "#dc2f3c";
+const DANGER_SOFT = "#fef2f2";
+const WARNING_COLOR = "#c98a04";
+const WARNING_SOFT = "#fffbeb";
+
+// Shared tone lookup for calloutBox/statusPill — one place that maps a
+// semantic tone (what happened) to a color (how it reads), same idea as
+// the app's own theme.status → color mapping.
+const TONES = {
+  neutral: { fg: MUTED_COLOR, bg: BG_COLOR, border: BORDER_COLOR },
+  success: { fg: SUCCESS_COLOR, bg: SUCCESS_SOFT, border: "rgba(22,163,74,0.25)" },
+  danger: { fg: DANGER_COLOR, bg: DANGER_SOFT, border: "rgba(220,47,60,0.22)" },
+  warning: { fg: WARNING_COLOR, bg: WARNING_SOFT, border: "rgba(201,138,4,0.25)" },
+};
 
 // Every user-supplied value (name, city, admin-entered reason text, etc.)
 // must go through this before landing in an email's HTML — these are
@@ -23,15 +46,47 @@ const escapeHtml = (value) =>
     "'": "&#39;",
   }[ch]));
 
-// A label/value line, e.g. a receipt's "Amount ... ₹5,000" row.
+// A label/value line, e.g. a receipt's "Amount ... ₹5,000" row. Values are
+// tabular-nums so a stack of amounts lines up on their digits.
 const detailRow = (label, value) => `
   <tr>
     <td style="padding: 9px 0; border-bottom: 1px solid ${BORDER_COLOR}; color: ${MUTED_COLOR}; font-size: 13.5px;">${escapeHtml(label)}</td>
-    <td style="padding: 9px 0; border-bottom: 1px solid ${BORDER_COLOR}; text-align: right; font-weight: 600; font-size: 13.5px; color: ${TEXT_COLOR};">${value}</td>
+    <td style="padding: 9px 0; border-bottom: 1px solid ${BORDER_COLOR}; text-align: right; font-weight: 600; font-size: 13.5px; color: ${TEXT_COLOR}; font-variant-numeric: tabular-nums;">${value}</td>
   </tr>`;
 
 const detailTable = (rows) =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 18px 0;">${rows.join("")}</table>`;
+
+// A tinted, rounded callout for one important line — a rejection reason, a
+// suspension note, a dispute resolution note. One shared look instead of
+// every template hand-rolling its own inline-styled box. `html` is
+// caller-escaped (these always wrap user/admin-entered text).
+const calloutBox = (html, tone = "neutral") => {
+  const t = TONES[tone] || TONES.neutral;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 2px 0 16px;">
+    <tr>
+      <td style="padding: 12px 14px; background-color: ${t.bg}; border: 1px solid ${t.border}; border-radius: 8px; color: ${TEXT_COLOR}; font-size: 14px; line-height: 1.55;">${html}</td>
+    </tr>
+  </table>`;
+};
+
+// A small colored status word ("Verified", "Suspended") — the email
+// equivalent of the app's own StatusBadge, so a status reads the same way
+// in an inbox as it does on the dashboard.
+const statusPill = (label, tone = "neutral") => {
+  const t = TONES[tone] || TONES.neutral;
+  return `<span style="display:inline-block; padding:4px 11px; border-radius:999px; background-color:${t.bg}; color:${t.fg}; font-size:12.5px; font-weight:700; letter-spacing:0.02em;">${escapeHtml(label)}</span>`;
+};
+
+// The one piece of copy a user needs to *transcribe* rather than just read
+// — set apart in a tinted box so it's unmistakable at a glance instead of
+// just another line of body text.
+const codeBox = (spacedCode) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 4px 0 20px;">
+    <tr>
+      <td align="center" style="padding: 18px; background-color: ${BRAND_SOFT}; border: 1px solid rgba(29,78,216,0.18); border-radius: 10px; font-size: 30px; font-weight: 700; letter-spacing: 6px; color: ${BRAND_COLOR_STRONG}; font-variant-numeric: tabular-nums;">${escapeHtml(spacedCode)}</td>
+    </tr>
+  </table>`;
 
 const formatINR = (amount) =>
   `&#8377;${Number(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -49,10 +104,27 @@ const formatDateTime = (value) => {
   });
 };
 
+// The brand mark in the header — an admin-configured logo when it's a real
+// absolute URL (so it resolves from an inbox with no session/cookie), else
+// a letter mark in the accent color. A letter mark is also just a safer
+// default than an image: many clients block remote images until the user
+// opts in, so an <img>-only header would render as a blank box by default.
+const brandMark = (branding) => {
+  const name = branding.platformName || "ShareTruck";
+  const initial = escapeHtml((name.trim().charAt(0) || "S").toUpperCase());
+  if (branding.logoUrl && /^https?:\/\//i.test(branding.logoUrl)) {
+    return `<img src="${escapeHtml(branding.logoUrl)}" width="28" height="28" alt="${escapeHtml(name)}" style="display:inline-block; vertical-align:middle; border-radius:7px; object-fit:cover;" />`;
+  }
+  return `<span style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; background-color:${BRAND_COLOR}; border-radius:7px; vertical-align:middle; color:#ffffff; font-size:15px; font-weight:800;">${initial}</span>`;
+};
+
 // title/preheader are plain text (never rendered as HTML); bodyHtml is
 // pre-built HTML from the caller (already escaped where it embeds
 // user data — see the individual templates).
-const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => `<!DOCTYPE html>
+const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => {
+  const branding = getBranding();
+  const brandName = escapeHtml(branding.platformName || "ShareTruck");
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -66,12 +138,12 @@ const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BG_COLOR};">
     <tr>
       <td align="center" style="padding: 32px 16px;">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:12px; border:1px solid ${BORDER_COLOR};">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:14px; border:1px solid ${BORDER_COLOR};">
 
           <tr>
-            <td style="padding: 26px 32px; border-bottom: 1px solid ${BORDER_COLOR};">
-              <span style="display:inline-block; width:26px; height:26px; background-color:${BRAND_COLOR}; border-radius:7px; vertical-align:middle;">&nbsp;</span>
-              <span style="font-size:19px; font-weight:800; color:${TEXT_COLOR}; vertical-align:middle; margin-left:10px;">${BRAND_NAME}</span>
+            <td style="padding: 24px 32px; border-bottom: 1px solid ${BORDER_COLOR};">
+              ${brandMark(branding)}
+              <span style="font-size:18px; font-weight:800; color:${TEXT_COLOR}; vertical-align:middle; margin-left:10px;">${brandName}</span>
             </td>
           </tr>
 
@@ -82,8 +154,8 @@ const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => `
                 ctaUrl
                   ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top: 26px;">
                 <tr>
-                  <td style="border-radius:8px; background-color:${BRAND_COLOR};">
-                    <a href="${ctaUrl}" style="display:inline-block; padding:13px 26px; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none;">${escapeHtml(ctaLabel)}</a>
+                  <td style="border-radius:10px; background-color:${BRAND_COLOR};">
+                    <a href="${ctaUrl}" style="display:inline-block; padding:13px 26px; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:10px;">${escapeHtml(ctaLabel)}</a>
                   </td>
                 </tr>
               </table>`
@@ -94,8 +166,12 @@ const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => `
 
           <tr>
             <td style="padding: 22px 32px; border-top: 1px solid ${BORDER_COLOR}; font-size:12.5px; color:${MUTED_COLOR}; line-height:1.6;">
-              <p style="margin:0 0 4px;">ShareTruck — Truck capacity sharing marketplace</p>
-              <p style="margin:0;">This is an automated message — please don't reply directly to this email. Need help? Reach us through the app's Support page.</p>
+              <p style="margin:0 0 4px;">${brandName} — Truck capacity sharing marketplace</p>
+              <p style="margin:0;">This is an automated message — please don't reply directly to this email.${
+                branding.contactEmail
+                  ? ` Need help? Reach us through the app's Support page or email <a href="mailto:${escapeHtml(branding.contactEmail)}" style="color:${MUTED_COLOR}; text-decoration:underline;">${escapeHtml(branding.contactEmail)}</a>.`
+                  : " Need help? Reach us through the app's Support page."
+              }</p>
             </td>
           </tr>
 
@@ -105,17 +181,24 @@ const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => `
   </table>
 </body>
 </html>`;
+};
 
 module.exports = {
   renderEmail,
   escapeHtml,
   detailRow,
+  calloutBox,
+  statusPill,
+  codeBox,
   detailTable,
   formatINR,
   formatDateTime,
-  BRAND_NAME,
   BRAND_COLOR,
+  BRAND_COLOR_STRONG,
   TEXT_COLOR,
   MUTED_COLOR,
   BORDER_COLOR,
+  SUCCESS_COLOR,
+  DANGER_COLOR,
+  WARNING_COLOR,
 };

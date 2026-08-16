@@ -2,6 +2,7 @@ const ChatThread = require("../models/chatThreadModel");
 const Message = require("../models/messageModel");
 const { notify } = require("../utils/notify");
 const { emitToRoom } = require("../realtime/io");
+const { logAdminAction } = require("../utils/audit");
 const { sendMessageValidation } = require("../validators/chatValidation");
 const sendServerError = require("../utils/sendServerError");
 
@@ -83,10 +84,20 @@ const markThreadRead = async (req, res) => {
       return res.status(404).json({ success: false, msg: "Chat thread not found" });
     }
 
-    await Message.updateMany(
+    const readAt = new Date();
+    const { modifiedCount } = await Message.updateMany(
       { thread: thread._id, sender: { $ne: req.auth.id }, "readBy.user": { $ne: req.auth.id } },
-      { $push: { readBy: { user: req.auth.id, readAt: new Date() } } }
+      { $push: { readBy: { user: req.auth.id, readAt } } }
     );
+
+    // SRS-06.2 — read-state indicators. Only worth telling the room about
+    // if something actually flipped to read, and only the sender needs to
+    // know (they're the one whose bubble should update) — but broadcasting
+    // to the whole thread room is simplest and harmless, same pattern
+    // sendMessage already uses.
+    if (modifiedCount > 0) {
+      emitToRoom(`thread:${thread._id}`, "chat:read", { threadId: thread._id, readerId: req.auth.id, readAt });
+    }
 
     res.status(200).json({ success: true, msg: "Marked as read" });
   } catch (error) {
@@ -94,4 +105,34 @@ const markThreadRead = async (req, res) => {
   }
 };
 
-module.exports = { getThreadForBooking, listMessages, sendMessage, markThreadRead };
+// SRS-06.1 — the spec scopes a thread to "the booking's shipper and
+// transporter (and admin for moderation)". Deliberately a separate
+// admin-gated route (see routes/adminRoutes.js, requireAdminScope("support")
+// — same scope dispute resolution already requires) rather than an isAdmin
+// bypass inside findThreadForParticipant, so the participant-only guard the
+// regular chat routes rely on stays exactly as strict as it already was.
+const adminGetThread = async (req, res) => {
+  try {
+    const thread = await ChatThread.findOne({ booking: req.params.bookingId });
+    if (!thread) {
+      return res.status(404).json({ success: false, msg: "Chat thread not found" });
+    }
+
+    const messages = await Message.find({ thread: thread._id }).sort({ createdAt: 1 });
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "chat.view",
+      targetType: "ChatThread",
+      targetId: thread._id,
+      reason: undefined,
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, thread, messages });
+  } catch (error) {
+    sendServerError(res, error, "chatController");
+  }
+};
+
+module.exports = { getThreadForBooking, listMessages, sendMessage, markThreadRead, adminGetThread };

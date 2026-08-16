@@ -12,6 +12,7 @@ const { bookingConfirmedEmail } = require("../emailTemplates/templates");
 const sendServerError = require("../utils/sendServerError");
 const { applyWalletEntry, withWalletSession } = require("../utils/walletService");
 const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
+const { getBrandName } = require("../utils/brandingCache");
 const {
   BOOKING_RESPONSE_WINDOW_HOURS,
   CANCELLATION_WINDOW_HOURS,
@@ -24,12 +25,15 @@ const {
 } = require("../validators/bookingValidation");
 
 // Pending requests the transporter never actioned auto-expire (SRS-05.4).
-// No job runner in this stack yet, so expiry is applied lazily whenever
-// bookings are read — correct-enough for MVP volume, and centralizing it
-// here means every read path expires consistently.
+// Applied lazily on every read path (so a booking someone is actively
+// looking at expires immediately, not on the next cron tick) AND swept
+// periodically by jobs/staleBookings.js, so one nobody ever reads again
+// still expires within a bounded window instead of staying "pending"
+// forever.
 const expireStalePendingBookings = async (filter) => {
   const stale = await Booking.find({ ...filter, status: "pending", respondBy: { $lt: new Date() } });
   await Promise.all(stale.map((booking) => expireIfStale(booking)));
+  return stale.length;
 };
 
 // Same lazy-expiry rule, but for a single already-fetched booking — used on
@@ -167,10 +171,13 @@ const acceptBooking = async (req, res) => {
     try {
       const shipper = await User.findById(booking.shipper).select("mobile name email");
       if (shipper) {
-        await smsProvider.sendSms(
-          shipper.mobile,
-          `Your ShareTruck booking (${trip.fromCity} to ${trip.toCity}) is confirmed. Check the app for pickup details.`
-        );
+        // Mobile is optional now — only SMS if they gave one.
+        if (shipper.mobile) {
+          await smsProvider.sendSms(
+            shipper.mobile,
+            `Your ${getBrandName()} booking (${trip.fromCity} to ${trip.toCity}) is confirmed. Check the app for pickup details.`
+          );
+        }
         if (shipper.email) {
           const { subject, html } = bookingConfirmedEmail({
             name: shipper.name,
@@ -478,4 +485,5 @@ module.exports = {
   confirmDrop,
   listMyBookings,
   getBooking,
+  expireStalePendingBookings,
 };

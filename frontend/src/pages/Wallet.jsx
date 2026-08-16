@@ -9,17 +9,20 @@ import {
   verifyRecharge,
   requestWithdrawal,
   listMyWithdrawals,
+  getMyPayoutMethod,
 } from "../api/wallet";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import { openRazorpayCheckout } from "../utils/razorpayCheckout";
-import { PageContainer, PageTitle, SectionTitle, Stack, Row, Muted, EmptyState } from "../components/ui/Layout";
+import { PageContainer, SectionTitle, Stack, Row, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Field, Input, Select } from "../components/ui/Form";
 import { StatusBadge } from "../components/ui/Badge";
-import { Spinner } from "../components/ui/Spinner";
+import { SkeletonBlock, SkeletonText, SkeletonTableRows } from "../components/ui/Skeleton";
 import { Pagination } from "../components/ui/Pagination";
-import { TableScroll, Table, Th, Td, Tr } from "../components/ui/Table";
+import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../components/ui/Table";
+import { Toolbar, ToolbarSelect, ToolbarSpacer, ResultsCount, ClearFiltersButton } from "../components/ui/Toolbar";
 import { formatINR, formatDateTime } from "../utils/format";
 
 const TX_LABELS = {
@@ -62,6 +65,7 @@ const RechargeForm = styled.form`
 
 export const Wallet = () => {
   const { user } = useAuth();
+  const { platformName } = useBranding();
   const isTransporter = user?.roles?.includes("transporter");
 
   const [wallet, setWallet] = useState(null);
@@ -71,8 +75,10 @@ export const Wallet = () => {
 
   const [txItems, setTxItems] = useState([]);
   const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(20);
   const [txPages, setTxPages] = useState(1);
   const [txTotal, setTxTotal] = useState(0);
+  const [txType, setTxType] = useState("");
   const [loadingTx, setLoadingTx] = useState(true);
 
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -85,6 +91,7 @@ export const Wallet = () => {
 
   const [withdrawals, setWithdrawals] = useState([]);
   const [loadingWithdrawals, setLoadingWithdrawals] = useState(isTransporter);
+  const [prefilledFromSaved, setPrefilledFromSaved] = useState(false);
 
   const loadWallet = () =>
     getMyWallet()
@@ -92,8 +99,8 @@ export const Wallet = () => {
       .catch((error) => toast.error(error.message))
       .finally(() => setLoadingWallet(false));
 
-  const loadTransactions = (page) =>
-    listMyTransactions({ page, limit: 20 })
+  const loadTransactions = (page, pageSize, type) =>
+    listMyTransactions({ page, limit: pageSize, type: type || undefined })
       .then((res) => {
         setTxItems(res.items || []);
         setTxTotal(res.total || 0);
@@ -116,9 +123,41 @@ export const Wallet = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Prefill the withdrawal form from the transporter's saved payout method
+  // (set on Profile) so they don't have to retype it every time — still
+  // fully editable/overridable per request.
   useEffect(() => {
-    loadTransactions(txPage);
-  }, [txPage]);
+    if (!isTransporter) return;
+    getMyPayoutMethod()
+      .then(({ payoutMethod: saved }) => {
+        if (!saved) return;
+        setPayoutMethod(saved.method);
+        if (saved.method === "upi") setUpiId(saved.upiId || "");
+        if (saved.method === "bank") {
+          setAccountHolderName(saved.bankDetails?.accountHolderName || "");
+          setAccountNumber(saved.bankDetails?.accountNumber || "");
+          setIfscCode(saved.bankDetails?.ifscCode || "");
+        }
+        setPrefilledFromSaved(true);
+      })
+      .catch(() => {});
+  }, [isTransporter]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingTx(true);
+    loadTransactions(txPage, txPageSize, txType);
+  }, [txPage, txPageSize, txType]);
+
+  const handleTypeChange = (e) => {
+    setTxType(e.target.value);
+    setTxPage(1);
+  };
+
+  const clearTxFilters = () => {
+    setTxType("");
+    setTxPage(1);
+  };
 
   const handleRecharge = async (e) => {
     e.preventDefault();
@@ -135,6 +174,7 @@ export const Wallet = () => {
         amount: order.amount,
         currency: order.currency,
         keyId: order.keyId,
+        name: platformName,
         description: "Wallet recharge",
         prefill: { name: user?.name, contact: user?.mobile },
       });
@@ -145,7 +185,7 @@ export const Wallet = () => {
       });
       toast.success("Wallet recharged");
       setRechargeAmount("");
-      await Promise.all([loadWallet(), loadTransactions(1)]);
+      await Promise.all([loadWallet(), loadTransactions(1, txPageSize, txType)]);
       setTxPage(1);
     } catch (error) {
       toast.error(error.message);
@@ -191,7 +231,7 @@ export const Wallet = () => {
       setAccountHolderName("");
       setAccountNumber("");
       setIfscCode("");
-      await Promise.all([loadWallet(), loadWithdrawals(), loadTransactions(1)]);
+      await Promise.all([loadWallet(), loadWithdrawals(), loadTransactions(1, txPageSize, txType)]);
       setTxPage(1);
     } catch (error) {
       toast.error(error.message);
@@ -202,14 +242,19 @@ export const Wallet = () => {
 
   return (
     <PageContainer style={{ maxWidth: 780 }}>
-      <PageTitle>Wallet</PageTitle>
 
       <Stack $gap={4} style={{ marginTop: 20 }}>
         <Card>
           {loadingWallet ? (
-            <Row style={{ justifyContent: "center", padding: "20px 0" }}>
-              <Spinner $size={24} />
-            </Row>
+            <BalanceRow>
+              <Row $gap={3}>
+                <SkeletonBlock $width="44px" $height="44px" $radius="16px" />
+                <Stack $gap={1}>
+                  <SkeletonBlock $width="90px" $height="12px" />
+                  <SkeletonText $width="140px" $size="30px" />
+                </Stack>
+              </Row>
+            </BalanceRow>
           ) : (
             <Stack $gap={4}>
               <BalanceRow>
@@ -251,6 +296,9 @@ export const Wallet = () => {
               <Muted>
                 Submit a request and our team will transfer the amount to your bank or UPI within 1–2 business days.
               </Muted>
+              {prefilledFromSaved && (
+                <Muted>Prefilled from your saved payout method — edit here anytime, or update it from your Profile.</Muted>
+              )}
               <form onSubmit={handleWithdraw}>
                 <Stack $gap={3}>
                   <Row $gap={3} $wrap>
@@ -315,22 +363,52 @@ export const Wallet = () => {
           </Card>
         )}
 
-        <Card>
-          <SectionTitle style={{ marginBottom: 16 }}>Transaction history</SectionTitle>
+        <Stack $gap={3}>
+          <SectionTitle>Transaction history</SectionTitle>
+          <Toolbar>
+            <ToolbarSelect value={txType} onChange={handleTypeChange}>
+              <option value="">All types</option>
+              {Object.entries(TX_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </ToolbarSelect>
+            <ToolbarSpacer />
+            {txType && <ClearFiltersButton onClick={clearTxFilters} />}
+            {!loadingTx && <ResultsCount>{txTotal} transaction{txTotal === 1 ? "" : "s"}</ResultsCount>}
+          </Toolbar>
+        </Stack>
+
+        <Card $padding="0">
           {loadingTx ? (
-            <Row style={{ justifyContent: "center", padding: "40px 0" }}>
-              <Spinner $size={24} />
-            </Row>
+            <TableScroll>
+              <Table $minWidth="620px">
+                <thead>
+                  <tr>
+                    <IndexTh>#</IndexTh>
+                    <Th>Date</Th>
+                    <Th>Type</Th>
+                    <Th>Amount (₹)</Th>
+                    <Th>Balance after (₹)</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <SkeletonTableRows rows={txPageSize > 10 ? 10 : txPageSize} cols={5} />
+                </tbody>
+              </Table>
+            </TableScroll>
           ) : txItems.length === 0 ? (
-            <EmptyState>
-              <Muted>No wallet activity yet.</Muted>
+            <EmptyState style={{ margin: "0 20px 20px" }}>
+              <Muted>{txType ? "No transactions match this filter." : "No wallet activity yet."}</Muted>
             </EmptyState>
           ) : (
             <>
               <TableScroll>
-                <Table $minWidth="560px">
+                <Table $minWidth="620px">
                   <thead>
                     <tr>
+                      <IndexTh>#</IndexTh>
                       <Th>Date</Th>
                       <Th>Type</Th>
                       <Th>Amount (₹)</Th>
@@ -338,8 +416,9 @@ export const Wallet = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {txItems.map((tx) => (
+                    {txItems.map((tx, i) => (
                       <Tr key={tx._id}>
+                        <IndexTd>{(txPage - 1) * txPageSize + i + 1}</IndexTd>
                         <Td>{formatDateTime(tx.createdAt)}</Td>
                         <Td>{TX_LABELS[tx.type] || tx.type}</Td>
                         <Td>
@@ -352,7 +431,19 @@ export const Wallet = () => {
                   </tbody>
                 </Table>
               </TableScroll>
-              <Pagination page={txPage} pages={txPages} total={txTotal} onPageChange={setTxPage} />
+              <div style={{ padding: "0 20px 16px" }}>
+                <Pagination
+                  page={txPage}
+                  pages={txPages}
+                  total={txTotal}
+                  onPageChange={setTxPage}
+                  pageSize={txPageSize}
+                  onPageSizeChange={(n) => {
+                    setTxPageSize(n);
+                    setTxPage(1);
+                  }}
+                />
+              </div>
             </>
           )}
         </Card>

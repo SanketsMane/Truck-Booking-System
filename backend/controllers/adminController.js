@@ -54,7 +54,7 @@ const getDashboard = async (req, res) => {
           { $project: { _id: 0, fromCity: "$_id.fromCity", toCity: "$_id.toCity", count: 1 } },
         ]),
         Booking.find().populate("shipper", "name").sort({ createdAt: -1 }).limit(5),
-        User.find().select("name mobile roles createdAt").sort({ createdAt: -1 }).limit(5),
+        User.find().select("name email mobile roles createdAt").sort({ createdAt: -1 }).limit(5),
       ]);
 
     res.status(200).json({
@@ -222,7 +222,7 @@ const listLiveTrips = async (req, res) => {
   try {
     const since = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60 * 1000);
     const trips = await Trip.find({ "currentLocation.updatedAt": { $gte: since } })
-      .populate("transporter", "name mobile")
+      .populate("transporter", "name email mobile")
       .populate("truck", "regNumber truckType")
       .sort({ "currentLocation.updatedAt": -1 });
 
@@ -248,7 +248,7 @@ const listTrucks = async (req, res) => {
     }
 
     const [trucks, total] = await Promise.all([
-      Truck.find(filter).populate("owner", "name mobile").sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Truck.find(filter).populate("owner", "name email mobile").sort({ createdAt: -1 }).skip(skip).limit(limit),
       Truck.countDocuments(filter),
     ]);
 
@@ -273,7 +273,7 @@ const listTrips = async (req, res) => {
     const [trips, total] = await Promise.all([
       Trip.find(filter)
         .populate("truck", "regNumber truckType")
-        .populate("transporter", "name mobile")
+        .populate("transporter", "name email mobile")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -378,8 +378,8 @@ const listBookings = async (req, res) => {
 
     const [bookings, total] = await Promise.all([
       Booking.find(filter)
-        .populate("shipper", "name mobile")
-        .populate({ path: "trip", populate: { path: "transporter", select: "name mobile" } })
+        .populate("shipper", "name email mobile")
+        .populate({ path: "trip", populate: { path: "transporter", select: "name email mobile" } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -629,7 +629,7 @@ const sendCsv = (res, filename, rows, columns) => {
 const exportBookingsCsv = async (req, res) => {
   try {
     const bookings = await Booking.find()
-      .populate("shipper", "name mobile")
+      .populate("shipper", "name email mobile")
       .populate({ path: "trip", populate: { path: "transporter", select: "name" } })
       .sort({ createdAt: -1 });
 
@@ -694,7 +694,7 @@ const exportUserGrowthCsv = async (req, res) => {
 const exportVerificationTurnaroundCsv = async (req, res) => {
   try {
     const verifications = await Verification.find({ status: { $ne: "pending" } })
-      .populate("user", "name mobile")
+      .populate("user", "name email mobile")
       .sort({ reviewedAt: -1 });
 
     sendCsv(res, "verification-turnaround.csv", verifications, [

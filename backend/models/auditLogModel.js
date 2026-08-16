@@ -51,6 +51,8 @@ const auditLogSchema = new mongoose.Schema(
 );
 
 auditLogSchema.index({ targetType: 1, targetId: 1 });
+// The admin audit-log viewer's default (and only) sort is newest-first.
+auditLogSchema.index({ createdAt: -1 });
 
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 

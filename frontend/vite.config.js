@@ -16,13 +16,14 @@ export default defineConfig({
             srcDir: "src",
             filename: "sw.js",
             injectManifest: {
-                // mapbox-gl alone is well over a megabyte minified, pushing the
-                // app-shell bundle past Workbox's 2 MiB default precache limit —
-                // that's not a real problem (this js file is loaded normally on
-                // first paint regardless of the service worker), just a config
-                // default that needs raising to match this app's actual shell
-                // size, or the production build fails outright.
-                maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+                // Routes are code-split (see routing/Routing.jsx), so the app
+                // shell is no longer one oversized bundle — but mapbox-gl still
+                // lands in its own single ~1.8 MiB chunk (LiveTruckMap/admin
+                // LiveTracking only), which still exceeds Workbox's 2 MiB
+                // default per-file precache limit on its own. 3 MiB gives that
+                // chunk headroom without going back to the old blanket 4 MiB
+                // that was sized for the pre-split single-bundle build.
+                maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
             },
             manifest: {
                 name: "ShareTruck",

@@ -38,8 +38,19 @@ export const GlobalStyle = createGlobalStyle`
     color: inherit;
   }
 
+  // Every button in this codebase is a styled-component that defines its
+  // own background/border/padding — without this reset, the browser's
+  // native button chrome (a gray gradient fill + inset border + default
+  // padding) shows through underneath on any button whose styles don't
+  // happen to override all three, which is exactly what was happening to
+  // icon-only buttons like the password-visibility toggle.
   button {
     cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
   }
 
   button:disabled {

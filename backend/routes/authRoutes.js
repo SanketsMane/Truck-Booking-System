@@ -4,10 +4,10 @@ const router = express.Router();
 
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middleWare/middleWare");
-const { authLimiter } = require("../middleWare/rateLimit");
+const { authLimiter, otpLimiter } = require("../middleWare/rateLimit");
 
-router.post("/request-otp", authController.requestOtp);
-router.post("/verify-otp", authController.verifyOtp);
+router.post("/request-otp", otpLimiter, authController.requestOtp);
+router.post("/verify-otp", otpLimiter, authController.verifyOtp);
 router.post("/logout", authMiddleware, authController.logout);
 
 router.post("/signup", authLimiter, authController.signup);

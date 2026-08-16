@@ -51,8 +51,8 @@ const createMarkerEl = () => {
   el.style.width = "34px";
   el.style.height = "34px";
   el.style.borderRadius = "50%";
-  el.style.background = theme.color.accent;
-  el.style.boxShadow = "0 2px 8px rgba(255,106,26,0.45), 0 0 0 3px #fff";
+  el.style.background = theme.color.accentBright;
+  el.style.boxShadow = "0 2px 8px rgba(59,130,246,0.45), 0 0 0 3px #fff";
   el.style.display = "flex";
   el.style.alignItems = "center";
   el.style.justifyContent = "center";
@@ -152,7 +152,7 @@ export const LiveTruckMap = ({ tripId }) => {
         id: TRAIL_LAYER,
         type: "line",
         source: TRAIL_SOURCE,
-        paint: { "line-color": theme.color.accent, "line-width": 3, "line-opacity": 0.6 },
+        paint: { "line-color": theme.color.accentBright, "line-width": 3, "line-opacity": 0.6 },
       });
     });
 

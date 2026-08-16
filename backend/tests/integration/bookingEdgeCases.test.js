@@ -3,17 +3,16 @@ const app = require("../../app");
 const Booking = require("../../models/bookingModel");
 const { signupUser, disableVerificationGate, postTestTrip } = require("../helpers");
 
-// Exactly 10 digits, starting 6-9, per authValidation's mobileSchema.
-const mobileFor = (seed) => `9${String(seed).padStart(9, "0")}`;
+const emailFor = (seed) => `user${seed}@example.test`;
 
 const newActors = async (seed) => {
   const { agent: transporterAgent, user: transporter } = await signupUser(app, {
-    mobile: mobileFor(seed * 10 + 1),
+    email: emailFor(seed * 10 + 1),
     name: "T",
     roles: ["transporter"],
   });
   const { agent: shipperAgent, user: shipper } = await signupUser(app, {
-    mobile: mobileFor(seed * 10 + 2),
+    email: emailFor(seed * 10 + 2),
     name: "S",
     roles: ["shipper"],
   });
@@ -113,7 +112,7 @@ describe("booking edge cases", () => {
     const { transporterAgent, shipperAgent } = await newActors(5);
     const trip = await postTestTrip(transporterAgent, { totalCapacity: 10, availableCapacity: 10 });
 
-    const { agent: shipper2Agent } = await signupUser(app, { mobile: mobileFor(53), name: "S2", roles: ["shipper"] });
+    const { agent: shipper2Agent } = await signupUser(app, { email: emailFor(53), name: "S2", roles: ["shipper"] });
 
     const first = await shipperAgent.post("/bookings").send({ tripId: trip._id, capacityRequested: 7, goodsDescription: "x" });
     expect(first.status).toBe(201);
