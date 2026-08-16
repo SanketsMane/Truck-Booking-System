@@ -216,6 +216,16 @@ describe("chat flow", () => {
     expect(imageOnly.body.message.image.url).toBe(`/files/${fileId}`);
     expect(imageOnly.body.message.text).toBe("");
 
+    // The real chat UI always sends a `text` key, even when empty (the
+    // composer's text field just wasn't filled in) — this must not be
+    // rejected as if text were the only thing missing, as long as an image
+    // is attached.
+    const imageWithEmptyText = await shipperAgent
+      .post(`/chat/${threadId}/messages`)
+      .send({ text: "", imageUrl: `/files/${fileId}` });
+    expect(imageWithEmptyText.status).toBe(201);
+    expect(imageWithEmptyText.body.message.image.url).toBe(`/files/${fileId}`);
+
     const both = await transporterAgent
       .post(`/chat/${threadId}/messages`)
       .send({ text: "see attached", imageUrl: `/files/${fileId}` });

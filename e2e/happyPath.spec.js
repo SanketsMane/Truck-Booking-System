@@ -116,8 +116,8 @@ test("shipper signs up, searches, and books capacity through the real UI", async
 
   shipperStorageState = await page.context().storageState();
 
-  await page.getByLabel("From city").fill(FROM_CITY);
-  await page.getByLabel("To city").fill(TO_CITY);
+  await page.getByLabel("From").fill(FROM_CITY);
+  await page.getByLabel("To").fill(TO_CITY);
   // The trip departs 2 days out — the search window is only ±1 day
   // (marketplaceConfig.SEARCH_DATE_RANGE_DAYS), so the default "today"
   // date the form starts with would never match it.

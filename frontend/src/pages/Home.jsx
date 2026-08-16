@@ -1012,7 +1012,7 @@ export const Home = () => {
   const navigate = useNavigate();
   const { platformName } = useBranding();
   usePageMeta({
-    description: `${platformName} — find or share spare truck capacity on routes across India. Verified transporters, secure payments, and zero commission — 100% free to use.`,
+    description: `${platformName} — ship for less, earn from empty space. Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use.`,
   });
   // The input shows a full address (Uber/Rapido-style autocomplete, see
   // LocationAutocomplete), but trip search still matches by exact city —
@@ -1124,13 +1124,13 @@ export const Home = () => {
                 </span>
               </Eyebrow>
               <HeroTitle>
-                Ship smarter.
+                Ship for less.
                 <br />
-                Fill every <AccentText>empty mile.</AccentText>
+                Earn from <AccentText>empty space.</AccentText>
               </HeroTitle>
               <HeroSubtitle>
-                Find spare truck capacity already running your route — or list your own and earn on the
-                way back.
+                Discover spare capacity on routes already running, get matched by route, and book only
+                the part-load space your shipment actually needs.
               </HeroSubtitle>
 
               <TrustRow>

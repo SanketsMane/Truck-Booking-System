@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const cookie = require("cookie");
+const { parseCookie } = require("cookie");
 
 const User = require("../models/userModel");
 const { setIO } = require("./io");
@@ -9,7 +9,7 @@ const registerChatHandlers = require("./chatHandlers");
 // shouldn't be able to open (or keep) a live socket connection either.
 const authenticateSocket = async (socket, next) => {
   try {
-    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+    const cookies = parseCookie(socket.handshake.headers.cookie || "");
     const token = cookies.token;
     if (!token) {
       return next(new Error("Unauthorized"));

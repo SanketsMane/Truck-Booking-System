@@ -9,6 +9,6 @@ export const getThreadForBooking = (bookingId) => api.get(`/chat/booking/${booki
 export const listMessages = (threadId) => api.get(`/chat/${threadId}/messages`);
 
 export const sendMessage = (threadId, { text, imageUrl } = {}) =>
-  api.post(`/chat/${threadId}/messages`, { text, imageUrl });
+  api.post(`/chat/${threadId}/messages`, { text: text || undefined, imageUrl });
 
 export const markThreadRead = (threadId) => api.put(`/chat/${threadId}/read`);

@@ -105,7 +105,7 @@ export const Footer = () => {
               <BrandLogo size={28} iconSize={15} glow="none" />
               {platformName}
             </BrandRow>
-            <Tagline>India's truck capacity marketplace — find or share spare space on routes you already run.</Tagline>
+            <Tagline>Ship for less. Earn from empty space.</Tagline>
           </Brand>
 
           <LinkGroups>
