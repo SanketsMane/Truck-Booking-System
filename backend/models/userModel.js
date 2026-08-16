@@ -70,12 +70,12 @@ const userSchema = new mongoose.Schema(
     },
 
     // "full" is a superuser — bypasses every requireAdminScope check.
-    // The other three scope an admin down to one area of the console
+    // The other two scope an admin down to one area of the console
     // (see middleWare/middleWare.js's requireAdminScope) — granted/revoked
     // via PUT /admin/users/:id/admin-role, full-scope-only.
     adminScope: {
       type: String,
-      enum: ["full", "verification", "support", "finance"],
+      enum: ["full", "verification", "support"],
     },
 
     status: {
@@ -112,25 +112,6 @@ const userSchema = new mongoose.Schema(
       type: Map,
       of: Boolean,
       default: {},
-    },
-
-    // A transporter's default withdrawal destination, saved once from
-    // Profile so it doesn't have to be retyped on every withdrawal request
-    // (see walletController.requestWithdrawal, which falls back to this
-    // when the request body omits payoutMethod). Same shape as
-    // WithdrawalRequest's payout fields, and encrypted at rest the same
-    // way via utils/withdrawalCrypto.js — accountNumber/ifscCode/upiId are
-    // ciphertext strings, accountHolderName/bankName stay plaintext.
-    payoutMethod: {
-      _id: false,
-      method: { type: String, enum: ["bank", "upi"] },
-      bankDetails: {
-        accountHolderName: { type: String, trim: true },
-        accountNumber: { type: String, trim: true },
-        ifscCode: { type: String, trim: true },
-        bankName: { type: String, trim: true },
-      },
-      upiId: { type: String, trim: true },
     },
 
     otp: {

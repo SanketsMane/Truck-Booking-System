@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Check, CheckCheck } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useBranding } from "../context/BrandingContext";
 import {
   getBooking,
   acceptBooking,
@@ -13,25 +12,18 @@ import {
   confirmPickup,
   confirmDrop,
 } from "../api/bookings";
-import { getThreadForBooking, listMessages, sendMessage, markThreadRead } from "../api/chat";
-import { getSocket, joinThread, leaveThread } from "../api/socket";
+import { getThreadForBooking } from "../api/chat";
 import { submitRating } from "../api/ratings";
 import { raiseDispute } from "../api/disputes";
-import {
-  createBookingWalletPayment,
-  createBookingRazorpayOrder,
-  verifyBookingRazorpayPayment,
-} from "../api/wallet";
-import { openRazorpayCheckout } from "../utils/razorpayCheckout";
 import ReviewList from "../components/ReviewList";
-import LiveTruckMap from "../components/LiveTruckMap";
+import { ChatPanel } from "../components/chat/ChatPanel";
 import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, Grid, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
 import { BookingStatusTimeline } from "../components/ui/BookingStatusTimeline";
 import { Avatar } from "../components/ui/Avatar";
-import { Field, Input, Textarea, Select } from "../components/ui/Form";
+import { Field, Textarea, Select } from "../components/ui/Form";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, normalizePoint } from "../utils/format";
 
@@ -52,69 +44,6 @@ const SummaryItem = ({ label, value, $accent }) => (
     <SummaryValue $accent={$accent}>{value}</SummaryValue>
   </Stack>
 );
-
-// Shown to the shipper on a confirmed-but-unpaid booking — payment is what
-// unlocks "Confirm pickup" server-side (bookingController.confirmPickup),
-// so this is the one place a shipper actually pays for a booking.
-const BookingPaymentActions = ({ booking, onPaid }) => {
-  const { platformName } = useBranding();
-  const [payingWallet, setPayingWallet] = useState(false);
-  const [payingRazorpay, setPayingRazorpay] = useState(false);
-  const busy = payingWallet || payingRazorpay;
-
-  const handlePayWallet = async () => {
-    setPayingWallet(true);
-    try {
-      await createBookingWalletPayment(booking._id);
-      toast.success("Paid from wallet");
-      await onPaid();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setPayingWallet(false);
-    }
-  };
-
-  const handlePayRazorpay = async () => {
-    setPayingRazorpay(true);
-    try {
-      const { order } = await createBookingRazorpayOrder(booking._id);
-      const response = await openRazorpayCheckout({
-        orderId: order.orderId,
-        amount: order.amount,
-        currency: order.currency,
-        keyId: order.keyId,
-        name: platformName,
-        description: `Booking ${booking._id}`,
-      });
-      await verifyBookingRazorpayPayment(booking._id, {
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_signature: response.razorpay_signature,
-      });
-      toast.success("Payment successful");
-      await onPaid();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setPayingRazorpay(false);
-    }
-  };
-
-  return (
-    <Stack $gap={2}>
-      <Muted>Pay ₹{booking.priceEstimate} to move this booking forward.</Muted>
-      <Row $gap={2} $wrap>
-        <Button onClick={handlePayWallet} disabled={busy}>
-          {payingWallet ? "Paying…" : "Pay from wallet"}
-        </Button>
-        <Button $variant="secondary" onClick={handlePayRazorpay} disabled={busy}>
-          {payingRazorpay ? "Opening…" : "Pay with Razorpay"}
-        </Button>
-      </Row>
-    </Stack>
-  );
-};
 
 const StarButton = styled.button`
   background: none;
@@ -142,49 +71,17 @@ const StarPicker = ({ value, onChange }) => (
   </Row>
 );
 
-const ChatScroll = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-  padding: 4px 2px;
-`;
-
-const ChatBubble = styled.div`
-  max-width: 78%;
-  align-self: ${({ $mine }) => ($mine ? "flex-end" : "flex-start")};
-  padding: 9px 13px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1.4;
-  background: ${({ theme, $mine }) => ($mine ? theme.color.accentSoft : theme.color.surfaceRaised)};
-  border: 1px solid ${({ theme, $mine }) => ($mine ? "transparent" : theme.color.border)};
-  color: ${({ theme }) => theme.color.text};
-`;
-
-const BubbleFooter = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-`;
-
-const BubbleTime = styled.div`
-  font-size: 11px;
-  opacity: 0.6;
-`;
-
-const BubbleStatus = styled.span`
+const OpenChatLink = styled(Link)`
   display: inline-flex;
-  color: ${({ theme, $read }) => ($read ? theme.color.accent : "inherit")};
-  opacity: ${({ $read }) => ($read ? 1 : 0.55)};
-`;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.color.accent};
 
-const ChatForm = styled.form`
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 export const BookingDetail = () => {
@@ -212,17 +109,9 @@ export const BookingDetail = () => {
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
   const [disputeSubmitted, setDisputeSubmitted] = useState(false);
 
-  const [thread, setThread] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [messageText, setMessageText] = useState("");
-  const [chatLoading, setChatLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  // Latest instant the counterparty is known to have read up to — a message
-  // I sent counts as "read" once its createdAt falls at or before this.
-  // Seeded from each message's own readBy on load, then kept live by the
-  // chat:read socket event (see markThreadRead on the backend).
-  const [otherReadAt, setOtherReadAt] = useState(null);
-  const messagesEndRef = useRef(null);
+  // Just the id, for the "Open full conversation" link — ChatPanel below
+  // resolves and owns the actual thread/messages/socket state itself.
+  const [threadId, setThreadId] = useState(null);
 
   const loadBooking = useCallback(async () => {
     try {
@@ -241,86 +130,17 @@ export const BookingDetail = () => {
     })();
   }, [loadBooking]);
 
-  // Chat: fetch the thread + history for this booking once.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const { thread: fetchedThread } = await getThreadForBooking(id);
-        if (cancelled) return;
-        const { messages: history } = await listMessages(fetchedThread._id);
-        if (cancelled) return;
-        setMessages(history);
-        setThread(fetchedThread);
-
-        // Seed read-state from whatever's already on the fetched messages —
-        // the latest readAt among messages someone else already marked read.
-        const latestRead = history
-          .flatMap((m) => m.readBy || [])
-          .map((r) => new Date(r.readAt))
-          .sort((a, b) => b - a)[0];
-        if (latestRead) setOtherReadAt(latestRead);
-
-        // Opening this page IS reading the thread — mark it read immediately
-        // rather than waiting for some other trigger.
-        markThreadRead(fetchedThread._id).catch(() => {});
-      } catch {
-        // No thread available for this booking/user — chat panel stays empty.
-      } finally {
-        if (!cancelled) setChatLoading(false);
-      }
-    })();
+    getThreadForBooking(id)
+      .then(({ thread }) => {
+        if (!cancelled) setThreadId(thread._id);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [id]);
-
-  // Join the socket room for live updates, paired with leaving it again.
-  useEffect(() => {
-    if (!thread) return;
-    joinThread(thread._id);
-    const socket = getSocket();
-    const handler = (message) => {
-      if (String(message.thread) !== String(thread._id)) return;
-      setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
-      // A message arriving while this page is open is read on arrival —
-      // same "looking at it counts as read" reasoning as the initial load.
-      if (String(message.sender) !== String(user?.id)) {
-        markThreadRead(thread._id).catch(() => {});
-      }
-    };
-    const readHandler = ({ threadId, readerId, readAt }) => {
-      if (String(threadId) !== String(thread._id) || String(readerId) === String(user?.id)) return;
-      setOtherReadAt(new Date(readAt));
-    };
-    socket?.on("chat:message", handler);
-    socket?.on("chat:read", readHandler);
-    return () => {
-      socket?.off("chat:message", handler);
-      socket?.off("chat:read", readHandler);
-      leaveThread(thread._id);
-    };
-  }, [thread]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages]);
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    const text = messageText.trim();
-    if (!text || !thread) return;
-    setSending(true);
-    try {
-      const { message } = await sendMessage(thread._id, text);
-      setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
-      setMessageText("");
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setSending(false);
-    }
-  };
 
   // Accept/reject/cancel/confirm-pickup/confirm-drop all return the bare
   // booking doc (no trip/shipper populate — those endpoints don't need it
@@ -463,9 +283,6 @@ export const BookingDetail = () => {
               label="Truck"
               value={`${trip.truck?.truckType || "—"}${trip.truck?.regNumber ? ` · ${trip.truck.regNumber}` : ""}`}
             />
-            {booking.status !== "pending" && booking.status !== "rejected" && (
-              <SummaryItem label="Payment" value={<StatusBadge status={booking.paymentStatus} />} />
-            )}
           </Grid>
 
           <Stack $gap={3} style={{ marginTop: 20 }}>
@@ -480,13 +297,6 @@ export const BookingDetail = () => {
             <Muted style={{ marginTop: 16 }}>Cancelled: {booking.cancelReason}</Muted>
           )}
         </Card>
-
-        {(booking.status === "confirmed" || booking.status === "ongoing") && (
-          <Stack $gap={2}>
-            <SectionTitle>Live location</SectionTitle>
-            <LiveTruckMap tripId={trip._id} />
-          </Stack>
-        )}
 
         <Card>
           <SectionTitle style={{ marginBottom: 14 }}>{isShipper ? "Transporter" : "Shipper"}</SectionTitle>
@@ -541,15 +351,9 @@ export const BookingDetail = () => {
 
             {canConfirmPickup && (
               <Stack $gap={3}>
-                {booking.paymentStatus === "paid" ? (
-                  <Button onClick={handleConfirmPickup} disabled={actionLoading}>
-                    Confirm pickup
-                  </Button>
-                ) : isShipper ? (
-                  <BookingPaymentActions booking={booking} onPaid={loadBooking} />
-                ) : (
-                  <Muted>Waiting for the shipper to complete payment before pickup can be confirmed.</Muted>
-                )}
+                <Button onClick={handleConfirmPickup} disabled={actionLoading}>
+                  Confirm pickup
+                </Button>
                 {!showCancelForm ? (
                   <Stack $gap={1}>
                     <Button $variant="danger" onClick={() => setShowCancelForm(true)} disabled={actionLoading}>
@@ -654,7 +458,6 @@ export const BookingDetail = () => {
                     <Select value={disputeCategory} onChange={(e) => setDisputeCategory(e.target.value)}>
                       <option value="no_show">No-show</option>
                       <option value="damaged_goods">Damaged goods</option>
-                      <option value="payment_issue">Payment issue</option>
                       <option value="behavior">Behavior</option>
                       <option value="other">Other</option>
                     </Select>
@@ -681,49 +484,16 @@ export const BookingDetail = () => {
         )}
 
         <Card>
-          <SectionTitle style={{ marginBottom: 14 }}>Messages</SectionTitle>
-          {chatLoading ? (
-            <CenteredSpinner $size={22} />
-          ) : !thread ? (
-            <Muted>Chat isn't available for this booking.</Muted>
-          ) : (
-            <>
-              <ChatScroll>
-                {messages.length === 0 && <Muted>No messages yet — say hello.</Muted>}
-                {messages.map((m) => {
-                  const mine = String(m.sender) === String(user?.id);
-                  const read = mine && otherReadAt && new Date(m.createdAt) <= otherReadAt;
-                  return (
-                    <ChatBubble key={m._id} $mine={mine}>
-                      {m.text}
-                      <BubbleFooter>
-                        <BubbleTime>
-                          {new Date(m.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                        </BubbleTime>
-                        {mine && (
-                          <BubbleStatus $read={read} title={read ? "Read" : "Sent"}>
-                            {read ? <CheckCheck size={13} strokeWidth={2.4} /> : <Check size={13} strokeWidth={2.4} />}
-                          </BubbleStatus>
-                        )}
-                      </BubbleFooter>
-                    </ChatBubble>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </ChatScroll>
-              <ChatForm onSubmit={handleSendMessage}>
-                <Input
-                  placeholder="Type a message…"
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  disabled={sending}
-                />
-                <Button type="submit" disabled={sending || !messageText.trim()}>
-                  Send
-                </Button>
-              </ChatForm>
-            </>
-          )}
+          <CardRow style={{ marginBottom: 14 }}>
+            <SectionTitle>Messages</SectionTitle>
+            {threadId && (
+              <OpenChatLink to={`/chat/${threadId}`}>
+                <MessageCircle size={14} strokeWidth={2.4} />
+                Open full conversation
+              </OpenChatLink>
+            )}
+          </CardRow>
+          <ChatPanel bookingId={id} />
         </Card>
       </Stack>
     </PageContainer>

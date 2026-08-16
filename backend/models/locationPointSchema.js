@@ -4,9 +4,8 @@
 // address was typed freehand rather than picked from a suggestion, so a
 // plain-text pickup point — as this app has always allowed — still works.
 //
-// `location` is a GeoJSON shadow of lat/lng (same {type, coordinates}
-// convention Trip.currentLocation already uses for live GPS), kept in sync
-// by utils/setLocationGeo.js whenever lat/lng are set — MongoDB's
+// `location` is a GeoJSON shadow of lat/lng ({type, coordinates}), kept in
+// sync by utils/setLocationGeo.js whenever lat/lng are set — MongoDB's
 // $geoWithin/$near queries need a real GeoJSON field to index, not a pair
 // of plain Number fields. The {address, lat, lng} contract itself doesn't
 // change; `location` is purely additive, for indexing/search.

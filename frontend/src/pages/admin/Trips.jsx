@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import styled from "styled-components";
 import { toast } from "react-toastify";
+import { Ban, ArrowRight, Truck as TruckIcon } from "lucide-react";
 import { listAdminTrips, deactivateAdminTrip } from "../../api/admin";
 import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
@@ -30,6 +32,21 @@ import { formatDateTime, formatINR } from "../../utils/format";
 
 const NON_DEACTIVATABLE = ["cancelled", "completed"];
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+// Small inline icon + text pairing shared by the route ("A → B") and truck
+// reg. number cells — same muted-icon treatment Dashboard.jsx's route list
+// uses, so a trip's lane reads at a glance instead of as plain strings.
+const IconCell = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+
+  svg {
+    color: ${({ theme }) => theme.admin.color.textMuted};
+    flex: none;
+  }
+`;
 
 export const Trips = () => {
   const [search, setSearch] = useState("");
@@ -148,7 +165,9 @@ export const Trips = () => {
                       <Tr key={t._id}>
                         <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
                         <Td>
-                          {t.fromCity} → {t.toCity}
+                          <IconCell>
+                            {t.fromCity} <ArrowRight size={13} strokeWidth={2.2} /> {t.toCity}
+                          </IconCell>
                         </Td>
                         <Td>
                           {t.transporter ? (
@@ -157,7 +176,16 @@ export const Trips = () => {
                             "—"
                           )}
                         </Td>
-                        <Td>{t.truck?.regNumber || "—"}</Td>
+                        <Td>
+                          {t.truck?.regNumber ? (
+                            <IconCell>
+                              <TruckIcon size={13} strokeWidth={2.2} />
+                              {t.truck.regNumber}
+                            </IconCell>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
                         <Td>{formatDateTime(t.departureAt)}</Td>
                         <Td>
                           {t.availableCapacity}/{t.totalCapacity}t
@@ -171,8 +199,14 @@ export const Trips = () => {
                             $variant="danger"
                             $size="sm"
                             disabled={NON_DEACTIVATABLE.includes(t.status)}
+                            title={
+                              NON_DEACTIVATABLE.includes(t.status)
+                                ? `Already ${t.status} — can't be deactivated`
+                                : undefined
+                            }
                             onClick={() => setTarget(t)}
                           >
+                            <Ban size={14} strokeWidth={2.4} />
                             Deactivate
                           </Button>
                         </Td>

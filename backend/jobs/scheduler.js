@@ -1,6 +1,5 @@
 const cron = require("node-cron");
 const { sendTripDepartureReminders } = require("./tripReminders");
-const { cancelUnpaidExpiredBookings } = require("./paymentDeadlines");
 const { sweepStaleBookings } = require("./staleBookings");
 
 // Every 15 minutes is frequent enough that a trip departing in ~24h is
@@ -17,19 +16,6 @@ const startScheduler = () => {
       }
     },
     { name: "trip-departure-reminders", noOverlap: true }
-  );
-
-  cron.schedule(
-    "*/15 * * * *",
-    async () => {
-      try {
-        const count = await cancelUnpaidExpiredBookings();
-        if (count) console.log(`[scheduler] auto-cancelled ${count} unpaid booking(s) past their payment deadline`);
-      } catch (error) {
-        console.error("[scheduler] payment deadline job failed:", error.message);
-      }
-    },
-    { name: "cancel-unpaid-expired-bookings", noOverlap: true }
   );
 
   // SRS-05.4 backstop — the controller expires stale pending bookings lazily

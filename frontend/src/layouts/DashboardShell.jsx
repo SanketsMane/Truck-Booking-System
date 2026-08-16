@@ -580,6 +580,27 @@ const DashNavItem = styled(NavLink)`
   }
 `;
 
+const DashNavItemLabel = styled.span`
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const DashNavItemBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.color.accent};
+  color: ${({ theme }) => theme.color.onAccent};
+  font-size: 10.5px;
+  font-weight: 700;
+`;
+
 const DashBackdrop = styled.div`
   display: ${({ $open }) => ($open ? "block" : "none")};
   position: fixed;
@@ -988,7 +1009,8 @@ export const DashboardShell = ({ nav, storageKey, brandTo = "/", tag, variant })
                 return (
                   <DashNavItem key={item.to} to={item.to} end={item.end} title={item.label}>
                     <Icon size={17} strokeWidth={2.2} />
-                    {!collapsed && <span>{item.label}</span>}
+                    {!collapsed && <DashNavItemLabel>{item.label}</DashNavItemLabel>}
+                    {item.badge > 0 && <DashNavItemBadge>{item.badge > 9 ? "9+" : item.badge}</DashNavItemBadge>}
                   </DashNavItem>
                 );
               })}

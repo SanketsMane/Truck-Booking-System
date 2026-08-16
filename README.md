@@ -1,10 +1,10 @@
-# ShareTruck
+# Truckgee
 
 A truck capacity-sharing marketplace that connects **shippers** who have a partial or small load with **transporters** who have spare capacity on a truck already running a matching route.
 
 ## Overview
 
-ShareTruck lets a transporter publish a trip (route, departure time, available capacity, price per ton) and lets shippers search for trips matching their own route and date, then book a portion of that capacity. The platform manages the full booking lifecycle — request, acceptance, payment, pickup, delivery, and rating — along with identity/KYC verification, an in-app wallet for payments and transporter payouts, live GPS tracking of ongoing bookings, in-app chat, and an administrative console for oversight and moderation.
+Truckgee lets a transporter publish a trip (route, departure time, available capacity, price per ton) and lets shippers search for trips matching their own route and date, then book a portion of that capacity. The platform manages the full booking lifecycle — request, acceptance, payment, pickup, delivery, and rating — along with identity/KYC verification, an in-app wallet for payments and transporter payouts, in-app chat, and an administrative console for oversight and moderation.
 
 The application is a mobile-first Progressive Web App (installable, offline-tolerant shell) built on a Node.js/Express API and a MongoDB database.
 
@@ -15,7 +15,6 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - Search trips by origin city, destination city, and date
 - Book capacity on a matching trip, with a server-computed price estimate
 - Pay for a confirmed booking from an in-app wallet or via Razorpay
-- Track a truck's live location on a map while a booking is ongoing
 - In-app chat with the transporter for a booking
 - Rate and review the transporter after a completed booking
 - Raise support requests and disputes tied to a specific booking
@@ -25,7 +24,6 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - Post trips (route, schedule, capacity, price) once the truck and account are verified
 - Accept or reject incoming booking requests
 - Confirm pickup and drop to progress a booking through its lifecycle
-- Broadcast live location while a booking is ongoing
 - In-app chat with the shipper, and rate the shipper after completion
 - View wallet earnings and request withdrawals to a bank account or UPI ID (payout details encrypted at rest)
 
@@ -37,7 +35,6 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - Platform wallet, payment, and withdrawal management (approve/reject/mark paid)
 - Review moderation and dispute resolution
 - Support ticket handling
-- Live tracking overview across active bookings
 - Configurable platform settings (e.g. the KYC verification gate) and SMS/email provider credentials, managed from the admin UI rather than server config
 - CSV exports for bookings, revenue by route, user growth, and verification turnaround
 - Full audit log of admin actions
@@ -48,8 +45,7 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - React 19 with Vite
 - React Router
 - styled-components
-- Socket.IO client (chat, live location, notifications)
-- Mapbox GL (live tracking map)
+- Socket.IO client (chat, notifications)
 - Progressive Web App support (installable, service worker)
 - Vitest + Testing Library (unit/component tests)
 
@@ -58,7 +54,7 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - MongoDB with Mongoose, including multi-document transactions for the wallet ledger
 - JWT sessions delivered via an httpOnly cookie
 - Joi request validation
-- Socket.IO (chat, live location broadcasting, real-time notifications)
+- Socket.IO (chat, real-time notifications)
 - Razorpay integration for online payments
 - Pluggable object storage for uploaded documents (local disk for development, any S3-compatible provider for production)
 - Web Push (VAPID) for browser push notifications
@@ -183,7 +179,7 @@ Razorpay and SMS/email provider credentials are configured at runtime from the a
 | Variable | Purpose |
 |---|---|
 | `VITE_API_URL` | Backend API base URL |
-| `VITE_MAPBOX_TOKEN` | Mapbox access token, powers the live tracking map |
+| `VITE_LOCATIONIQ_TOKEN` | LocationIQ API key, powers pickup/drop address autocomplete |
 
 ## Running the Application
 

@@ -34,29 +34,15 @@ const emailConfigSchemas = {
   }),
 };
 
-const razorpayConfigSchemas = {
-  none: Joi.object({}),
-  razorpay: Joi.object({
-    keyId: Joi.string().trim().required(),
-    keySecret: Joi.string().trim().required(),
-    webhookSecret: Joi.string().trim().allow(""),
-  }),
-};
-
-// Shared shape for both KYC and payout's custom_http seam — a webhook URL
-// plus optional headers, same generic-integration pattern as SMS's own
-// custom_http provider.
+// Shared shape for KYC's custom_http seam — a webhook URL plus optional
+// headers, same generic-integration pattern as SMS's own custom_http
+// provider.
 const customHttpSeamSchema = Joi.object({
   url: Joi.string().uri().required(),
   headers: Joi.object().pattern(Joi.string(), Joi.string()).default({}),
 });
 
 const kycConfigSchemas = {
-  manual: Joi.object({}),
-  custom_http: customHttpSeamSchema,
-};
-
-const payoutConfigSchemas = {
   manual: Joi.object({}),
   custom_http: customHttpSeamSchema,
 };
@@ -89,20 +75,6 @@ const testEmailValidation = Joi.object({
   to: Joi.string().trim().email({ tlds: false }).required(),
 });
 
-const updateRazorpayValidation = Joi.object({
-  provider: Joi.string().valid("none", "razorpay").required(),
-  config: Joi.object().required(),
-}).custom((value, helpers) => {
-  const schema = razorpayConfigSchemas[value.provider];
-  const { error, value: validatedConfig } = schema.validate(value.config);
-  if (error) return helpers.message(error.details[0].message);
-  return { ...value, config: validatedConfig };
-}, "razorpay config shape");
-
-// Testing just pings Razorpay's API using the already-saved keys — no
-// free-text value like a mobile number/email address is needed.
-const testRazorpayValidation = Joi.object({});
-
 const updateKycValidation = Joi.object({
   provider: Joi.string().valid("manual", "custom_http").required(),
   config: Joi.object().required(),
@@ -113,28 +85,13 @@ const updateKycValidation = Joi.object({
   return { ...value, config: validatedConfig };
 }, "kyc config shape");
 
-const updatePayoutValidation = Joi.object({
-  provider: Joi.string().valid("manual", "custom_http").required(),
-  config: Joi.object().required(),
-}).custom((value, helpers) => {
-  const schema = payoutConfigSchemas[value.provider];
-  const { error, value: validatedConfig } = schema.validate(value.config);
-  if (error) return helpers.message(error.details[0].message);
-  return { ...value, config: validatedConfig };
-}, "payout config shape");
-
 module.exports = {
   smsConfigSchemas,
   emailConfigSchemas,
-  razorpayConfigSchemas,
   kycConfigSchemas,
-  payoutConfigSchemas,
   updateSmsValidation,
   updateEmailValidation,
-  updateRazorpayValidation,
   updateKycValidation,
-  updatePayoutValidation,
   testSmsValidation,
   testEmailValidation,
-  testRazorpayValidation,
 };

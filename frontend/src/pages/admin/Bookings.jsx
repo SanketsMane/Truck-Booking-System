@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import styled from "styled-components";
 import { toast } from "react-toastify";
+import { XCircle, ArrowRight } from "lucide-react";
 import { listAdminBookings, forceCancelAdminBooking } from "../../api/admin";
 import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
@@ -30,6 +32,20 @@ import { formatDateTime, formatINR } from "../../utils/format";
 
 const NON_CANCELLABLE = ["cancelled", "completed", "rejected", "expired"];
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+// Same muted-icon route treatment as admin/Trips.jsx — the two pages show
+// the same "fromCity → toCity" shape and should read identically.
+const IconCell = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+
+  svg {
+    color: ${({ theme }) => theme.admin.color.textMuted};
+    flex: none;
+  }
+`;
 
 export const Bookings = () => {
   const [status, setStatus] = useState("");
@@ -151,7 +167,15 @@ export const Bookings = () => {
                     bookings.map((b, i) => (
                       <Tr key={b._id}>
                         <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
-                        <Td>{b.trip ? `${b.trip.fromCity} → ${b.trip.toCity}` : "—"}</Td>
+                        <Td>
+                          {b.trip ? (
+                            <IconCell>
+                              {b.trip.fromCity} <ArrowRight size={13} strokeWidth={2.2} /> {b.trip.toCity}
+                            </IconCell>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
                         <Td>
                           {b.shipper ? (
                             <Link to={`/admin/users/${b.shipper._id}`}>{b.shipper.name}</Link>
@@ -178,8 +202,14 @@ export const Bookings = () => {
                             $variant="danger"
                             $size="sm"
                             disabled={NON_CANCELLABLE.includes(b.status)}
+                            title={
+                              NON_CANCELLABLE.includes(b.status)
+                                ? `Already ${b.status} — can't be force-cancelled`
+                                : undefined
+                            }
                             onClick={() => setTarget(b)}
                           >
+                            <XCircle size={14} strokeWidth={2.4} />
                             Force cancel
                           </Button>
                         </Td>

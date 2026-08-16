@@ -27,9 +27,6 @@ export const formatDateTime = (value) => {
 export const formatTons = (value) =>
   `${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} t`;
 
-export const formatCbm = (value) =>
-  `${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} m³`;
-
 // Value for <input type="date">, in the browser's local time.
 export const toDateInputValue = (value) => {
   const d = value ? new Date(value) : new Date();
@@ -51,14 +48,6 @@ export const toDateTimeInputValue = (value) => {
 export const normalizePoint = (point) => {
   if (typeof point === "string") return { address: point, lat: null, lng: null };
   return point || { address: "", lat: null, lng: null };
-};
-
-// A saved bank account number is real financial PII — show only the last 4
-// digits by default (Profile's payout summary, Wallet's prefill hint).
-export const maskAccountNumber = (value) => {
-  const digits = String(value || "");
-  if (digits.length <= 4) return digits;
-  return `•••• ${digits.slice(-4)}`;
 };
 
 export const ratingLabel = (avg, count) => {

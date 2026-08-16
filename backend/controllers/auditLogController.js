@@ -4,11 +4,10 @@ const escapeRegex = require("../utils/escapeRegex");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
 const sendServerError = require("../utils/sendServerError");
 
-// Every admin action (withdrawal review, user status/role changes, settings
-// updates, etc.) is already written here via utils/audit.js's
-// logAdminAction — this is the first read endpoint for it. Same
-// list-endpoint shape as every other admin list (adminController.listUsers,
-// adminWalletController.listWithdrawals): getPagination/paginatedResponse,
+// Every admin action (user status/role changes, settings updates, etc.) is
+// already written here via utils/audit.js's logAdminAction — this is the
+// first read endpoint for it. Same list-endpoint shape as every other admin
+// list (adminController.listUsers): getPagination/paginatedResponse,
 // Promise.all([find, countDocuments]), sort newest-first.
 const listAuditLogs = async (req, res) => {
   try {

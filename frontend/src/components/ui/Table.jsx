@@ -34,9 +34,9 @@ export const Table = styled.table`
 
 // Every cell/row below defaults to the consumer-app palette (theme.color.*)
 // and takes an optional `$variant="admin"` to read theme.admin.color.*
-// instead — additive, opt-in, so the one consumer page that already uses
-// this table (Wallet.jsx) renders exactly as before while admin pages can
-// opt into the new admin palette one call-site at a time.
+// instead — additive, opt-in, so consumer-facing pages render exactly as
+// before while admin pages can opt into the new admin palette one
+// call-site at a time.
 export const Th = styled.th`
   text-align: left;
   padding: 10px 14px;

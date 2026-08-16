@@ -4,8 +4,8 @@ import { MapPin, Loader2, CircleCheck } from "lucide-react";
 import { Input } from "./Form";
 import { useOnClickOutside } from "../../hooks/useOnClickOutside";
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
-const GEOCODING_UNAVAILABLE = !MAPBOX_TOKEN;
+const LOCATIONIQ_TOKEN = import.meta.env.VITE_LOCATIONIQ_TOKEN || "";
+const GEOCODING_UNAVAILABLE = !LOCATIONIQ_TOKEN;
 
 const Wrap = styled.div`
   position: relative;
@@ -111,29 +111,62 @@ const PreviewImg = styled.img`
 const DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 3;
 
-// Splits Mapbox's place_name ("Hadapsar, Pune, Maharashtra, India") into a
-// main line (the first, most specific segment) and a secondary line (the
-// rest) — mirrors how most address-autocomplete UIs present a result.
-const splitPlaceName = (placeName) => {
-  const [main, ...rest] = placeName.split(",");
+// Splits LocationIQ's display_name ("Hadapsar, Pune, Maharashtra, India")
+// into a main line (the first, most specific segment) and a secondary line
+// (the rest) — mirrors how most address-autocomplete UIs present a result.
+const splitPlaceName = (displayName) => {
+  const [main, ...rest] = displayName.split(",");
   return { main: main.trim(), secondary: rest.join(",").trim() };
 };
 
 const staticPreviewUrl = (lat, lng) =>
-  `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+1d4ed8(${lng},${lat})/${lng},${lat},14,0/640x220@2x?access_token=${MAPBOX_TOKEN}`;
+  `https://maps.locationiq.com/v3/staticmap?key=${LOCATIONIQ_TOKEN}&center=${lat},${lng}` +
+  `&zoom=14&size=640x220&format=png&markers=icon:large-red-cutout|${lat},${lng}`;
+
+// Pulls the city-level name out of a LocationIQ result's `address` object.
+// normalizecity=1 (see the fetch below) makes LocationIQ consistently fill
+// `address.city` instead of the raw OSM data's inconsistent city/town/
+// village/municipality split — the fallback chain only matters for the rare
+// result normalizecity doesn't cover. Callers that only care about
+// city-level search (e.g. Home.jsx's route search, which still matches
+// trips by exact fromCity/toCity) use this via onResolve instead of
+// widening what onChange itself sends — onChange's {address, lat, lng}
+// shape is also what gets persisted straight into Trip.pickupPoint/dropPoint
+// (see PostTrip.jsx/ManageTrip.jsx), and the backend's Joi schema for that
+// rejects unknown keys, so it must stay exactly as-is.
+const extractCity = (result) => {
+  const a = result.address || {};
+  return a.city || a.town || a.village || a.county || a.state_district || result.display_name.split(",")[0].trim();
+};
 
 // Address-level autocomplete for a pickup/drop point — the specific spot
 // within a city, as opposed to CityAutocomplete's city-level search. Backed
-// by Mapbox's Geocoding API (same token already used for live tracking,
-// see LiveTruckMap), restricted to India. Degrades to a plain free-text
-// field when VITE_MAPBOX_TOKEN isn't configured, or when a search comes
-// back empty — this app has always accepted a freehand pickup/drop point,
-// and a missing/failed geocode should never block that.
+// by LocationIQ's Autocomplete API (free tier: 5,000 requests/day, no
+// credit card), restricted to India. Degrades to a plain free-text field
+// when VITE_LOCATIONIQ_TOKEN isn't configured, or when a search comes back
+// empty — this app has always accepted a freehand pickup/drop point, and a
+// missing/failed geocode should never block that.
 //
 // value/onChange shape: { address: string, lat: number|null, lng: number|null }.
 // lat/lng are only set once a suggestion is actually picked; typing without
 // selecting one keeps them null, same as a plain text field.
-export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFocus }) => {
+//
+// onResolve(city, feature) — optional, fires alongside onChange when a
+// suggestion is picked, with the city-level name extracted from it. Doesn't
+// change what onChange sends (see extractCity's comment above).
+//
+// showPreview — set false to skip the static map thumbnail once a
+// suggestion is confirmed (default on; PostTrip/ManageTrip/TripDetail want
+// it, a compact marketing search bar like Home.jsx's doesn't).
+export const LocationAutocomplete = ({
+  id,
+  value,
+  onChange,
+  onResolve,
+  placeholder,
+  autoFocus,
+  showPreview = true,
+}) => {
   const address = value?.address || "";
   const confirmed = value?.lat != null && value?.lng != null;
 
@@ -170,14 +203,17 @@ export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFoc
       setLoading(true);
       try {
         const url =
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
-          `?access_token=${MAPBOX_TOKEN}&country=IN&types=address,poi,neighborhood,locality,place&limit=6`;
+          `https://api.locationiq.com/v1/autocomplete?key=${LOCATIONIQ_TOKEN}&q=${encodeURIComponent(query)}` +
+          `&countrycodes=in&normalizecity=1&limit=6&format=json`;
         const res = await fetch(url);
-        const data = await res.json();
         // A slower earlier request resolving after a faster later one would
         // otherwise clobber the suggestions for what's currently typed.
         if (requestId !== requestIdRef.current) return;
-        setSuggestions(data.features || []);
+        // LocationIQ returns a plain JSON array on success, but a 404 +
+        // {error: "..."} object when nothing matches — not an array either
+        // way, so this also naturally covers that "zero results" case.
+        const data = await res.json();
+        setSuggestions(Array.isArray(data) ? data : []);
         setOpen(true);
         setActiveIndex(-1);
       } catch {
@@ -190,9 +226,10 @@ export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFoc
     return () => clearTimeout(debounceRef.current);
   }, [address]);
 
-  const selectSuggestion = (feature) => {
+  const selectSuggestion = (result) => {
     skipNextFetch.current = true;
-    onChange({ address: feature.place_name, lat: feature.center[1], lng: feature.center[0] });
+    onChange({ address: result.display_name, lat: Number(result.lat), lng: Number(result.lon) });
+    onResolve?.(extractCity(result), result);
     setOpen(false);
     setSuggestions([]);
   };
@@ -246,16 +283,16 @@ export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFoc
           {suggestions.length === 0 ? (
             <EmptyOption>No matching address — you can still use what you've typed</EmptyOption>
           ) : (
-            suggestions.map((feature, i) => {
-              const { main, secondary } = splitPlaceName(feature.place_name);
+            suggestions.map((result, i) => {
+              const { main, secondary } = splitPlaceName(result.display_name);
               return (
                 <Option
-                  key={feature.id}
+                  key={result.place_id}
                   role="option"
                   aria-selected={i === activeIndex}
                   $active={i === activeIndex}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => selectSuggestion(feature)}
+                  onClick={() => selectSuggestion(result)}
                 >
                   <OptionMain>{main}</OptionMain>
                   {secondary && <OptionSecondary>{secondary}</OptionSecondary>}
@@ -265,7 +302,7 @@ export const LocationAutocomplete = ({ id, value, onChange, placeholder, autoFoc
           )}
         </Dropdown>
       )}
-      {confirmed && (
+      {confirmed && showPreview && (
         <Preview>
           <PreviewImg src={staticPreviewUrl(value.lat, value.lng)} alt={`Map preview of ${address}`} loading="lazy" />
         </Preview>

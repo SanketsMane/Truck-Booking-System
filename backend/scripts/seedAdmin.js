@@ -84,7 +84,6 @@ const ADMIN_NAME = process.env.SEED_ADMIN_NAME || "Admin";
   console.log(`  adminScope: ${admin.adminScope}`);
   console.log("\nPlatform settings ready:");
   console.log(`  verificationGateEnabled: ${settings.verificationGateEnabled}`);
-  console.log(`  commissionPercent:       ${settings.commissionPercent}`);
   console.log("\nLog in at /login with this email and a real OTP");
   console.log("(or MASTER_OTP, in non-production environments only).");
 

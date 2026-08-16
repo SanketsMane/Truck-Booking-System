@@ -13,10 +13,10 @@ beforeEach(async () => {
   await disableVerificationGate();
 });
 
-// Drives a booking all the way to "completed" (request -> accept -> pay ->
-// pickup -> drop, mirroring happyPath.test.js's lifecycle but skipping the
-// KYC submission/review steps since the verification gate is disabled
-// above) and then has the shipper rate the transporter, returning what a
+// Drives a booking all the way to "completed" (request -> accept -> pickup
+// -> drop, mirroring happyPath.test.js's lifecycle but skipping the KYC
+// submission/review steps since the verification gate is disabled above)
+// and then has the shipper rate the transporter, returning what a
 // flag/moderate test needs to work with a real, submittable rating.
 const buildCompletedRating = async (seed) => {
   const { agent: transporterAgent, user: transporter } = await signupUser(app, {
@@ -36,26 +36,8 @@ const buildCompletedRating = async (seed) => {
     .post("/bookings")
     .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
   const bookingId = bookingRes.body.booking._id;
-  const price = bookingRes.body.booking.priceEstimate;
 
   await transporterAgent.put(`/bookings/${bookingId}/accept`);
-
-  // Fund the shipper's wallet via a temporary finance-admin grant on this
-  // same test user (same trick bookingEdgeCases.test.js uses) rather than
-  // standing up a whole separate admin actor just to seed money.
-  shipper.isAdmin = true;
-  shipper.adminScope = "finance";
-  await shipper.save();
-  await shipperAgent.post(`/admin/wallets/${shipper._id}/adjust`).send({
-    amount: price,
-    direction: "credit",
-    reason: "test funding",
-  });
-  shipper.isAdmin = false;
-  shipper.adminScope = undefined;
-  await shipper.save();
-
-  await shipperAgent.post(`/bookings/${bookingId}/pay/wallet`);
   await shipperAgent.put(`/bookings/${bookingId}/confirm-pickup`);
   await transporterAgent.put(`/bookings/${bookingId}/confirm-drop`);
 
@@ -74,11 +56,11 @@ describe("support requests", () => {
     const { agent: userA } = await signupUser(app, { email: emailFor(1), name: "A" });
     const { agent: userB } = await signupUser(app, { email: emailFor(2), name: "B" });
 
-    const createRes = await userA.post("/support").send({ subject: "Payment issue", message: "My wallet wasn't credited" });
+    const createRes = await userA.post("/support").send({ subject: "Booking issue", message: "Driver never showed up" });
     expect(createRes.status).toBe(201);
     expect(createRes.body.success).toBe(true);
-    expect(createRes.body.request.subject).toBe("Payment issue");
-    expect(createRes.body.request.message).toBe("My wallet wasn't credited");
+    expect(createRes.body.request.subject).toBe("Booking issue");
+    expect(createRes.body.request.message).toBe("Driver never showed up");
     expect(createRes.body.request.status).toBe("open");
 
     const otherCreate = await userB.post("/support").send({ subject: "Other user's issue", message: "Unrelated" });
@@ -87,7 +69,7 @@ describe("support requests", () => {
     const listRes = await userA.get("/support/me");
     expect(listRes.status).toBe(200);
     expect(listRes.body.requests).toHaveLength(1);
-    expect(listRes.body.requests[0].subject).toBe("Payment issue");
+    expect(listRes.body.requests[0].subject).toBe("Booking issue");
     expect(listRes.body.requests[0]._id).toBe(createRes.body.request._id);
   });
 
@@ -125,13 +107,13 @@ describe("support requests", () => {
     expect(meAfter.body.requests[0].status).toBe("resolved");
   });
 
-  it("blocks a finance-scoped admin from resolving a support request (requireAdminScope is exact-match, not hierarchical)", async () => {
+  it("blocks a verification-scoped admin from resolving a support request (requireAdminScope is exact-match, not hierarchical)", async () => {
     const { agent: userA } = await signupUser(app, { email: emailFor(6), name: "A" });
     const createRes = await userA.post("/support").send({ subject: "x", message: "y" });
     const requestId = createRes.body.request._id;
 
     const { agent: adminAgent, user: adminUser } = await signupUser(app, { email: emailFor(7), name: "Admin" });
-    await makeAdmin(adminUser, "finance");
+    await makeAdmin(adminUser, "verification");
 
     const resolveRes = await adminAgent.put(`/support/${requestId}/resolve`);
     expect(resolveRes.status).toBe(403);

@@ -29,7 +29,7 @@ export const describeNotification = (n) => {
     case "new_rating":
       return { text: `You received a ${p.stars}-star rating`, to: p.bookingId && `/bookings/${p.bookingId}` };
     case "new_chat_message":
-      return { text: "New message", to: p.bookingId && `/bookings/${p.bookingId}` };
+      return { text: "New message", to: p.threadId && `/chat/${p.threadId}` };
     case "saved_search_match":
       return {
         text: `New trip found: ${p.fromCity || "?"} → ${p.toCity || "?"}`,

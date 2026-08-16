@@ -22,10 +22,6 @@ const updateSettingsValidation = Joi.object({
   verificationGateEnabled: Joi.boolean().required(),
 });
 
-const updateCommissionValidation = Joi.object({
-  commissionPercent: Joi.number().min(0).max(100).required(),
-});
-
 // A local email schema rather than importing authValidation.js's — that
 // file is mid-rewrite in a concurrently-running session, and branding's
 // contact email has no need to share a schema object with login/signup.
@@ -46,7 +42,7 @@ const updateBrandingValidation = Joi.object({
 const setAdminRoleValidation = Joi.object({
   isAdmin: Joi.boolean().required(),
   adminScope: Joi.string()
-    .valid("full", "verification", "support", "finance")
+    .valid("full", "verification", "support")
     .when("isAdmin", { is: true, then: Joi.required(), otherwise: Joi.optional().allow(null) }),
 });
 
@@ -55,7 +51,6 @@ module.exports = {
   forceCancelBookingValidation,
   deactivateTripValidation,
   updateSettingsValidation,
-  updateCommissionValidation,
   updateBrandingValidation,
   setAdminRoleValidation,
 };

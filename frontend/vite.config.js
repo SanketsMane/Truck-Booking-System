@@ -15,19 +15,9 @@ export default defineConfig({
             strategies: "injectManifest",
             srcDir: "src",
             filename: "sw.js",
-            injectManifest: {
-                // Routes are code-split (see routing/Routing.jsx), so the app
-                // shell is no longer one oversized bundle — but mapbox-gl still
-                // lands in its own single ~1.8 MiB chunk (LiveTruckMap/admin
-                // LiveTracking only), which still exceeds Workbox's 2 MiB
-                // default per-file precache limit on its own. 3 MiB gives that
-                // chunk headroom without going back to the old blanket 4 MiB
-                // that was sized for the pre-split single-bundle build.
-                maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-            },
             manifest: {
-                name: "ShareTruck",
-                short_name: "ShareTruck",
+                name: "Truckgee",
+                short_name: "Truckgee",
                 description: "Truck capacity sharing marketplace",
                 theme_color: "#ffffff",
                 background_color: "#ffffff",

@@ -56,16 +56,4 @@ const otpLimiter = rateLimit({
   message: { success: false, msg: "Too many attempts — please slow down and try again shortly." },
 });
 
-// GPS pings arrive far more often than typical REST calls (~1 per 8s while
-// a trip is actively tracked) — the global apiLimiter's 300/15min budget is
-// shared across all of a user's traffic and would starve everything else
-// if a location pinger ran full-tilt against it alone.
-const locationLimiter = rateLimit({
-  windowMs: 2 * 60 * 1000,
-  limit: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, msg: "Too many location updates — slow down." },
-});
-
-module.exports = { apiLimiter, uploadLimiter, authLimiter, otpLimiter, locationLimiter };
+module.exports = { apiLimiter, uploadLimiter, authLimiter, otpLimiter };

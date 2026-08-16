@@ -1,7 +1,6 @@
-// CI-only helper: starts an ephemeral MongoDB (single-node replica set, so
-// the wallet ledger's real transactions work — see tests/setup.js for why
-// a plain standalone server isn't enough) and writes its connection URI to
-// a file, then stays running until killed. Used by the e2e CI job to give
+// CI-only helper: starts an ephemeral MongoDB (single-node replica set) and
+// writes its connection URI to a file, then stays running until killed.
+// Used by the e2e CI job to give
 // the real server.js process (not app.js via supertest) something to
 // connect to, without depending on a Docker service container or a real
 // Atlas cluster in CI.

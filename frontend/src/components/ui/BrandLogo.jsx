@@ -1,28 +1,26 @@
 import styled from "styled-components";
-import { Truck } from "lucide-react";
 import { useBranding, brandingAssetUrl } from "../../context/BrandingContext";
+import defaultLogo from "../../assets/brand-mark.png";
 
 // The one shared "brand mark" square used everywhere the app shows its own
 // identity (Navbar, Footer, AuthShell, DashboardShell). Renders the
-// admin-uploaded logo once one exists; otherwise falls back to exactly the
-// colored-square-plus-truck-icon mark this app already used everywhere, so
-// an unconfigured deployment looks pixel-identical to before this existed.
-// Callers pass the same size/background/radius/glow their local mark
-// already used, to preserve each context's exact existing look (e.g. the
-// admin sidebar's own color scheme) rather than forcing one visual style
-// everywhere.
+// admin-uploaded logo once one exists (useBranding().logoUrl); otherwise
+// falls back to Truckgee's own mark, bundled at build time — so every
+// deployment shows the real logo without an admin having to configure
+// branding first. Callers pass the same size/radius their local mark
+// already used, to preserve each context's existing layout (e.g. the admin
+// sidebar's own sizing) rather than forcing one everywhere.
 const Box = styled.span`
   width: ${({ $size }) => $size}px;
   height: ${({ $size }) => $size}px;
   flex: none;
   border-radius: ${({ $radius, theme }) => $radius || theme.radius.sm};
-  background: ${({ $hasLogo, $background, theme }) => ($hasLogo ? theme.color.surface : $background || theme.color.accent)};
-  box-shadow: ${({ $hasLogo, $glow, theme }) => ($hasLogo ? "none" : $glow ?? theme.shadow.accentGlow)};
+  background: ${({ theme }) => theme.color.surface};
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  color: ${({ $iconColor, theme }) => $iconColor || theme.color.onAccent};
 `;
 
 const LogoImg = styled.img`
@@ -32,24 +30,12 @@ const LogoImg = styled.img`
   padding: 3px;
 `;
 
-export const BrandLogo = ({ size = 32, iconSize, background, radius, iconColor, glow, className }) => {
+export const BrandLogo = ({ size = 32, radius, className }) => {
   const { logoUrl, platformName } = useBranding();
 
   return (
-    <Box
-      $size={size}
-      $hasLogo={Boolean(logoUrl)}
-      $background={background}
-      $radius={radius}
-      $iconColor={iconColor}
-      $glow={glow}
-      className={className}
-    >
-      {logoUrl ? (
-        <LogoImg src={brandingAssetUrl(logoUrl)} alt={platformName} />
-      ) : (
-        <Truck size={iconSize || Math.round(size * 0.56)} strokeWidth={2.4} />
-      )}
+    <Box $size={size} $radius={radius} className={className}>
+      <LogoImg src={logoUrl ? brandingAssetUrl(logoUrl) : defaultLogo} alt={platformName} />
     </Box>
   );
 };

@@ -6,12 +6,40 @@ const { logAdminAction } = require("../utils/audit");
 const { sendMessageValidation } = require("../validators/chatValidation");
 const sendServerError = require("../utils/sendServerError");
 
+// Fields safe to hand to the other side of a chat/booking relationship —
+// mirrors what's already shown on trip search results and booking detail
+// (name/city/rating), deliberately excluding mobile/email/documents.
+const COUNTERPARTY_FIELDS = "name city ratingAvg ratingCount roles";
+
 const findThreadForParticipant = async (threadId, userId) => {
   const thread = await ChatThread.findById(threadId);
   if (!thread || !thread.participants.some((p) => String(p) === userId)) {
     return null;
   }
   return thread;
+};
+
+// Shared shape for both listInbox and getThread — a thread the client
+// actually needs to render a conversation list/header, not just raw ids.
+const populateThreadSummary = (query) =>
+  query.populate("participants", COUNTERPARTY_FIELDS).populate({
+    path: "booking",
+    select: "status trip",
+    populate: { path: "trip", select: "fromCity toCity departureAt" },
+  });
+
+const toInboxEntry = (thread, userId) => {
+  const counterparty = thread.participants.find((p) => String(p._id) !== userId);
+  return {
+    _id: thread._id,
+    lastMessageAt: thread.lastMessageAt,
+    booking: thread.booking && {
+      _id: thread.booking._id,
+      status: thread.booking.status,
+      trip: thread.booking.trip,
+    },
+    counterparty: counterparty || null,
+  };
 };
 
 // FR-07.1 / SRS-06.1 — one thread per booking, reachable from booking detail.
@@ -58,7 +86,8 @@ const sendMessage = async (req, res) => {
     const message = await Message.create({
       thread: thread._id,
       sender: req.auth.id,
-      text: req.body.text,
+      text: req.body.text?.trim() || "",
+      image: req.body.imageUrl ? { url: req.body.imageUrl } : undefined,
     });
 
     thread.lastMessageAt = message.createdAt;
@@ -72,6 +101,55 @@ const sendMessage = async (req, res) => {
     }
 
     res.status(201).json({ success: true, msg: "Message sent", message });
+  } catch (error) {
+    sendServerError(res, error, "chatController");
+  }
+};
+
+// A thread by id, populated for direct rendering (conversation header,
+// counterparty card) — unlike getThreadForBooking, which the existing
+// BookingDetail chat panel + chatFlow.test.js rely on returning bare
+// participant ids, so that route is left untouched.
+const getThread = async (req, res) => {
+  try {
+    const thread = await populateThreadSummary(ChatThread.findById(req.params.threadId));
+    if (!thread || !thread.participants.some((p) => String(p._id) === req.auth.id)) {
+      return res.status(404).json({ success: false, msg: "Chat thread not found" });
+    }
+    res.status(200).json({ success: true, thread: toInboxEntry(thread, req.auth.id) });
+  } catch (error) {
+    sendServerError(res, error, "chatController");
+  }
+};
+
+// A conversation only earns a place in the inbox once the transporter has
+// actually engaged — either they've replied (lastMessageAt is set, from
+// either side sending) or they've approved the request (booking is past
+// "pending"). A thread that's just sitting there from booking-request time
+// with no reply and no decision yet would otherwise clutter the inbox with
+// nothing to act on.
+const listInbox = async (req, res) => {
+  try {
+    const threads = await populateThreadSummary(ChatThread.find({ participants: req.auth.id }));
+
+    const eligible = threads.filter(
+      (t) => t.lastMessageAt || ["confirmed", "ongoing", "completed"].includes(t.booking?.status)
+    );
+
+    const withUnread = await Promise.all(
+      eligible.map(async (t) => {
+        const unreadCount = await Message.countDocuments({
+          thread: t._id,
+          sender: { $ne: req.auth.id },
+          "readBy.user": { $ne: req.auth.id },
+        });
+        return { ...toInboxEntry(t, req.auth.id), unreadCount };
+      })
+    );
+
+    withUnread.sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
+
+    res.status(200).json({ success: true, threads: withUnread });
   } catch (error) {
     sendServerError(res, error, "chatController");
   }
@@ -135,4 +213,12 @@ const adminGetThread = async (req, res) => {
   }
 };
 
-module.exports = { getThreadForBooking, listMessages, sendMessage, markThreadRead, adminGetThread };
+module.exports = {
+  getThreadForBooking,
+  getThread,
+  listInbox,
+  listMessages,
+  sendMessage,
+  markThreadRead,
+  adminGetThread,
+};

@@ -5,10 +5,6 @@ import {
   Truck as TruckIcon,
   Route as RouteIcon,
   Package,
-  CreditCard,
-  Wallet as WalletIcon,
-  Banknote,
-  MapPin,
   Star,
   LifeBuoy,
   AlertTriangle,
@@ -51,32 +47,8 @@ const NAV = [
     ],
   },
   {
-    label: "Finance",
-    items: [
-      { to: "/admin/payments", label: "Payments", description: "Booking and wallet transactions", icon: CreditCard },
-      {
-        to: "/admin/platform-wallet",
-        label: "Platform Wallet",
-        description: "Commission balance and ledger",
-        icon: WalletIcon,
-      },
-      {
-        to: "/admin/withdrawals",
-        label: "Withdrawals",
-        description: "Transporter payout requests",
-        icon: Banknote,
-      },
-    ],
-  },
-  {
     label: "Monitoring",
     items: [
-      {
-        to: "/admin/live-tracking",
-        label: "Live Tracking",
-        description: "Trucks currently on the road",
-        icon: MapPin,
-      },
       { to: "/admin/reviews", label: "Reviews", description: "Flagged ratings and moderation", icon: Star },
       { to: "/admin/support", label: "Support", description: "Open support requests", icon: LifeBuoy },
       { to: "/admin/disputes", label: "Disputes", description: "Booking disputes awaiting resolution", icon: AlertTriangle },

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { LifeBuoy, MessageSquare } from "lucide-react";
 import * as supportApi from "../api/support";
 import { listMyBookings } from "../api/bookings";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +28,41 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const DetailRow = styled.tr`
   background: ${({ theme }) => theme.color.surfaceRaised};
+`;
+
+// Icon-prefixed subject + a one-line message preview underneath, so the
+// table reads as a scannable ticket history rather than a bare subject
+// column — same treatment as the admin console's support queue
+// (pages/admin/Support.jsx's SubjectText/MessagePreview), ported to the
+// consumer palette.
+const SubjectText = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.color.text};
+
+  svg {
+    flex: none;
+    color: ${({ theme }) => theme.color.textFaint};
+  }
+`;
+
+const MessagePreview = styled.div`
+  max-width: 320px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.color.textFaint};
+`;
+
+// The subject cell now carries two lines (subject + preview) while every
+// other cell in the row is single-line — top-align it so it doesn't drift
+// to the vertical center of the (now taller) row.
+const SubjectTd = styled(Td)`
+  vertical-align: top;
 `;
 
 // e.g. "Delhi → Jaipur · 14 Aug 2026 · confirmed"
@@ -240,6 +276,7 @@ export const Support = () => {
           <Card $padding="0">
             {!loading && paged.length === 0 ? (
               <EmptyState style={{ margin: 20 }}>
+                <LifeBuoy size={26} strokeWidth={1.6} />
                 <Muted>
                   {requests.length === 0
                     ? "You haven't raised any support requests yet."
@@ -269,17 +306,23 @@ export const Support = () => {
                               style={{ cursor: "pointer" }}
                               onClick={() => setExpandedId(expandedId === r._id ? null : r._id)}
                             >
-                              <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
-                              <Td>{r.subject}</Td>
-                              <Td>
+                              <IndexTd style={{ verticalAlign: "top" }}>{(page - 1) * pageSize + i + 1}</IndexTd>
+                              <SubjectTd>
+                                <SubjectText>
+                                  <MessageSquare size={14} strokeWidth={2.2} />
+                                  {r.subject}
+                                </SubjectText>
+                                <MessagePreview>{r.message}</MessagePreview>
+                              </SubjectTd>
+                              <Td style={{ verticalAlign: "top" }}>
                                 <Muted>{r.booking?.goodsDescription || "—"}</Muted>
                               </Td>
-                              <Td>
+                              <Td style={{ verticalAlign: "top" }}>
                                 <StatusBadge status={r.status === "resolved" ? "completed" : "pending"}>
                                   {r.status}
                                 </StatusBadge>
                               </Td>
-                              <Td>{formatDateTime(r.createdAt)}</Td>
+                              <Td style={{ verticalAlign: "top" }}>{formatDateTime(r.createdAt)}</Td>
                             </Tr>
                             {expandedId === r._id && (
                               <DetailRow>

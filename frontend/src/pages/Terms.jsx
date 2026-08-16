@@ -56,15 +56,25 @@ export const Terms = () => {
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>4. Bookings, pricing, and payment</SectionTitle>
+          <SectionTitle>4. Bookings and pricing</SectionTitle>
           <Body>
-            Trip listings and price estimates are set by transporters. A booking request reserves
-            capacity but isn't confirmed until the transporter accepts it, subject to available
-            capacity on the truck. Requests left unanswered past their response window expire
-            automatically. Once confirmed, payment is made through the app — from your wallet
-            balance or a supported payment gateway — and is held until the delivery is confirmed.{" "}
-            {platformName} facilitates the connection between shippers and transporters; it is not
-            a party to the actual carriage of goods.
+            {platformName} is a free platform that connects shippers with a partial load to
+            transporters with spare capacity on the same route — we don't charge a commission, a
+            listing fee, or any platform fee to either side, and we are not a party to the actual
+            carriage of goods.
+          </Body>
+          <Body>
+            Trip listings and price estimates are set by transporters, shown so shippers can
+            compare options before booking — the price shown is a reference, not an amount{" "}
+            {platformName} collects, holds, or guarantees. A booking request reserves capacity but
+            isn't confirmed until the transporter accepts it, subject to available capacity on the
+            truck. Requests left unanswered past their response window expire automatically.
+          </Body>
+          <Body>
+            Once a booking is confirmed, payment — the amount, method (cash, UPI, bank transfer,
+            or anything else you both agree on), and timing — is entirely between the shipper and
+            the transporter. {platformName} does not process, hold, or guarantee any payment, and
+            has no visibility into whether or how it was made.
           </Body>
         </Stack>
 
@@ -72,10 +82,8 @@ export const Terms = () => {
           <SectionTitle>5. Cancellations</SectionTitle>
           <Body>
             Either party may cancel a confirmed booking up until the cancellation cutoff shown on
-            the booking, after which cancellations are no longer permitted through the app. A
-            confirmed booking left unpaid past its payment window is cancelled automatically so
-            the capacity isn't held indefinitely. Repeat or late cancellations may affect your
-            account standing.
+            the booking, after which cancellations are no longer permitted through the app. Repeat
+            or late cancellations may affect your account standing.
           </Body>
         </Stack>
 

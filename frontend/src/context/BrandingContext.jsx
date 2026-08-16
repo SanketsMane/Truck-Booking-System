@@ -8,7 +8,7 @@ const BrandingContext = createContext(null);
 // an admin who hasn't touched Settings) — nothing should ever render blank
 // while this loads.
 const DEFAULT_BRANDING = {
-  platformName: "ShareTruck",
+  platformName: "Truckgee",
   logoUrl: "",
   faviconUrl: "",
   contactEmail: "",

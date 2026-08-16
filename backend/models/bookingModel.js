@@ -21,13 +21,6 @@ const bookingSchema = new mongoose.Schema(
       min: 0,
     },
 
-    // Optional companion to capacityRequested — only meaningful when the
-    // trip itself tracks volumeCbm; see utils/capacityHelpers.js.
-    volumeRequested: {
-      type: Number,
-      min: 0,
-    },
-
     goodsDescription: {
       type: String,
       required: true,
@@ -85,41 +78,13 @@ const bookingSchema = new mongoose.Schema(
     dropConfirmedAt: {
       type: Date,
     },
-
-    paymentStatus: {
-      type: String,
-      enum: ["unpaid", "paid", "refunded"],
-      default: "unpaid",
-    },
-
-    paymentMethod: {
-      type: String,
-      enum: ["wallet", "razorpay"],
-    },
-
-    payment: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Payment",
-    },
-
-    paidAt: {
-      type: Date,
-    },
-
-    // Set at accept time — a confirmed booking left unpaid past this point
-    // is auto-cancelled by jobs/paymentDeadlines.js so it doesn't squat on
-    // the transporter's capacity forever (capacity is already committed at
-    // accept time, before payment exists).
-    paymentDueBy: {
-      type: Date,
-    },
   },
   { timestamps: true }
 );
 
 bookingSchema.index({ trip: 1 });
 bookingSchema.index({ shipper: 1 });
-bookingSchema.index({ status: 1, paymentStatus: 1, paymentDueBy: 1 });
+bookingSchema.index({ status: 1, respondBy: 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 

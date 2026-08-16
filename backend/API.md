@@ -1,4 +1,4 @@
-# ShareTruck API Reference
+# Truckgee API Reference
 
 Base URL: `VITE_API_URL` in the frontend / wherever the backend is deployed (e.g. `http://localhost:3000` locally). All requests/responses are JSON unless noted. Authenticated routes read a JWT from an `httpOnly` cookie named `token` — the browser sends it automatically once set by `/auth/verify-otp`; non-browser clients need to forward that cookie explicitly (`credentials: "include"` on `fetch`).
 
@@ -91,14 +91,6 @@ Booking states: `pending → confirmed → ongoing → completed`, or `pending �
 | PUT | `/:id/flag` | ✓ | — | Any authenticated user can flag a review. |
 | PUT | `/:id/moderate` | admin | `{ action: "hide"\|"remove" }` | |
 
-## Payment log — `/payment-logs`
-
-| Method | Path | Auth | Body | Notes |
-|---|---|---|---|---|
-| GET | `/` | admin | query `status?` | |
-| POST | `/` | admin | `{ bookingId, amount, status: "paid"\|"unpaid"\|"partial" }` | No payment gateway in MVP — this is a manual reconciliation record. Audit-logged. |
-| GET | `/booking/:bookingId` | ✓ (party or admin) | — | Read-only for booking parties. |
-
 ## Notifications — `/notifications`
 
 | Method | Path | Auth | Query | Notes |
@@ -131,7 +123,7 @@ Booking states: `pending → confirmed → ongoing → completed`, or `pending �
 | GET | `/settings` | — | `{ verificationGateEnabled }` |
 | PUT | `/settings` | `{ verificationGateEnabled }` | SRS-02.3 admin-level toggle. Audit-logged. |
 | GET | `/reports/bookings.csv` | — | |
-| GET | `/reports/revenue-by-route.csv` | — | |
+| GET | `/reports/bookings-by-route.csv` | — | |
 | GET | `/reports/user-growth.csv` | — | |
 | GET | `/reports/verification-turnaround.csv` | — | |
 

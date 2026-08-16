@@ -30,7 +30,7 @@ startScheduler();
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
     console.log(`
-        ShareTruck server started successfully
+        Truckgee server started successfully
         Environment : ${process.env.NODE_ENV}
         Port        : ${PORT}
 `);

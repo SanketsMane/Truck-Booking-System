@@ -17,7 +17,7 @@
 #   docker network connect sharetruck_default mbfx-web-1
 #
 # Usage:
-#   MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... docker compose -f docker-compose.prod.yml build
+#   MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... VITE_LOCATIONIQ_TOKEN=... VITE_MAPBOX_TOKEN=... docker compose -f docker-compose.prod.yml build
 #   MINIO_ROOT_USER=... MINIO_ROOT_PASSWORD=... docker compose -f docker-compose.prod.yml up -d
 services:
   backend:
@@ -35,6 +35,7 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: https://sharetruck.visionitinfra.com
+        VITE_LOCATIONIQ_TOKEN: ${VITE_LOCATIONIQ_TOKEN}
         VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
     container_name: sharetruck-frontend
     restart: unless-stopped

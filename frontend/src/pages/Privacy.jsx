@@ -39,8 +39,8 @@ export const Privacy = () => {
           <Body>
             We use this information to operate the marketplace — matching shippers with spare
             truck capacity, verifying identities before allowing bookings to be accepted, sending
-            booking and account notifications, processing payments, and providing customer
-            support. We do not sell your personal information.
+            booking and account notifications, and providing customer support. We do not sell your
+            personal information.
           </Body>
         </Stack>
 
@@ -84,10 +84,10 @@ export const Privacy = () => {
           <SectionTitle>7. Security</SectionTitle>
           <Body>
             We use reasonable technical and organizational measures to protect your information —
-            verification documents and payout details are encrypted at rest, and account access
-            is protected by one-time codes rather than a password alone unless you choose to set
-            one. No system is completely secure, and we can't guarantee absolute security of data
-            transmitted to or from the app.
+            verification documents are encrypted at rest, and account access is protected by
+            one-time codes rather than a password alone unless you choose to set one. No system is
+            completely secure, and we can't guarantee absolute security of data transmitted to or
+            from the app.
           </Body>
         </Stack>
 

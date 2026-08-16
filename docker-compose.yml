@@ -48,6 +48,8 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: http://localhost:3000
+        VITE_LOCATIONIQ_TOKEN: ${VITE_LOCATIONIQ_TOKEN}
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN}
     ports:
       - "5173:80"
     depends_on:

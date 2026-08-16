@@ -35,7 +35,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 // The full vocabulary of action/targetType strings any admin action in the
 // app can log (see backend/utils/audit.js call sites) — used to build the
-// filter dropdowns and to turn a raw "withdrawal.approve" into a readable
+// filter dropdowns and to turn a raw "trip.deactivate" into a readable
 // label for the table.
 const ACTIONS = [
   { value: "user.setStatus", label: "User status changed" },
@@ -43,22 +43,13 @@ const ACTIONS = [
   { value: "trip.deactivate", label: "Trip deactivated" },
   { value: "booking.forceCancel", label: "Booking force-cancelled" },
   { value: "settings.update", label: "Settings updated" },
-  { value: "settings.commission.update", label: "Commission updated" },
   { value: "settings.branding.update", label: "Branding updated" },
-  { value: "withdrawal.approve", label: "Withdrawal approved" },
-  { value: "withdrawal.autoPaid", label: "Withdrawal auto-paid" },
-  { value: "withdrawal.reject", label: "Withdrawal rejected" },
-  { value: "withdrawal.markPaid", label: "Withdrawal marked paid" },
-  { value: "wallet.adjust", label: "Wallet adjusted" },
   { value: "chat.view", label: "Chat viewed" },
   { value: "dispute.resolve", label: "Dispute resolved" },
   { value: "file.view", label: "File viewed" },
   { value: "integrations.sms.update", label: "SMS integration updated" },
   { value: "integrations.email.update", label: "Email integration updated" },
-  { value: "integrations.razorpay.update", label: "Razorpay integration updated" },
   { value: "integrations.kyc.update", label: "KYC integration updated" },
-  { value: "integrations.payout.update", label: "Payout integration updated" },
-  { value: "paymentLog.set", label: "Payment log updated" },
   { value: "rating.moderate", label: "Rating moderated" },
   { value: "truck.review", label: "Truck reviewed" },
   { value: "verification.autoReview", label: "Verification auto-reviewed" },
@@ -70,8 +61,6 @@ const TARGET_TYPES = [
   "Trip",
   "Booking",
   "PlatformSetting",
-  "WithdrawalRequest",
-  "Wallet",
   "ChatThread",
   "Dispute",
   "UploadedFile",

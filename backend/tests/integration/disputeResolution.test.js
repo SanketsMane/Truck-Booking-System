@@ -24,22 +24,11 @@ const completedBooking = async (seed) => {
     .post("/bookings")
     .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
   const bookingId = bookingRes.body.booking._id;
-  const price = bookingRes.body.booking.priceEstimate;
   await transporterAgent.put(`/bookings/${bookingId}/accept`);
-
-  shipper.isAdmin = true;
-  shipper.adminScope = "finance";
-  await shipper.save();
-  await shipperAgent.post(`/admin/wallets/${shipper._id}/adjust`).send({ amount: price, direction: "credit", reason: "funding" });
-  shipper.isAdmin = false;
-  shipper.adminScope = undefined;
-  await shipper.save();
-
-  await shipperAgent.post(`/bookings/${bookingId}/pay/wallet`);
   await shipperAgent.put(`/bookings/${bookingId}/confirm-pickup`);
   await transporterAgent.put(`/bookings/${bookingId}/confirm-drop`);
 
-  return { transporterAgent, transporter, shipperAgent, shipper, bookingId, price };
+  return { transporterAgent, transporter, shipperAgent, shipper, bookingId };
 };
 
 describe("dispute resolution", () => {
@@ -85,38 +74,33 @@ describe("dispute resolution", () => {
       .send({ bookingId, category: "other", description: "Something worth reporting here." });
     const disputeId = disputeRes.body.dispute._id;
 
-    const { agent: financeAgent, user: financeAdmin } = await signupUser(app, { email: emailFor(49), name: "Fin" });
-    await makeAdmin(financeAdmin, "finance");
+    const { agent: verificationAgent, user: verificationAdmin } = await signupUser(app, { email: emailFor(49), name: "Ver" });
+    await makeAdmin(verificationAdmin, "verification");
 
-    const res = await financeAgent
+    const res = await verificationAgent
       .put(`/admin/disputes/${disputeId}/resolve`)
       .send({ status: "resolved", resolutionAction: "none", resolutionNote: "n/a" });
     expect(res.status).toBe(403);
   });
 
-  it("resolving with refund_shipper credits the shipper's wallet and logs the resolution", async () => {
-    const { shipperAgent, shipper, bookingId } = await completedBooking(5);
+  it("resolving with warning_issued (no money involved) updates status and logs the resolution", async () => {
+    const { shipperAgent, bookingId } = await completedBooking(5);
     const disputeRes = await shipperAgent
       .post("/disputes")
-      .send({ bookingId, category: "damaged_goods", description: "Goods arrived damaged, requesting compensation." });
+      .send({ bookingId, category: "behavior", description: "Transporter was rude during pickup." });
     const disputeId = disputeRes.body.dispute._id;
 
     const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { email: emailFor(59), name: "Sup" });
     await makeAdmin(supportAdmin, "support");
 
-    const balanceBefore = (await shipperAgent.get("/wallet/me")).body.wallet.balance;
-
     const resolveRes = await supportAgent.put(`/admin/disputes/${disputeId}/resolve`).send({
       status: "resolved",
-      resolutionAction: "refund_shipper",
-      resolutionAmount: 500,
-      resolutionNote: "Confirmed damage from photos, partial refund issued.",
+      resolutionAction: "warning_issued",
+      resolutionNote: "Warned the transporter about conduct.",
     });
     expect(resolveRes.status).toBe(200);
     expect(resolveRes.body.dispute.status).toBe("resolved");
-
-    const balanceAfter = (await shipperAgent.get("/wallet/me")).body.wallet.balance;
-    expect(balanceAfter).toBe(balanceBefore + 500);
+    expect(resolveRes.body.dispute.resolutionAction).toBe("warning_issued");
   });
 
   it("rejects resolving an already-resolved dispute", async () => {
@@ -137,31 +121,5 @@ describe("dispute resolution", () => {
       .put(`/admin/disputes/${disputeId}/resolve`)
       .send({ status: "resolved", resolutionAction: "none", resolutionNote: "trying again" });
     expect(second.status).toBe(400);
-  });
-
-  it("requires an amount for a money-moving resolution action, and forbids one otherwise", async () => {
-    const { shipperAgent, bookingId } = await completedBooking(7);
-    const disputeRes = await shipperAgent
-      .post("/disputes")
-      .send({ bookingId, category: "other", description: "Yet another reportable issue here." });
-    const disputeId = disputeRes.body.dispute._id;
-
-    const { agent: supportAgent, user: supportAdmin } = await signupUser(app, { email: emailFor(79), name: "Sup" });
-    await makeAdmin(supportAdmin, "support");
-
-    const missingAmount = await supportAgent.put(`/admin/disputes/${disputeId}/resolve`).send({
-      status: "resolved",
-      resolutionAction: "refund_shipper",
-      resolutionNote: "no amount given",
-    });
-    expect(missingAmount.status).toBe(400);
-
-    const unexpectedAmount = await supportAgent.put(`/admin/disputes/${disputeId}/resolve`).send({
-      status: "resolved",
-      resolutionAction: "warning_issued",
-      resolutionAmount: 100,
-      resolutionNote: "shouldn't allow an amount here",
-    });
-    expect(unexpectedAmount.status).toBe(400);
   });
 });

@@ -86,7 +86,7 @@ const bookingConfirmedEmail = ({ name, fromCity, toCity, departureAt, capacityRe
           detailRow("Capacity", `${escapeHtml(capacityRequested)} tons`),
           detailRow("Estimated price", formatINR(priceEstimate)),
         ])}
-        <p style="margin:0;">Complete payment from the app to lock in pickup.</p>
+        <p style="margin:0;">The transporter has accepted — coordinate pickup directly with them from the app.</p>
       `,
       ctaLabel: "View booking",
       ctaUrl: `${FRONTEND_URL()}/bookings/${bookingId}`,
@@ -94,35 +94,7 @@ const bookingConfirmedEmail = ({ name, fromCity, toCity, departureAt, capacityRe
   };
 };
 
-// 5. Payment receipt — sent to the shipper once a booking payment settles
-// (wallet or Razorpay, both call sites — see bookingPaymentController.js
-// and utils/paymentFinalizer.js).
-const paymentReceiptEmail = ({ name, fromCity, toCity, amount, paymentMethod, paidAt, bookingId }) => {
-  const safeName = escapeHtml(name || "there");
-  const methodLabel = paymentMethod === "razorpay" ? "Razorpay" : "Wallet";
-  return {
-    subject: `Payment receipt — ${formatINR(amount).replace("&#8377;", "₹")}`,
-    html: renderEmail({
-      title: "Payment receipt",
-      preheader: `Payment received for ${fromCity} to ${toCity}.`,
-      bodyHtml: `
-        <p style="margin:0 0 16px;">Hi ${safeName},</p>
-        <p style="margin:0 0 12px;">This confirms your payment for the booking below.</p>
-        ${detailTable([
-          detailRow("Route", `${escapeHtml(fromCity)} &rarr; ${escapeHtml(toCity)}`),
-          detailRow("Amount paid", formatINR(amount)),
-          detailRow("Payment method", methodLabel),
-          detailRow("Paid on", formatDateTime(paidAt)),
-        ])}
-        <p style="margin:0;">Keep this email for your records.</p>
-      `,
-      ctaLabel: "View booking",
-      ctaUrl: `${FRONTEND_URL()}/bookings/${bookingId}`,
-    }),
-  };
-};
-
-// 6. KYC verification status changed (verified/rejected).
+// 5. KYC verification status changed (verified/rejected).
 const verificationStatusEmail = ({ name, type, status, reason }) => {
   const safeName = escapeHtml(name || "there");
   const roleLabel = type === "transporter" ? "transporter" : "shipper";
@@ -151,7 +123,7 @@ const verificationStatusEmail = ({ name, type, status, reason }) => {
   };
 };
 
-// 7. Account status changed (suspended/banned/reactivated) — may be the
+// 6. Account status changed (suspended/banned/reactivated) — may be the
 // only channel a suspended/banned user can still receive, since they can
 // no longer log in to see an in-app notification.
 const accountStatusEmail = ({ name, status, reason }) => {
@@ -185,38 +157,13 @@ const accountStatusEmail = ({ name, status, reason }) => {
   };
 };
 
-// 8. Withdrawal paid — sent to the transporter once an admin records the
-// payout reference (see adminWalletController.markWithdrawalPaid).
-const withdrawalPaidEmail = ({ name, amount, payoutReference }) => {
-  const safeName = escapeHtml(name || "there");
-  return {
-    subject: `Your withdrawal of ${formatINR(amount).replace("&#8377;", "₹")} has been paid`,
-    html: renderEmail({
-      title: "Withdrawal paid",
-      preheader: "Your payout has been sent.",
-      bodyHtml: `
-        <p style="margin:0 0 16px;">Hi ${safeName},</p>
-        <p style="margin:0 0 12px;">Your withdrawal has been paid out.</p>
-        ${detailTable([
-          detailRow("Amount", formatINR(amount)),
-          detailRow("Reference", escapeHtml(payoutReference || "—")),
-        ])}
-        <p style="margin:0;">It may take a day or two to reflect in your bank/UPI account, depending on your provider.</p>
-      `,
-      ctaLabel: "View wallet",
-      ctaUrl: `${FRONTEND_URL()}/wallet`,
-    }),
-  };
-};
-
-// 9. Dispute resolved — sent to both the raiser and the counterparty once
+// 7. Dispute resolved — sent to both the raiser and the counterparty once
 // an admin resolves or rejects a dispute (see disputeController.resolveDispute).
 const disputeResolvedEmail = ({ name, category, status, resolutionNote }) => {
   const safeName = escapeHtml(name || "there");
   const CATEGORY_LABELS = {
     no_show: "No-show",
     damaged_goods: "Damaged goods",
-    payment_issue: "Payment issue",
     behavior: "Behavior",
     other: "Other",
   };
@@ -243,9 +190,7 @@ module.exports = {
   welcomeEmail,
   passwordResetEmail,
   bookingConfirmedEmail,
-  paymentReceiptEmail,
   verificationStatusEmail,
   accountStatusEmail,
-  withdrawalPaidEmail,
   disputeResolvedEmail,
 };

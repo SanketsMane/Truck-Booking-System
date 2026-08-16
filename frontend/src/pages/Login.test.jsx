@@ -16,7 +16,7 @@ vi.mock("../context/AuthContext", () => ({
 }));
 
 vi.mock("../context/BrandingContext", () => ({
-  useBranding: () => ({ platformName: "ShareTruck" }),
+  useBranding: () => ({ platformName: "Truckgee" }),
 }));
 
 vi.mock("react-toastify", () => ({

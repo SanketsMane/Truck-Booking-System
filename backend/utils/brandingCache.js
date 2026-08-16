@@ -9,7 +9,7 @@ const PlatformSetting = require("../models/platformSettingModel");
 // synchronous call site gets a plain getter with no new awaits and no
 // staleness beyond "an admin just changed it this millisecond".
 let cache = {
-  platformName: "ShareTruck",
+  platformName: "Truckgee",
   logoUrl: "",
   faviconUrl: "",
   contactEmail: "",
@@ -19,7 +19,7 @@ let cache = {
 const refreshBrandingCache = async () => {
   const settings = await PlatformSetting.getSettings();
   cache = {
-    platformName: settings.platformName || "ShareTruck",
+    platformName: settings.platformName || "Truckgee",
     logoUrl: settings.logoUrl || "",
     faviconUrl: settings.faviconUrl || "",
     contactEmail: settings.contactEmail || "",

@@ -3,10 +3,8 @@ const express = require("express");
 const router = express.Router();
 
 const tripController = require("../controllers/tripController");
-const tripLocationController = require("../controllers/tripLocationController");
 const authMiddleware = require("../middleWare/middleWare");
 const { requireRole } = require("../middleWare/middleWare");
-const { locationLimiter } = require("../middleWare/rateLimit");
 
 router.get("/search", tripController.searchTrips);
 router.get("/popular-routes", tripController.popularRoutes);
@@ -17,14 +15,5 @@ router.post("/", authMiddleware, requireRole("transporter"), tripController.post
 router.get("/:id", tripController.getTrip);
 router.put("/:id", authMiddleware, requireRole("transporter"), tripController.editTrip);
 router.delete("/:id", authMiddleware, requireRole("transporter"), tripController.cancelTrip);
-
-router.put(
-  "/:id/location",
-  authMiddleware,
-  requireRole("transporter"),
-  locationLimiter,
-  tripLocationController.postLocation
-);
-router.get("/:id/location", authMiddleware, tripLocationController.getLocation);
 
 module.exports = router;

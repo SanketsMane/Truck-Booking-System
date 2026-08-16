@@ -18,11 +18,6 @@ const NOTIFICATION_CATEGORIES = {
   rating_prompt: "ratings",
   saved_search_match: "search_alerts",
   trip_departure_reminder: "reminders",
-  booking_payment_received: "payments",
-  wallet_credited: "payments",
-  withdrawal_approved: "payments",
-  withdrawal_rejected: "payments",
-  withdrawal_paid: "payments",
   dispute_raised: "disputes",
   dispute_resolved: "disputes",
 };
@@ -34,7 +29,6 @@ const CATEGORY_LABELS = {
   ratings: "Ratings & reviews",
   search_alerts: "Saved search alerts",
   reminders: "Trip departure reminders",
-  payments: "Wallet & payment updates",
   disputes: "Dispute updates",
 };
 

@@ -5,10 +5,10 @@ const Verification = require("../models/verificationModel");
 const SavedSearch = require("../models/savedSearchModel");
 const PlatformSetting = require("../models/platformSettingModel");
 const { notify } = require("../utils/notify");
-const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
+const { markBookingCancelled } = require("../utils/bookingCancellation");
 const escapeRegex = require("../utils/escapeRegex");
 const setLocationGeo = require("../utils/setLocationGeo");
-const { getPendingHeldMap, visibleAvailable, visibleAvailableVolume } = require("../utils/capacityHelpers");
+const { getPendingHeldMap, visibleAvailable } = require("../utils/capacityHelpers");
 const { SEARCH_DATE_RANGE_DAYS, SEARCH_RADIUS_KM_DEFAULT } = require("../config/marketplaceConfig");
 const { postTripValidation, editTripValidation, searchAlertValidation } = require("../validators/tripValidation");
 const sendServerError = require("../utils/sendServerError");
@@ -90,8 +90,6 @@ const postTrip = async (req, res) => {
       dropPoint: setLocationGeo({ ...req.body.dropPoint }),
       totalCapacity,
       availableCapacity,
-      volumeCbm: req.body.volumeCbm,
-      availableVolumeCbm: req.body.availableVolumeCbm,
       pricePerTon: req.body.pricePerTon,
       status: "published",
     });
@@ -119,7 +117,7 @@ const postTrip = async (req, res) => {
 // attempted here — that needs real waypoint data, not just an endpoint.
 const searchTrips = async (req, res) => {
   try {
-    const { fromCity, toCity, date, nearLat, nearLng, radiusKm, minCapacity, minVolumeCbm, sort = "departure", rangeDays } = req.query;
+    const { fromCity, toCity, date, nearLat, nearLng, radiusKm, minCapacity, sort = "departure", rangeDays } = req.query;
 
     const hasCitySearch = Boolean(fromCity && toCity);
     const hasNearSearch = nearLat !== undefined && nearLng !== undefined;
@@ -165,11 +163,6 @@ const searchTrips = async (req, res) => {
       filter["pickupPoint.location"] = { $geoWithin: { $centerSphere: [[lng, lat], radius / EARTH_RADIUS_KM] } };
     }
 
-    // Only trips that actually track volume can guarantee a minimum, so
-    // this naturally excludes weight-only trips rather than treating them
-    // as having unlimited volume.
-    if (minVolumeCbm) filter.availableVolumeCbm = { $gte: Number(minVolumeCbm) };
-
     let query = Trip.find(filter)
       .populate("truck", "truckType bodyType totalCapacity photos")
       .populate("transporter", "name city ratingAvg ratingCount");
@@ -190,7 +183,6 @@ const searchTrips = async (req, res) => {
     const tripsWithVisibility = trips.map((trip) => ({
       ...trip.toObject(),
       visibleAvailableCapacity: visibleAvailable(trip, heldMap),
-      visibleAvailableVolumeCbm: visibleAvailableVolume(trip, heldMap),
     }));
 
     res.status(200).json({ success: true, trips: tripsWithVisibility, count: tripsWithVisibility.length });
@@ -231,7 +223,6 @@ const getTrip = async (req, res) => {
     const tripWithVisibility = {
       ...trip.toObject(),
       visibleAvailableCapacity: visibleAvailable(trip, heldMap),
-      visibleAvailableVolumeCbm: visibleAvailableVolume(trip, heldMap),
     };
 
     res.status(200).json({ success: true, trip: tripWithVisibility });
@@ -267,9 +258,6 @@ const editTrip = async (req, res) => {
     if (!["published", "full"].includes(trip.status)) {
       return res.status(400).json({ success: false, msg: `Trip can't be edited while ${trip.status}` });
     }
-    if (req.body.volumeCbm !== undefined && trip.volumeCbm == null) {
-      return res.status(400).json({ success: false, msg: "This trip doesn't track volume" });
-    }
 
     const otherFields = {};
     ["departureAt", "estimatedArrivalAt", "pickupPoint", "dropPoint", "pricePerTon"].forEach((field) => {
@@ -285,10 +273,7 @@ const editTrip = async (req, res) => {
     // as a single atomic $inc that composes correctly with a concurrent
     // acceptBooking/cancelBooking capacity change instead of racing a
     // stale read-then-write against them. The $gte guard is exactly
-    // "the resulting availableCapacity won't go negative." volumeCbm gets
-    // the same treatment, as an independent resource, when the trip tracks
-    // it — applied as its own atomic update rather than folded into the
-    // capacity one, since the two are unrelated dimensions.
+    // "the resulting availableCapacity won't go negative."
     if (req.body.totalCapacity !== undefined) {
       const delta = req.body.totalCapacity - updated.totalCapacity;
       const result = await Trip.findOneAndUpdate(
@@ -301,23 +286,6 @@ const editTrip = async (req, res) => {
         return res.status(409).json({
           success: false,
           msg: `Can't reduce capacity below the ~${bookedCapacity} tons already booked`,
-        });
-      }
-      updated = result;
-    }
-
-    if (req.body.volumeCbm !== undefined) {
-      const delta = req.body.volumeCbm - updated.volumeCbm;
-      const result = await Trip.findOneAndUpdate(
-        { _id: trip._id, transporter: req.auth.id, availableVolumeCbm: { $gte: -delta } },
-        { $inc: { volumeCbm: delta, availableVolumeCbm: delta } },
-        { new: true }
-      );
-      if (!result) {
-        const bookedVolume = updated.volumeCbm - updated.availableVolumeCbm;
-        return res.status(409).json({
-          success: false,
-          msg: `Can't reduce volume below the ~${bookedVolume} m³ already booked`,
         });
       }
       updated = result;
@@ -372,18 +340,11 @@ const cancelTrip = async (req, res) => {
     const affectedBookings = await Booking.find({ trip: trip._id, status: { $in: ["pending", "confirmed"] } });
     await Promise.all(
       affectedBookings.map(async (booking) => {
-        const { wasPaid } = await cancelBookingWithRefund(booking, {
+        await markBookingCancelled(booking, {
           cancelledBy: req.auth.id,
           reason: "Trip cancelled by transporter",
         });
         await notify(booking.shipper, "booking_cancelled", { bookingId: booking._id, tripId: trip._id });
-        if (wasPaid) {
-          await notify(booking.shipper, "wallet_credited", {
-            bookingId: booking._id,
-            amount: booking.priceEstimate,
-            reason: "refund",
-          });
-        }
       })
     );
 

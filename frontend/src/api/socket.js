@@ -22,6 +22,3 @@ export const getSocket = () => socket;
 export const joinThread = (threadId) => socket?.emit("chat:join", threadId);
 export const leaveThread = (threadId) => socket?.emit("chat:leave", threadId);
 export const notifyTyping = (threadId) => socket?.emit("chat:typing", threadId);
-
-export const joinTripRoom = (tripId) => socket?.emit("trip:join", tripId);
-export const leaveTripRoom = (tripId) => socket?.emit("trip:leave", tripId);

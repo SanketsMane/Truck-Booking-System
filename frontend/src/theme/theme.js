@@ -1,4 +1,4 @@
-// Design tokens for ShareTruck — light theme, black text on white with a
+// Design tokens for Truckgee — light theme, black text on white with a
 // confident blue accent (trust/logistics-marketplace signal), card-based
 // layouts (SRS §5.7). Single theme by design: one visual language, not a
 // light/dark toggle.

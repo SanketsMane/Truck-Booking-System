@@ -9,10 +9,12 @@ import { useAuth } from "../context/AuthContext";
 import { PageContainer, Stack, Row, PageTitle, Muted, EmptyState } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Field, Input } from "../components/ui/Form";
+import { Field } from "../components/ui/Form";
+import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
-import { formatDate, formatINR, formatTons, formatCbm, ratingLabel } from "../utils/format";
+import { formatDate, formatINR, formatTons, ratingLabel } from "../utils/format";
 import { fadeInUp } from "../theme/animations";
+import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const ResultCard = styled(Card).attrs({ $padding: "0" })`
   display: block;
@@ -220,14 +222,7 @@ const FilterRow = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: ${({ theme }) => theme.space(3)};
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.phone}) {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    max-width: 460px;
-  }
+  max-width: 260px;
 `;
 
 const SORT_OPTIONS = [
@@ -258,10 +253,8 @@ export const SearchResults = () => {
   const date = searchParams.get("date") || "";
   const sort = searchParams.get("sort") || "departure";
   const minCapacity = searchParams.get("minCapacity") || "";
-  const minVolumeCbm = searchParams.get("minVolumeCbm") || "";
 
-  const [minCapacityInput, setMinCapacityInput] = useState(minCapacity);
-  const [minVolumeCbmInput, setMinVolumeCbmInput] = useState(minVolumeCbm);
+  const minCapacityAmount = useUnitAmount(minCapacity);
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -278,7 +271,6 @@ export const SearchResults = () => {
       date,
       sort,
       minCapacity: minCapacity || undefined,
-      minVolumeCbm: minVolumeCbm || undefined,
     })
       .then(({ trips }) => {
         if (cancelled) return;
@@ -295,7 +287,7 @@ export const SearchResults = () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromCity, toCity, date, sort, minCapacity, minVolumeCbm]);
+  }, [fromCity, toCity, date, sort, minCapacity]);
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -304,8 +296,7 @@ export const SearchResults = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const handleMinCapacityBlur = () => updateParam("minCapacity", minCapacityInput);
-  const handleMinVolumeCbmBlur = () => updateParam("minVolumeCbm", minVolumeCbmInput);
+  const handleMinCapacityBlur = () => updateParam("minCapacity", minCapacityAmount.tons);
 
   const handleNotifyMe = async () => {
     if (!user) {
@@ -364,28 +355,15 @@ export const SearchResults = () => {
             ))}
           </SortRow>
           <FilterRow>
-            <Field label="Min. capacity (tons)">
-              <Input
-                type="number"
-                min="0"
-                step="0.1"
+            <Field label="Min. capacity">
+              <UnitAmountInput
+                value={minCapacityAmount.displayValue}
+                unit={minCapacityAmount.unit}
+                onValueChange={minCapacityAmount.onValueChange}
+                onUnitChange={minCapacityAmount.onUnitChange}
                 placeholder="Any"
-                value={minCapacityInput}
-                onChange={(e) => setMinCapacityInput(e.target.value)}
                 onBlur={handleMinCapacityBlur}
                 onKeyDown={(e) => e.key === "Enter" && handleMinCapacityBlur()}
-              />
-            </Field>
-            <Field label="Min. volume (m³, optional)">
-              <Input
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="Any"
-                value={minVolumeCbmInput}
-                onChange={(e) => setMinVolumeCbmInput(e.target.value)}
-                onBlur={handleMinVolumeCbmBlur}
-                onKeyDown={(e) => e.key === "Enter" && handleMinVolumeCbmBlur()}
               />
             </Field>
           </FilterRow>
@@ -415,7 +393,13 @@ export const SearchResults = () => {
         ) : (
           <ResultList>
             {trips.map((trip, i) => (
-              <ResultCard as={Link} to={`/trips/${trip._id}`} key={trip._id} $i={i} $interactive>
+              <ResultCard
+                as={Link}
+                to={minCapacity ? `/trips/${trip._id}?capacity=${minCapacity}` : `/trips/${trip._id}`}
+                key={trip._id}
+                $i={i}
+                $interactive
+              >
                 <ResultRow>
                   <TimeCol>
                     <TimeValue>{formatTime(trip.departureAt)}</TimeValue>
@@ -448,7 +432,6 @@ export const SearchResults = () => {
                     </Row>
                     <BadgeRow>
                       <span>Available: {formatTons(trip.availableCapacity)}</span>
-                      {trip.volumeCbm != null && <span>Volume: {formatCbm(trip.availableVolumeCbm)}</span>}
                     </BadgeRow>
                   </InfoCol>
 

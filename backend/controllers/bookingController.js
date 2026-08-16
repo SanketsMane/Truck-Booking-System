@@ -10,13 +10,11 @@ const smsProvider = require("../utils/smsProvider");
 const emailProvider = require("../utils/emailProvider");
 const { bookingConfirmedEmail } = require("../emailTemplates/templates");
 const sendServerError = require("../utils/sendServerError");
-const { applyWalletEntry, withWalletSession } = require("../utils/walletService");
-const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
+const { markBookingCancelled } = require("../utils/bookingCancellation");
 const { getBrandName } = require("../utils/brandingCache");
 const {
   BOOKING_RESPONSE_WINDOW_HOURS,
   CANCELLATION_WINDOW_HOURS,
-  PAYMENT_WINDOW_HOURS,
 } = require("../config/marketplaceConfig");
 const {
   createBookingValidation,
@@ -71,7 +69,7 @@ const createBooking = async (req, res) => {
     await expireStalePendingBookings({ trip: trip._id });
 
     const heldMap = await getPendingHeldMap([trip._id]);
-    const held = heldMap.get(String(trip._id)) || { capacity: 0, volume: 0 };
+    const held = heldMap.get(String(trip._id)) || { capacity: 0 };
     const visibleAvailable = trip.availableCapacity - held.capacity;
 
     if (req.body.capacityRequested > visibleAvailable) {
@@ -81,16 +79,6 @@ const createBooking = async (req, res) => {
       });
     }
 
-    if (trip.availableVolumeCbm != null && req.body.volumeRequested != null) {
-      const visibleAvailableVolume = trip.availableVolumeCbm - held.volume;
-      if (req.body.volumeRequested > visibleAvailableVolume) {
-        return res.status(400).json({
-          success: false,
-          msg: `Only ${Math.max(visibleAvailableVolume, 0)} m³ available on this trip right now`,
-        });
-      }
-    }
-
     const respondByCandidate = new Date(Date.now() + BOOKING_RESPONSE_WINDOW_HOURS * 60 * 60 * 1000);
     const respondBy = respondByCandidate < trip.departureAt ? respondByCandidate : trip.departureAt;
 
@@ -98,7 +86,6 @@ const createBooking = async (req, res) => {
       trip: trip._id,
       shipper: req.auth.id,
       capacityRequested: req.body.capacityRequested,
-      volumeRequested: req.body.volumeRequested,
       goodsDescription: req.body.goodsDescription,
       handlingNotes: req.body.handlingNotes,
       pickupPoint: req.body.pickupPoint || trip.pickupPoint,
@@ -145,10 +132,6 @@ const acceptBooking = async (req, res) => {
 
     const acceptFilter = { _id: trip._id, availableCapacity: { $gte: booking.capacityRequested } };
     const acceptInc = { availableCapacity: -booking.capacityRequested };
-    if (trip.availableVolumeCbm != null && booking.volumeRequested) {
-      acceptFilter.availableVolumeCbm = { $gte: booking.volumeRequested };
-      acceptInc.availableVolumeCbm = -booking.volumeRequested;
-    }
     const updatedTrip = await Trip.findOneAndUpdate(acceptFilter, { $inc: acceptInc }, { new: true });
     if (!updatedTrip) {
       return res.status(409).json({ success: false, msg: "Not enough capacity left on this trip to accept" });
@@ -158,9 +141,7 @@ const acceptBooking = async (req, res) => {
       await updatedTrip.save();
     }
 
-    const paymentDueByCandidate = new Date(Date.now() + PAYMENT_WINDOW_HOURS * 60 * 60 * 1000);
     booking.status = "confirmed";
-    booking.paymentDueBy = paymentDueByCandidate < trip.departureAt ? paymentDueByCandidate : trip.departureAt;
     await booking.save();
 
     await notify(booking.shipper, "booking_confirmed", { bookingId: booking._id, tripId: trip._id });
@@ -266,10 +247,7 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    // A paid-but-not-yet-completed booking gets refunded into the shipper's
-    // wallet — always the ShareTruck wallet, never back to the original
-    // card/UPI instrument (no Razorpay Refunds API integration in this pass).
-    const { wasPaid } = await cancelBookingWithRefund(booking, {
+    await markBookingCancelled(booking, {
       cancelledBy: req.auth.id,
       reason: req.body.reason,
     });
@@ -280,9 +258,6 @@ const cancelBooking = async (req, res) => {
     // flip below is idempotent (both racers would write the same target
     // value), so it doesn't need the same treatment.
     const releaseInc = { availableCapacity: booking.capacityRequested };
-    if (trip.availableVolumeCbm != null && booking.volumeRequested) {
-      releaseInc.availableVolumeCbm = booking.volumeRequested;
-    }
     const updatedTrip = await Trip.findOneAndUpdate(
       { _id: trip._id },
       { $inc: releaseInc },
@@ -295,9 +270,6 @@ const cancelBooking = async (req, res) => {
 
     const otherParty = isShipper ? trip.transporter : booking.shipper;
     await notify(otherParty, "booking_cancelled", { bookingId: booking._id, tripId: trip._id });
-    if (wasPaid) {
-      await notify(booking.shipper, "wallet_credited", { bookingId: booking._id, amount: booking.priceEstimate, reason: "refund" });
-    }
 
     res.status(200).json({ success: true, msg: "Booking cancelled", booking });
   } catch (error) {
@@ -319,9 +291,6 @@ const confirmPickup = async (req, res) => {
     }
     if (booking.status !== "confirmed") {
       return res.status(400).json({ success: false, msg: `Booking must be confirmed to start (currently ${booking.status})` });
-    }
-    if (booking.paymentStatus !== "paid") {
-      return res.status(400).json({ success: false, msg: "Payment is required before pickup can be confirmed" });
     }
 
     booking.status = "ongoing";
@@ -352,47 +321,10 @@ const confirmDrop = async (req, res) => {
     if (booking.status !== "ongoing") {
       return res.status(400).json({ success: false, msg: `Booking must be ongoing to complete (currently ${booking.status})` });
     }
-    // Defensive re-check — confirmPickup already required paymentStatus
-    // "paid" to reach "ongoing" at all, but the two calls can happen days
-    // apart and this is the exact point money actually moves.
-    if (booking.paymentStatus !== "paid") {
-      return res.status(400).json({ success: false, msg: "This booking was never paid — cannot release funds" });
-    }
 
-    // Commission split: platform takes its configured % of the fare, the
-    // rest lands in the transporter's wallet — both as credit-only ledger
-    // rows (the shipper's side was already debited, or never touched via
-    // wallet, at payment time; see walletService for the accounting).
-    const settings = await PlatformSetting.getSettings();
-    const commissionAmount = Math.round(booking.priceEstimate * (settings.commissionPercent / 100) * 100) / 100;
-    const transporterAmount = Math.round((booking.priceEstimate - commissionAmount) * 100) / 100;
-
-    await withWalletSession(async (session) => {
-      if (transporterAmount > 0) {
-        await applyWalletEntry({
-          walletFilter: { ownerType: "user", user: trip.transporter },
-          amount: transporterAmount,
-          direction: "credit",
-          type: "payout_credit",
-          booking: booking._id,
-          session,
-        });
-      }
-      if (commissionAmount > 0) {
-        await applyWalletEntry({
-          walletFilter: { ownerType: "platform", user: null },
-          amount: commissionAmount,
-          direction: "credit",
-          type: "commission_earned",
-          booking: booking._id,
-          session,
-        });
-      }
-
-      booking.status = "completed";
-      booking.dropConfirmedAt = new Date();
-      await booking.save({ session });
-    });
+    booking.status = "completed";
+    booking.dropConfirmedAt = new Date();
+    await booking.save();
 
     if (trip) {
       const remainingActive = await Booking.countDocuments({ trip: trip._id, status: { $in: ["confirmed", "ongoing"] } });
@@ -406,7 +338,6 @@ const confirmDrop = async (req, res) => {
     await notify(otherParty, "booking_completed", { bookingId: booking._id });
     await notify(booking.shipper, "rating_prompt", { bookingId: booking._id });
     await notify(trip.transporter, "rating_prompt", { bookingId: booking._id });
-    await notify(trip.transporter, "wallet_credited", { bookingId: booking._id, amount: transporterAmount });
 
     res.status(200).json({ success: true, msg: "Drop confirmed — booking completed", booking });
   } catch (error) {

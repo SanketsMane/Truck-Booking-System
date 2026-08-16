@@ -9,14 +9,13 @@ import * as verificationApi from "../api/verification";
 import * as notificationsApi from "../api/notifications";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from "../utils/webPush";
-import { getMyPayoutMethod, savePayoutMethod } from "../api/wallet";
 import { PageContainer, SectionTitle, Stack, Row, Muted } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Field, Input, Select } from "../components/ui/Form";
 import { StatusBadge } from "../components/ui/Badge";
 import { Spinner } from "../components/ui/Spinner";
-import { formatDate, ratingLabel, maskAccountNumber } from "../utils/format";
+import { formatDate, ratingLabel } from "../utils/format";
 
 const ROLE_LABELS = { shipper: "Shipper", transporter: "Transporter" };
 
@@ -324,143 +323,6 @@ const PasswordCard = ({ user, refreshUser }) => {
             </Row>
           </Stack>
         </form>
-      </Stack>
-    </Card>
-  );
-};
-
-// Saved once here, reused to prefill the withdrawal form on the Wallet page
-// (see Wallet.jsx) instead of retyping bank/UPI details on every request.
-const PayoutMethodCard = () => {
-  const [saved, setSaved] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [method, setMethod] = useState("upi");
-  const [upiId, setUpiId] = useState("");
-  const [accountHolderName, setAccountHolderName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [ifscCode, setIfscCode] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const applySaved = (value) => {
-    setSaved(value);
-    if (value) {
-      setMethod(value.method);
-      setUpiId(value.upiId || "");
-      setAccountHolderName(value.bankDetails?.accountHolderName || "");
-      setAccountNumber(value.bankDetails?.accountNumber || "");
-      setIfscCode(value.bankDetails?.ifscCode || "");
-    }
-    setEditing(!value);
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { payoutMethod } = await getMyPayoutMethod();
-        applySaved(payoutMethod);
-      } catch (error) {
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (method === "upi" && !upiId.trim()) {
-      toast.error("Enter your UPI ID");
-      return;
-    }
-    if (method === "bank" && (!accountHolderName.trim() || !accountNumber.trim() || !ifscCode.trim())) {
-      toast.error("Fill in your bank account details");
-      return;
-    }
-    setSaving(true);
-    try {
-      const { payoutMethod } = await savePayoutMethod({
-        payoutMethod: method,
-        upiId: method === "upi" ? upiId.trim() : undefined,
-        bankDetails:
-          method === "bank"
-            ? { accountHolderName: accountHolderName.trim(), accountNumber: accountNumber.trim(), ifscCode: ifscCode.trim() }
-            : undefined,
-      });
-      applySaved(payoutMethod);
-      toast.success("Payout method saved");
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card>
-      <Stack $gap={3}>
-        <SectionTitle>Payout method</SectionTitle>
-        <Muted>
-          Save your bank or UPI details once — we'll use them to prefill your next withdrawal request from Wallet.
-        </Muted>
-
-        {loading ? (
-          <Row style={{ justifyContent: "center", padding: "20px 0" }}>
-            <Spinner $size={22} />
-          </Row>
-        ) : !editing ? (
-          <CardRow>
-            <Stack $gap={0}>
-              <strong>{saved.method === "upi" ? "UPI" : "Bank transfer"}</strong>
-              <Muted>
-                {saved.method === "upi" ? saved.upiId : `${saved.bankDetails?.accountHolderName} · ${maskAccountNumber(saved.bankDetails?.accountNumber)}`}
-              </Muted>
-            </Stack>
-            <Button type="button" $variant="secondary" $size="sm" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          </CardRow>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <Stack $gap={2}>
-              <Field label="Payout method">
-                <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-                  <option value="upi">UPI</option>
-                  <option value="bank">Bank transfer</option>
-                </Select>
-              </Field>
-
-              {method === "upi" ? (
-                <Field label="UPI ID">
-                  <Input placeholder="yourname@upi" value={upiId} onChange={(e) => setUpiId(e.target.value)} />
-                </Field>
-              ) : (
-                <>
-                  <Field label="Account holder name">
-                    <Input value={accountHolderName} onChange={(e) => setAccountHolderName(e.target.value)} />
-                  </Field>
-                  <Field label="Account number">
-                    <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
-                  </Field>
-                  <Field label="IFSC code">
-                    <Input value={ifscCode} onChange={(e) => setIfscCode(e.target.value)} />
-                  </Field>
-                </>
-              )}
-
-              <Row $gap={2}>
-                <Button type="submit" $size="sm" disabled={saving}>
-                  {saving ? "Saving…" : "Save payout method"}
-                </Button>
-                {saved && (
-                  <Button type="button" $variant="ghost" $size="sm" onClick={() => applySaved(saved)}>
-                    Cancel
-                  </Button>
-                )}
-              </Row>
-            </Stack>
-          </form>
-        )}
       </Stack>
     </Card>
   );
@@ -839,8 +701,6 @@ export const Profile = () => {
             )}
           </Stack>
         </Card>
-
-        {user.roles?.includes("transporter") && <PayoutMethodCard />}
 
         <PushNotificationsCard />
         <NotificationPreferencesCard user={user} refreshUser={refreshUser} />

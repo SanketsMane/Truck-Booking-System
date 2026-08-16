@@ -38,7 +38,6 @@ test.describe.configure({ mode: "serial" });
 let adminApi;
 let transporterApi;
 let trip;
-let shipperId;
 let shipperStorageState;
 
 test.beforeAll(async () => {
@@ -115,8 +114,6 @@ const openAuthenticatedPage = async (browser, apiContext) => {
 test("shipper signs up, searches, and books capacity through the real UI", async ({ page }) => {
   await signUpViaUi(page, { email: SHIPPER_EMAIL, name: "E2E Shipper", roleButtonLabel: "Ship goods" });
 
-  const meRes = await page.request.get(`${API_URL}/auth/profile`);
-  shipperId = (await meRes.json()).user.id;
   shipperStorageState = await page.context().storageState();
 
   await page.getByLabel("From city").fill(FROM_CITY);
@@ -124,7 +121,7 @@ test("shipper signs up, searches, and books capacity through the real UI", async
   // The trip departs 2 days out — the search window is only ±1 day
   // (marketplaceConfig.SEARCH_DATE_RANGE_DAYS), so the default "today"
   // date the form starts with would never match it.
-  await page.getByLabel("Date").fill(trip.departureAt.slice(0, 10));
+  await page.getByLabel("Date & time").fill(trip.departureAt.slice(0, 16));
   await page.getByRole("button", { name: "Search" }).click();
 
   await expect(page).toHaveURL(/\/search\?/);
@@ -161,23 +158,16 @@ test("transporter accepts the booking through the real UI", async ({ browser }) 
   await expect(page.getByText("confirmed", { exact: false }).first()).toBeVisible();
 });
 
-test("shipper pays, both parties confirm pickup/drop, and rate each other through the real UI", async ({
-  browser,
-}) => {
-  // Wallet funding is admin backstage, not the UI behavior under test.
+test("both parties confirm pickup/drop, and rate each other through the real UI", async ({ browser }) => {
   const listRes = await adminApi.get(`${API_URL}/admin/bookings?status=confirmed`);
   const bookings = (await listRes.json()).bookings;
   const booking = bookings.find((b) => b.trip?.fromCity === FROM_CITY);
   expect(booking).toBeTruthy();
-  await adminApi.post(`/admin/wallets/${shipperId}/adjust`, {
-    data: { amount: booking.priceEstimate, direction: "credit", reason: "e2e funding" },
-  });
 
   const shipperContext = await browser.newContext({ storageState: shipperStorageState });
   const page = await shipperContext.newPage();
   await page.goto(`/bookings/${booking._id}`);
 
-  await page.getByRole("button", { name: "Pay from wallet" }).click();
   await expect(page.getByRole("button", { name: "Confirm pickup" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm pickup" }).click();
   await expect(page.getByText("ongoing", { exact: false }).first()).toBeVisible();

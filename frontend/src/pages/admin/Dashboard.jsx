@@ -6,7 +6,7 @@ import {
   Route as RouteIcon,
   Package,
   Truck as TruckIcon,
-  IndianRupee,
+  PackageCheck,
   TrendingUp,
   TrendingDown,
   Download,
@@ -17,7 +17,7 @@ import * as adminApi from "../../api/admin";
 import { Row } from "../../components/ui/Layout";
 import { Avatar } from "../../components/ui/Avatar";
 import { Spinner } from "../../components/ui/Spinner";
-import { formatINR, formatRelative, formatDate } from "../../utils/format";
+import { formatRelative, formatDate } from "../../utils/format";
 
 const REPORTS = [
   {
@@ -26,9 +26,9 @@ const REPORTS = [
     description: "Export booking history and status data",
   },
   {
-    key: "revenue-by-route",
-    label: "Revenue by route",
-    description: "Revenue breakdown across every lane",
+    key: "bookings-by-route",
+    label: "Bookings by route",
+    description: "Booking volume across every lane",
   },
   {
     key: "user-growth",
@@ -629,9 +629,9 @@ export const Dashboard = () => {
   // Real, derived-from-data trend: this week's bookings vs. the 7 days
   // before it, both read straight off the same `bookingsTrend` array the
   // chart renders. No trend is shown for the other three KPIs — the API
-  // doesn't return historical comparisons for trips/trucks/revenue, and
-  // making one up would be exactly the kind of hardcoded number this
-  // dashboard shouldn't show.
+  // doesn't return historical comparisons for trips/trucks/completed
+  // bookings, and making one up would be exactly the kind of hardcoded
+  // number this dashboard shouldn't show.
   const bookingsWoWTrend = useMemo(() => {
     const trend = dashboard?.bookingsTrend;
     if (!trend || trend.length < 14) return null;
@@ -715,12 +715,12 @@ export const Dashboard = () => {
 
           <KpiCard>
             <KpiTop>
-              <KpiLabel>Revenue indicator</KpiLabel>
+              <KpiLabel>Completed bookings</KpiLabel>
               <KpiIconWrap>
-                <IndianRupee size={16} strokeWidth={2.2} />
+                <PackageCheck size={16} strokeWidth={2.2} />
               </KpiIconWrap>
             </KpiTop>
-            <KpiValue>{formatINR(dashboard.revenueIndicator)}</KpiValue>
+            <KpiValue>{dashboard.completedBookings}</KpiValue>
           </KpiCard>
         </KpiGrid>
       </Section>

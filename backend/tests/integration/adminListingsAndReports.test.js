@@ -1,15 +1,13 @@
 const app = require("../../app");
-const Booking = require("../../models/bookingModel");
 const { signupUser, makeAdmin, disableVerificationGate, postTestTrip } = require("../helpers");
 
 const emailFor = (seed) => `admlist${seed}@example.test`;
 
 // Covers the bulk of the /admin listing + CRUD + reporting surface —
-// listUsers/getUserDetail/listLiveTrips/listTrucks/listTrips/deactivateTrip/
-// listBookings/forceCancelBooking/getSettings/updateSettings/
-// updateCommission and the four CSV report endpoints. Admin finance/
-// integration endpoints (wallets, withdrawals, integrations) are covered
-// elsewhere. Imitates adminScopes.test.js's style throughout.
+// listUsers/getUserDetail/listTrucks/listTrips/deactivateTrip/
+// listBookings/forceCancelBooking/getSettings/updateSettings and the four
+// CSV report endpoints. Admin integration endpoints are covered elsewhere.
+// Imitates adminScopes.test.js's style throughout.
 describe("admin listings, CRUD and reports", () => {
   beforeEach(async () => {
     await disableVerificationGate();
@@ -22,7 +20,6 @@ describe("admin listings, CRUD and reports", () => {
     const calls = [
       () => agent.get("/admin/users"),
       () => agent.get(`/admin/users/${fakeId}`),
-      () => agent.get("/admin/live-trips"),
       () => agent.get("/admin/trucks"),
       () => agent.get("/admin/trips"),
       () => agent.put(`/admin/trips/${fakeId}/deactivate`).send({ reason: "x" }),
@@ -30,9 +27,8 @@ describe("admin listings, CRUD and reports", () => {
       () => agent.put(`/admin/bookings/${fakeId}/force-cancel`).send({ reason: "x" }),
       () => agent.get("/admin/settings"),
       () => agent.put("/admin/settings").send({ verificationGateEnabled: false }),
-      () => agent.put("/admin/settings/commission").send({ commissionPercent: 5 }),
       () => agent.get("/admin/reports/bookings.csv"),
-      () => agent.get("/admin/reports/revenue-by-route.csv"),
+      () => agent.get("/admin/reports/bookings-by-route.csv"),
       () => agent.get("/admin/reports/user-growth.csv"),
       () => agent.get("/admin/reports/verification-turnaround.csv"),
     ];
@@ -136,51 +132,12 @@ describe("admin listings, CRUD and reports", () => {
     expect(listRes.body.items.some((b) => String(b._id) === String(bookingId))).toBe(true);
   });
 
-  it("returns live trips only for trips with a recent GPS ping", async () => {
-    const { agent: adminAgent, user: adminUser } = await signupUser(app, { email: emailFor(40), name: "Admin" });
-    await makeAdmin(adminUser, "full");
-    const { agent: transporterAgent } = await signupUser(app, {
-      email: emailFor(41),
-      name: "Transporter",
-      roles: ["transporter"],
-    });
-    const { agent: shipperAgent } = await signupUser(app, {
-      email: emailFor(42),
-      name: "Shipper",
-      roles: ["shipper"],
-    });
-    const trip = await postTestTrip(transporterAgent);
-
-    // A trip with no location ping at all shouldn't show up in the live feed.
-    const beforePing = await adminAgent.get("/admin/live-trips");
-    expect(beforePing.status).toBe(200);
-    expect(beforePing.body.success).toBe(true);
-    expect(beforePing.body.trips.some((t) => String(t._id) === String(trip._id))).toBe(false);
-
-    // Location updates require an "ongoing" booking on the trip (see
-    // gpsAuth.test.js) — get a booking there via the real accept flow, then
-    // force it to "ongoing" the same way that test file does.
-    const bookingRes = await shipperAgent
-      .post("/bookings")
-      .send({ tripId: trip._id, capacityRequested: 2, goodsDescription: "x" });
-    const bookingId = bookingRes.body.booking._id;
-    await transporterAgent.put(`/bookings/${bookingId}/accept`);
-    await Booking.updateOne({ _id: bookingId }, { $set: { status: "ongoing", paymentStatus: "paid" } });
-
-    const pingRes = await transporterAgent.put(`/trips/${trip._id}/location`).send({ lat: 18.5, lng: 73.8 });
-    expect(pingRes.status).toBe(200);
-
-    const afterPing = await adminAgent.get("/admin/live-trips");
-    expect(afterPing.status).toBe(200);
-    expect(afterPing.body.trips.some((t) => String(t._id) === String(trip._id))).toBe(true);
-  });
-
-  it("deactivates a trip as a full-scope admin, and blocks a finance-scope admin with 403", async () => {
-    const { agent: financeAdminAgent, user: financeAdmin } = await signupUser(app, {
+  it("deactivates a trip as a full-scope admin, and blocks a support-scope admin with 403", async () => {
+    const { agent: supportAdminAgent, user: supportAdmin } = await signupUser(app, {
       email: emailFor(50),
-      name: "FinanceAdmin",
+      name: "SupportAdmin",
     });
-    await makeAdmin(financeAdmin, "finance");
+    await makeAdmin(supportAdmin, "support");
     const { agent: fullAdminAgent, user: fullAdmin } = await signupUser(app, { email: emailFor(51), name: "FullAdmin" });
     await makeAdmin(fullAdmin, "full");
     const { agent: transporterAgent } = await signupUser(app, {
@@ -190,8 +147,8 @@ describe("admin listings, CRUD and reports", () => {
     });
     const trip = await postTestTrip(transporterAgent);
 
-    const financeRes = await financeAdminAgent.put(`/admin/trips/${trip._id}/deactivate`).send({ reason: "test" });
-    expect(financeRes.status).toBe(403);
+    const supportRes = await supportAdminAgent.put(`/admin/trips/${trip._id}/deactivate`).send({ reason: "test" });
+    expect(supportRes.status).toBe(403);
 
     const fullRes = await fullAdminAgent.put(`/admin/trips/${trip._id}/deactivate`).send({ reason: "no longer needed" });
     expect(fullRes.status).toBe(200);
@@ -203,12 +160,12 @@ describe("admin listings, CRUD and reports", () => {
     expect(persisted.status).toBe("cancelled");
   });
 
-  it("force-cancels a booking as a full-scope admin, and blocks a finance-scope admin with 403", async () => {
-    const { agent: financeAdminAgent, user: financeAdmin } = await signupUser(app, {
+  it("force-cancels a booking as a full-scope admin, and blocks a support-scope admin with 403", async () => {
+    const { agent: supportAdminAgent, user: supportAdmin } = await signupUser(app, {
       email: emailFor(60),
-      name: "FinanceAdmin",
+      name: "SupportAdmin",
     });
-    await makeAdmin(financeAdmin, "finance");
+    await makeAdmin(supportAdmin, "support");
     const { agent: fullAdminAgent, user: fullAdmin } = await signupUser(app, { email: emailFor(61), name: "FullAdmin" });
     await makeAdmin(fullAdmin, "full");
     const { agent: transporterAgent } = await signupUser(app, {
@@ -227,8 +184,8 @@ describe("admin listings, CRUD and reports", () => {
       .send({ tripId: trip._id, capacityRequested: 4, goodsDescription: "Steel rods" });
     const bookingId = bookingRes.body.booking._id;
 
-    const financeRes = await financeAdminAgent.put(`/admin/bookings/${bookingId}/force-cancel`).send({ reason: "test" });
-    expect(financeRes.status).toBe(403);
+    const supportRes = await supportAdminAgent.put(`/admin/bookings/${bookingId}/force-cancel`).send({ reason: "test" });
+    expect(supportRes.status).toBe(403);
 
     const fullRes = await fullAdminAgent
       .put(`/admin/bookings/${bookingId}/force-cancel`)
@@ -242,38 +199,31 @@ describe("admin listings, CRUD and reports", () => {
     expect(persisted.status).toBe("cancelled");
   });
 
-  it("returns platform settings, updates verificationGateEnabled as full scope, and updates commission as finance scope", async () => {
+  it("returns platform settings and updates verificationGateEnabled as full scope only", async () => {
     const { agent: fullAdminAgent, user: fullAdmin } = await signupUser(app, { email: emailFor(70), name: "FullAdmin" });
     await makeAdmin(fullAdmin, "full");
-    const { agent: financeAdminAgent, user: financeAdmin } = await signupUser(app, {
+    const { agent: supportAdminAgent, user: supportAdmin } = await signupUser(app, {
       email: emailFor(71),
-      name: "FinanceAdmin",
+      name: "SupportAdmin",
     });
-    await makeAdmin(financeAdmin, "finance");
+    await makeAdmin(supportAdmin, "support");
 
     const getRes = await fullAdminAgent.get("/admin/settings");
     expect(getRes.status).toBe(200);
     expect(getRes.body.success).toBe(true);
     expect(getRes.body.settings).toHaveProperty("verificationGateEnabled");
-    expect(getRes.body.settings).toHaveProperty("commissionPercent");
     const currentGate = getRes.body.settings.verificationGateEnabled;
 
-    // A finance-scope admin is blocked from the full-only settings endpoint.
-    const financeBlocked = await financeAdminAgent.put("/admin/settings").send({ verificationGateEnabled: !currentGate });
-    expect(financeBlocked.status).toBe(403);
+    // A support-scope admin is blocked from the full-only settings endpoint.
+    const supportBlocked = await supportAdminAgent.put("/admin/settings").send({ verificationGateEnabled: !currentGate });
+    expect(supportBlocked.status).toBe(403);
 
     const putRes = await fullAdminAgent.put("/admin/settings").send({ verificationGateEnabled: !currentGate });
     expect(putRes.status).toBe(200);
     expect(putRes.body.success).toBe(true);
     expect(putRes.body.settings.verificationGateEnabled).toBe(!currentGate);
 
-    const commissionRes = await financeAdminAgent.put("/admin/settings/commission").send({ commissionPercent: 15 });
-    expect(commissionRes.status).toBe(200);
-    expect(commissionRes.body.success).toBe(true);
-    expect(commissionRes.body.settings.commissionPercent).toBe(15);
-
     const confirmRes = await fullAdminAgent.get("/admin/settings");
-    expect(confirmRes.body.settings.commissionPercent).toBe(15);
     expect(confirmRes.body.settings.verificationGateEnabled).toBe(!currentGate);
   });
 
@@ -292,14 +242,14 @@ describe("admin listings, CRUD and reports", () => {
     });
     const { agent: plainAgent } = await signupUser(app, { email: emailFor(83), name: "Plain", roles: ["shipper"] });
 
-    // Seed a booking so bookings.csv / revenue-by-route.csv have real rows,
+    // Seed a booking so bookings.csv / bookings-by-route.csv have real rows,
     // not just a header line.
     const trip = await postTestTrip(transporterAgent);
     await shipperAgent.post("/bookings").send({ tripId: trip._id, capacityRequested: 2, goodsDescription: "x" });
 
     const reportPaths = [
       "/admin/reports/bookings.csv",
-      "/admin/reports/revenue-by-route.csv",
+      "/admin/reports/bookings-by-route.csv",
       "/admin/reports/user-growth.csv",
       "/admin/reports/verification-turnaround.csv",
     ];

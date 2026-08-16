@@ -22,8 +22,8 @@ const getVapidPublicKey = (req, res) => {
 };
 
 // Public — only the display-safe subset of PlatformSetting (name/logo/
-// favicon/contact), never the sms/email/razorpay/kyc/payout integration
-// blocks. This is what every page fetches on load to render the current
+// favicon/contact), never the sms/email/kyc integration blocks. This is
+// what every page fetches on load to render the current
 // brand identity; see utils/brandingCache.js for the backend's own
 // synchronous mirror of these same fields (used in emails/SMS/push).
 const getBranding = async (req, res) => {
@@ -32,7 +32,7 @@ const getBranding = async (req, res) => {
     res.status(200).json({
       success: true,
       branding: {
-        platformName: settings.platformName || "ShareTruck",
+        platformName: settings.platformName || "Truckgee",
         logoUrl: settings.logoUrl || "",
         faviconUrl: settings.faviconUrl || "",
         contactEmail: settings.contactEmail || "",

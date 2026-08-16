@@ -110,8 +110,8 @@ const formatDateTime = (value) => {
 // default than an image: many clients block remote images until the user
 // opts in, so an <img>-only header would render as a blank box by default.
 const brandMark = (branding) => {
-  const name = branding.platformName || "ShareTruck";
-  const initial = escapeHtml((name.trim().charAt(0) || "S").toUpperCase());
+  const name = branding.platformName || "Truckgee";
+  const initial = escapeHtml((name.trim().charAt(0) || "T").toUpperCase());
   if (branding.logoUrl && /^https?:\/\//i.test(branding.logoUrl)) {
     return `<img src="${escapeHtml(branding.logoUrl)}" width="28" height="28" alt="${escapeHtml(name)}" style="display:inline-block; vertical-align:middle; border-radius:7px; object-fit:cover;" />`;
   }
@@ -123,7 +123,7 @@ const brandMark = (branding) => {
 // user data — see the individual templates).
 const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => {
   const branding = getBranding();
-  const brandName = escapeHtml(branding.platformName || "ShareTruck");
+  const brandName = escapeHtml(branding.platformName || "Truckgee");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -10,7 +10,7 @@ const geocodeAddress = async (address) => {
       limit: 1
     },
     headers: {
-      "User-Agent": "ShareTruck (solutionsformonex@gmail.com)"
+      "User-Agent": "Truckgee (solutionsformonex@gmail.com)"
     }
   });
 

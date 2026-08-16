@@ -32,13 +32,10 @@ const tripRoutes = require("./routes/tripRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const ratingRoutes = require("./routes/ratingRoutes");
-const paymentLogRoutes = require("./routes/paymentLogRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const supportRoutes = require("./routes/supportRoutes");
 const disputeRoutes = require("./routes/disputeRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-const walletRoutes = require("./routes/walletRoutes");
-const webhookRoutes = require("./routes/webhookRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const pushRoutes = require("./routes/pushRoutes");
 
@@ -68,18 +65,7 @@ app.use(
     })
 );
 
-// Middleware. The verify callback stashes the exact raw request bytes on
-// req.rawBody — needed by the Razorpay webhook handler to HMAC the payload
-// exactly as sent, since re-serializing req.body would not reproduce the
-// same bytes Razorpay signed. Cheap enough to do for every request rather
-// than adding a second, route-scoped body parser just for one endpoint.
-app.use(
-    express.json({
-        verify: (req, res, buf) => {
-            req.rawBody = buf;
-        },
-    })
-);
+app.use(express.json());
 app.use(cookieParser());
 
 // CORS
@@ -98,7 +84,7 @@ app.use(sanitizeInput);
 app.get("/", (req, res) => {
     res.status(200).json({
         success: true,
-        message: "ShareTruck backend server running successfully",
+        message: "Truckgee backend server running successfully",
         environment: process.env.NODE_ENV,
     });
 });
@@ -125,13 +111,10 @@ app.use("/trips", tripRoutes);
 app.use("/bookings", bookingRoutes);
 app.use("/chat", chatRoutes);
 app.use("/ratings", ratingRoutes);
-app.use("/payment-logs", paymentLogRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/support", supportRoutes);
 app.use("/disputes", disputeRoutes);
 app.use("/admin", adminRoutes);
-app.use("/wallet", walletRoutes);
-app.use("/webhooks", webhookRoutes);
 app.use("/meta", metaRoutes);
 app.use("/push", pushRoutes);
 

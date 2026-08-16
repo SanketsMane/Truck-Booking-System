@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import {
   Search,
   Package,
-  Wallet as WalletIcon,
   User,
   LifeBuoy,
   Truck,
@@ -10,6 +9,7 @@ import {
   Route as RouteIcon,
   ShieldCheck,
   ScrollText,
+  MessageCircle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import DashboardShell from "./DashboardShell";
@@ -24,7 +24,7 @@ import DashboardShell from "./DashboardShell";
 // shell (the public Navbar's "Admin" link isn't rendered here) — one extra
 // entry closes that dead end.
 export const DashboardLayout = () => {
-  const { user } = useAuth();
+  const { user, chatUnreadCount } = useAuth();
   const isTransporter = Boolean(user?.roles?.includes("transporter"));
 
   const nav = useMemo(() => {
@@ -49,8 +49,14 @@ export const DashboardLayout = () => {
     sections.push({
       label: "Account",
       items: [
+        {
+          to: "/chat",
+          label: "Chat",
+          description: "Messages with transporters and shippers",
+          icon: MessageCircle,
+          badge: chatUnreadCount,
+        },
         { to: "/bookings", label: "My Bookings", description: "Your booking history", icon: Package },
-        { to: "/wallet", label: "Wallet", description: "Balance and transactions", icon: WalletIcon },
         { to: "/profile", label: "Profile", description: "Account details", icon: User },
       ],
     });
@@ -71,7 +77,7 @@ export const DashboardLayout = () => {
     }
 
     return sections;
-  }, [isTransporter, user?.isAdmin]);
+  }, [isTransporter, user?.isAdmin, chatUnreadCount]);
 
   return <DashboardShell nav={nav} storageKey="dashboard-sidebar-collapsed" brandTo="/" />;
 };

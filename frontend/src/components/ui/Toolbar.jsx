@@ -4,7 +4,7 @@ import { Search, X } from "lucide-react";
 // Consumer-palette counterpart to AdminToolbar — same search+filters+clear
 // layout, themed with theme.color.* instead of theme.admin.color.* so it
 // matches the shopper-facing pages (My Bookings, My Trips, My Trucks,
-// Wallet, Support, Disputes) rather than the admin console.
+// Support, Disputes) rather than the admin console.
 export const Toolbar = styled.div`
   display: flex;
   align-items: center;

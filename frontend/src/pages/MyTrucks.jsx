@@ -1,17 +1,33 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import {
+  Plus,
+  Truck,
+  FileText,
+  Image as ImageIcon,
+  ShieldCheck,
+  ShieldAlert,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Upload,
+  Eye,
+  X,
+  CheckCircle2,
+  Weight,
+} from "lucide-react";
 import { listMyTrucks, registerTruck, addTruckDocuments, addTruckPhotos } from "../api/trucks";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { BASE_URL } from "../api/client";
-import { PageContainer, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
-import { Card } from "../components/ui/Card";
+import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
+import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
 import { Field, Input } from "../components/ui/Form";
+import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Pagination } from "../components/ui/Pagination";
-import { TableScroll, Table, Th, Td, Tr, IndexTh, IndexTd } from "../components/ui/Table";
-import { SkeletonTableRows } from "../components/ui/Skeleton";
+import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
 import {
   Toolbar,
   SearchInput,
@@ -20,6 +36,8 @@ import {
   ResultsCount,
   ClearFiltersButton,
 } from "../components/ui/Toolbar";
+import { useUnitAmount } from "../hooks/useUnitAmount";
+import { formatTons } from "../utils/format";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -32,30 +50,99 @@ const DOC_TYPES = [
 ];
 const emptyDocs = { rc: null, insurance: null, permit: null };
 
-const Header = styled(Row)`
-  justify-content: space-between;
-  margin-bottom: ${({ theme }) => theme.space(5)};
-`;
+// Small icon accent alongside each verification status badge — same
+// pattern as TripDetail's "Verified" transporter badge.
+const STATUS_ICON = { pending: Clock, verified: ShieldCheck, rejected: ShieldAlert };
+
+const docTypeLabel = (docType) => DOC_TYPES.find((d) => d.key === docType)?.label || docType;
 
 const HiddenInput = styled.input`
   display: none;
+`;
+
+const CheckIcon = styled(CheckCircle2)`
+  color: ${({ theme }) => theme.color.success};
+  flex-shrink: 0;
+`;
+
+const TruckThumb = styled.div`
+  width: 48px;
+  height: 48px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  flex-shrink: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) => theme.color.accentSoft};
+  color: ${({ theme }) => theme.color.accentStrong};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`;
+
+const RegNumber = styled.div`
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+`;
+
+const TruckMeta = styled(Row)`
+  color: ${({ theme }) => theme.color.textMuted};
+  font-size: 13.5px;
+`;
+
+const MetaItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  svg {
+    color: ${({ theme }) => theme.color.textFaint};
+  }
+`;
+
+const Callout = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  background: ${({ theme }) => theme.color.dangerSoft};
+  color: ${({ theme }) => theme.color.danger};
+  font-size: 13.5px;
+  line-height: 1.4;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+`;
+
+const PanelWrap = styled(Stack).attrs({ $gap: 4 })`
+  padding-top: ${({ theme }) => theme.space(3)};
+  border-top: 1px solid ${({ theme }) => theme.color.border};
 `;
 
 const DocRow = styled(Row)`
   padding: 10px 0;
   border-top: 1px solid ${({ theme }) => theme.color.border};
   justify-content: space-between;
+
+  &:first-child {
+    border-top: none;
+  }
 `;
 
 const PhotoThumb = styled.img`
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   object-fit: cover;
   border-radius: ${({ theme }) => theme.radius.md};
-`;
-
-const DetailRow = styled.tr`
-  background: ${({ theme }) => theme.color.surfaceRaised};
+  border: 1px solid ${({ theme }) => theme.color.border};
 `;
 
 // Uploads the file immediately on selection (the backend needs a fileId to
@@ -92,13 +179,14 @@ const DocumentUploadField = ({ docType, label, required, doc, onUploaded, onUplo
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
         >
+          <Upload size={14} strokeWidth={2.2} />
           {uploading ? "Uploading…" : doc?.fileId ? "Replace file" : "Choose file"}
         </Button>
         {doc?.fileName && (
-          <Muted>
-            {doc.fileId ? "✓ " : ""}
-            {doc.fileName}
-          </Muted>
+          <Row $gap={1}>
+            {doc.fileId && <CheckIcon size={14} strokeWidth={2.2} />}
+            <Muted>{doc.fileName}</Muted>
+          </Row>
         )}
       </Row>
       <HiddenInput ref={inputRef} type="file" accept="image/*,application/pdf" onChange={handleChange} />
@@ -172,15 +260,20 @@ const PhotoUploadField = ({ photos, setPhotos }) => {
       <Stack $gap={2}>
         <Row $gap={3} $wrap>
           <Button type="button" $variant="secondary" $size="sm" onClick={() => inputRef.current?.click()} disabled={uploading}>
+            <ImageIcon size={14} strokeWidth={2.2} />
             {uploading ? "Uploading…" : "Add photos"}
           </Button>
         </Row>
         {photos.length > 0 && (
           <Stack $gap={1}>
             {photos.map((p) => (
-              <Row key={p.fileId} $gap={2}>
-                <Muted>✓ {p.fileName}</Muted>
+              <Row key={p.fileId} $gap={2} style={{ justifyContent: "space-between" }}>
+                <Row $gap={1}>
+                  <CheckIcon size={14} strokeWidth={2.2} />
+                  <Muted>{p.fileName}</Muted>
+                </Row>
                 <Button type="button" $variant="ghost" $size="sm" onClick={() => handleRemove(p.fileId)}>
+                  <X size={13} strokeWidth={2.2} />
                   Remove
                 </Button>
               </Row>
@@ -197,7 +290,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
   const [regNumber, setRegNumber] = useState("");
   const [truckType, setTruckType] = useState("");
   const [bodyType, setBodyType] = useState("");
-  const [totalCapacity, setTotalCapacity] = useState("");
+  const totalCapacityAmount = useUnitAmount();
   const [docs, setDocs] = useState(emptyDocs);
   const [photos, setPhotos] = useState([]);
   const [errors, setErrors] = useState({});
@@ -209,7 +302,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
     const nextErrors = {};
     if (!regNumber.trim()) nextErrors.regNumber = "Enter the truck's registration number";
     if (!truckType.trim()) nextErrors.truckType = "Enter or pick a truck type";
-    if (!totalCapacity || Number(totalCapacity) <= 0) nextErrors.totalCapacity = "Enter a valid capacity in tons";
+    if (!totalCapacityAmount.tons || Number(totalCapacityAmount.tons) <= 0) nextErrors.totalCapacity = "Enter a valid capacity";
     if (!docs.rc?.fileId) nextErrors.rc = "Upload the RC to register this truck";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -220,7 +313,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
         regNumber: regNumber.trim(),
         truckType: truckType.trim(),
         bodyType: bodyType.trim(),
-        totalCapacity: Number(totalCapacity),
+        totalCapacity: Number(totalCapacityAmount.tons),
         documents: collectDocuments(docs),
         photos: photos.map((p) => ({ fileId: p.fileId })),
       });
@@ -234,7 +327,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
   };
 
   return (
-    <Card style={{ marginBottom: 24 }}>
+    <Card>
       <SectionTitle style={{ marginBottom: 16 }}>Register a truck</SectionTitle>
       <form onSubmit={handleSubmit}>
         <Field label="Registration number" error={errors.regNumber}>
@@ -273,14 +366,13 @@ const RegisterTruckForm = ({ onRegistered }) => {
           </datalist>
         </Field>
 
-        <Field label="Total capacity (tons)" error={errors.totalCapacity}>
-          <Input
-            type="number"
-            min="0"
-            step="0.1"
+        <Field label="Total capacity" error={errors.totalCapacity}>
+          <UnitAmountInput
+            value={totalCapacityAmount.displayValue}
+            unit={totalCapacityAmount.unit}
+            onValueChange={totalCapacityAmount.onValueChange}
+            onUnitChange={totalCapacityAmount.onUnitChange}
             placeholder="e.g. 9"
-            value={totalCapacity}
-            onChange={(e) => setTotalCapacity(e.target.value)}
           />
         </Field>
 
@@ -297,9 +389,10 @@ const RegisterTruckForm = ({ onRegistered }) => {
 };
 
 // The full management panel for one truck — photos, documents, add-photos
-// form, rejected-truck resubmit form. Rendered inside an expanded table row
-// (see MyTrucks below) rather than its own Card, so the table stays the
-// primary at-a-glance view and this only takes up space once opened.
+// form, rejected-truck resubmit form. Rendered inline under the truck's
+// card once "Manage" is expanded, rather than its own Card, so the truck
+// list stays the primary at-a-glance view and this only takes up space
+// once opened.
 const TruckDetailPanel = ({ truck, onUpdated }) => {
   const [showResubmit, setShowResubmit] = useState(false);
   const [docs, setDocs] = useState(emptyDocs);
@@ -362,7 +455,7 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
   };
 
   return (
-    <Stack $gap={3} style={{ padding: "12px 4px" }}>
+    <PanelWrap>
       {truck.photos?.length > 0 && (
         <Row $gap={2} $wrap>
           {truck.photos.map((photo, i) => (
@@ -375,8 +468,12 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
         <Stack $gap={0}>
           {truck.documents.map((doc, i) => (
             <DocRow key={`${doc.docType}-${i}`} $gap={3}>
-              <Muted style={{ textTransform: "capitalize" }}>{doc.docType}</Muted>
+              <Row $gap={2}>
+                <FileText size={15} strokeWidth={2} />
+                <span>{docTypeLabel(doc.docType)}</span>
+              </Row>
               <Button type="button" $variant="ghost" $size="sm" onClick={() => handleView(doc)}>
+                <Eye size={14} strokeWidth={2.2} />
                 View
               </Button>
             </DocRow>
@@ -387,7 +484,8 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
       <Stack $gap={3}>
         {!showAddPhotos ? (
           <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowAddPhotos(true)}>
-            + Add photos
+            <ImageIcon size={14} strokeWidth={2.2} />
+            Add photos
           </Button>
         ) : (
           <form onSubmit={handleAddPhotos}>
@@ -436,9 +534,103 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
           )}
         </Stack>
       )}
-    </Stack>
+    </PanelWrap>
   );
 };
+
+// One truck's at-a-glance summary — photo/type thumb, reg number, status,
+// and document/photo/capacity counts — with the full management panel
+// (TruckDetailPanel) tucked behind "Manage" so the list stays scannable.
+const TruckCard = ({ truck, expanded, onToggle, onUpdated }) => {
+  const StatusIcon = STATUS_ICON[truck.status];
+  const docCount = truck.documents?.length || 0;
+  const photoCount = truck.photos?.length || 0;
+
+  return (
+    <Card>
+      <Stack $gap={3}>
+        <CardRow>
+          <Row $gap={3}>
+            <TruckThumb>
+              {truck.photos?.[0]?.url ? (
+                <img src={`${BASE_URL}${truck.photos[0].url}`} alt="" loading="lazy" />
+              ) : (
+                <Truck size={20} strokeWidth={2.2} />
+              )}
+            </TruckThumb>
+            <Stack $gap={1}>
+              <RegNumber>{truck.regNumber}</RegNumber>
+              <Muted>
+                {truck.truckType}
+                {truck.bodyType ? ` · ${truck.bodyType}` : ""}
+              </Muted>
+            </Stack>
+          </Row>
+          <StatusBadge status={truck.status}>
+            {StatusIcon && <StatusIcon size={12} strokeWidth={2.4} style={{ marginRight: 4, verticalAlign: -2 }} />}
+            {truck.status}
+          </StatusBadge>
+        </CardRow>
+
+        <TruckMeta $gap={4} $wrap>
+          <MetaItem>
+            <Weight size={14} strokeWidth={2} />
+            {formatTons(truck.totalCapacity)}
+          </MetaItem>
+          <MetaItem>
+            <FileText size={14} strokeWidth={2} />
+            {docCount} document{docCount === 1 ? "" : "s"}
+          </MetaItem>
+          <MetaItem>
+            <ImageIcon size={14} strokeWidth={2} />
+            {photoCount} photo{photoCount === 1 ? "" : "s"}
+          </MetaItem>
+        </TruckMeta>
+
+        {truck.status === "rejected" && truck.rejectReason && (
+          <Callout>
+            <ShieldAlert size={15} strokeWidth={2.2} />
+            <span>{truck.rejectReason}</span>
+          </Callout>
+        )}
+
+        <Row>
+          <Button type="button" $variant="secondary" $size="sm" onClick={onToggle}>
+            {expanded ? "Close" : "Manage"}
+            {expanded ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
+          </Button>
+        </Row>
+
+        {expanded && <TruckDetailPanel truck={truck} onUpdated={onUpdated} />}
+      </Stack>
+    </Card>
+  );
+};
+
+// Mirrors TruckCard's shape (thumb + reg number/type, status badge, meta
+// row) so the loading state previews the real content instead of a plain
+// spinner.
+const TruckCardSkeleton = () => (
+  <Card>
+    <Stack $gap={3}>
+      <CardRow>
+        <Row $gap={3}>
+          <SkeletonBlock $width="48px" $height="48px" $radius="10px" />
+          <Stack $gap={1}>
+            <SkeletonText $width="130px" $size="16px" />
+            <SkeletonBlock $width="90px" $height="12px" />
+          </Stack>
+        </Row>
+        <SkeletonBlock $width="72px" $height="20px" $radius="999px" />
+      </CardRow>
+      <Row $gap={4}>
+        <SkeletonBlock $width="55px" $height="12px" />
+        <SkeletonBlock $width="80px" $height="12px" />
+        <SkeletonBlock $width="65px" $height="12px" />
+      </Row>
+    </Stack>
+  </Card>
+);
 
 export const MyTrucks = () => {
   const [trucks, setTrucks] = useState([]);
@@ -488,127 +680,100 @@ export const MyTrucks = () => {
 
   return (
     <PageContainer style={{ maxWidth: 1080 }}>
-      <Header $gap={3} $wrap>
-        <Button type="button" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? "Cancel" : "+ Register a truck"}
-        </Button>
-      </Header>
+      <Stack $gap={5}>
+        <Row $gap={3} $wrap style={{ justifyContent: "space-between" }}>
+          <Stack $gap={1}>
+            <PageTitle>My trucks</PageTitle>
+            <Muted>Register your trucks, upload documents, and track verification status.</Muted>
+          </Stack>
+          <Button type="button" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? (
+              "Cancel"
+            ) : (
+              <>
+                <Plus size={16} strokeWidth={2.4} />
+                Register a truck
+              </>
+            )}
+          </Button>
+        </Row>
 
-      {showForm && <RegisterTruckForm onRegistered={handleRegistered} />}
+        {showForm && <RegisterTruckForm onRegistered={handleRegistered} />}
 
-      <Toolbar>
-        <SearchInput
-          placeholder="Search by reg number or type…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-        <ToolbarSelect
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="verified">Verified</option>
-          <option value="rejected">Rejected</option>
-        </ToolbarSelect>
-        <ToolbarSpacer />
-        {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
-        {!loading && <ResultsCount>{total} truck{total === 1 ? "" : "s"}</ResultsCount>}
-      </Toolbar>
+        <Toolbar>
+          <SearchInput
+            placeholder="Search by reg number or type…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+          <ToolbarSelect
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+          </ToolbarSelect>
+          <ToolbarSpacer />
+          {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
+          {!loading && <ResultsCount>{total} truck{total === 1 ? "" : "s"}</ResultsCount>}
+        </Toolbar>
 
-      <Card $padding="0">
         {!loading && paged.length === 0 ? (
-          <EmptyState style={{ margin: 20 }}>
+          <EmptyState>
+            <Truck size={26} strokeWidth={1.6} />
             <Muted>
               {trucks.length === 0
                 ? "You haven't registered any trucks yet. Register one to start posting trips."
                 : "No trucks match these filters."}
             </Muted>
+            {trucks.length === 0 && (
+              <Button type="button" $size="sm" onClick={() => setShowForm(true)} style={{ marginTop: 4 }}>
+                <Plus size={14} strokeWidth={2.4} />
+                Register a truck
+              </Button>
+            )}
           </EmptyState>
         ) : (
           <>
-            <TableScroll>
-              <Table $minWidth="760px">
-                <thead>
-                  <tr>
-                    <IndexTh>#</IndexTh>
-                    <Th>Reg number</Th>
-                    <Th>Type</Th>
-                    <Th>Capacity</Th>
-                    <Th>Docs</Th>
-                    <Th>Photos</Th>
-                    <Th>Status</Th>
-                    <Th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <SkeletonTableRows rows={pageSize > 10 ? 10 : pageSize} cols={8} />
-                  ) : (
-                    paged.map((truck, i) => (
-                      <Fragment key={truck._id}>
-                        <Tr>
-                          <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
-                          <Td>{truck.regNumber}</Td>
-                          <Td>
-                            {truck.truckType}
-                            {truck.bodyType ? ` · ${truck.bodyType}` : ""}
-                          </Td>
-                          <Td>{truck.totalCapacity} tons</Td>
-                          <Td>{truck.documents?.length || 0}</Td>
-                          <Td>{truck.photos?.length || 0}</Td>
-                          <Td>
-                            <StatusBadge status={truck.status} />
-                          </Td>
-                          <Td>
-                            <Button
-                              type="button"
-                              $variant="ghost"
-                              $size="sm"
-                              onClick={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
-                            >
-                              {expandedId === truck._id ? "Close" : "Manage"}
-                            </Button>
-                          </Td>
-                        </Tr>
-                        {expandedId === truck._id && (
-                          <DetailRow>
-                            <Td colSpan={8}>
-                              <TruckDetailPanel truck={truck} onUpdated={handleTruckUpdated} />
-                            </Td>
-                          </DetailRow>
-                        )}
-                      </Fragment>
-                    ))
-                  )}
-                </tbody>
-              </Table>
-            </TableScroll>
-            <div style={{ padding: "0 20px 16px" }}>
-              {!loading && (
-                <Pagination
-                  page={page}
-                  pages={pages}
-                  total={total}
-                  onPageChange={setPage}
-                  pageSize={pageSize}
-                  onPageSizeChange={(n) => {
-                    setPageSize(n);
-                    setPage(1);
-                  }}
-                  pageSizeOptions={PAGE_SIZE_OPTIONS}
-                />
-              )}
-            </div>
+            <Stack $gap={3}>
+              {loading
+                ? Array.from({ length: Math.min(pageSize, 6) }).map((_, i) => <TruckCardSkeleton key={i} />)
+                : paged.map((truck) => (
+                    <TruckCard
+                      key={truck._id}
+                      truck={truck}
+                      expanded={expandedId === truck._id}
+                      onToggle={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
+                      onUpdated={handleTruckUpdated}
+                    />
+                  ))}
+            </Stack>
+
+            {!loading && (
+              <Pagination
+                page={page}
+                pages={pages}
+                total={total}
+                onPageChange={setPage}
+                pageSize={pageSize}
+                onPageSizeChange={(n) => {
+                  setPageSize(n);
+                  setPage(1);
+                }}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+              />
+            )}
           </>
         )}
-      </Card>
+      </Stack>
     </PageContainer>
   );
 };

@@ -1,14 +1,14 @@
 import { Link } from "react-router-dom";
 import styled from "styled-components";
-import { ShieldCheck, MapPin, Wallet as WalletIcon } from "lucide-react";
+import { ShieldCheck, MapPin, Gift } from "lucide-react";
 import heroTruckSrc from "../assets/hero-truck.png";
 import { useBranding } from "../context/BrandingContext";
 import { BrandLogo } from "../components/ui/BrandLogo";
 
 const FEATURES = [
   { icon: ShieldCheck, text: "Every transporter and shipper is KYC-verified before they can book" },
-  { icon: MapPin, text: "Track your shipment live on the map from pickup to drop" },
-  { icon: WalletIcon, text: "Pay and get paid through a secure in-app wallet" },
+  { icon: MapPin, text: "Follow your booking's status from pickup to drop" },
+  { icon: Gift, text: "100% free — no commission on any booking" },
 ];
 
 // Auth gets its own full-screen shell — same "not nested under the

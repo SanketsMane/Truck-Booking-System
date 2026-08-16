@@ -11,7 +11,6 @@ const locationPointValidation = Joi.object({
 const createBookingValidation = Joi.object({
   tripId: Joi.string().hex().length(24).required(),
   capacityRequested: Joi.number().positive().required(),
-  volumeRequested: Joi.number().positive().optional(),
   goodsDescription: Joi.string().trim().required(),
   handlingNotes: Joi.string().trim().allow(""),
   pickupPoint: locationPointValidation,

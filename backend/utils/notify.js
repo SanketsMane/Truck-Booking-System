@@ -33,7 +33,7 @@ const pushCopy = (type, payload = {}) => {
     case "new_rating":
       return { body: `You received a ${payload.stars}-star rating`, url: payload.bookingId && `/bookings/${payload.bookingId}` };
     case "new_chat_message":
-      return { body: "New message", url: payload.bookingId && `/bookings/${payload.bookingId}` };
+      return { body: "New message", url: payload.threadId && `/chat/${payload.threadId}` };
     case "saved_search_match":
       return {
         body: `New trip found: ${payload.fromCity || "?"} → ${payload.toCity || "?"}`,

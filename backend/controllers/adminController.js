@@ -7,7 +7,7 @@ const PlatformSetting = require("../models/platformSettingModel");
 const UploadedFile = require("../models/uploadedFileModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
-const { cancelBookingWithRefund } = require("../utils/bookingCancellation");
+const { markBookingCancelled } = require("../utils/bookingCancellation");
 const emailProvider = require("../utils/emailProvider");
 const { accountStatusEmail } = require("../emailTemplates/templates");
 const { toCsv } = require("../utils/csv");
@@ -21,7 +21,6 @@ const {
   forceCancelBookingValidation,
   deactivateTripValidation,
   updateSettingsValidation,
-  updateCommissionValidation,
   updateBrandingValidation,
   setAdminRoleValidation,
 } = require("../validators/adminValidation");
@@ -31,15 +30,12 @@ const getDashboard = async (req, res) => {
   try {
     const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [totalTrips, totalBookings, activeTrucks, revenueAgg, bookingsTrend, topRoutes, recentBookings, recentRegistrations] =
+    const [totalTrips, totalBookings, activeTrucks, completedBookings, bookingsTrend, topRoutes, recentBookings, recentRegistrations] =
       await Promise.all([
         Trip.countDocuments(),
         Booking.countDocuments(),
         Truck.countDocuments({ status: "verified" }),
-        Booking.aggregate([
-          { $match: { status: { $in: ["confirmed", "ongoing", "completed"] } } },
-          { $group: { _id: null, total: { $sum: "$priceEstimate" } } },
-        ]),
+        Booking.countDocuments({ status: "completed" }),
         Booking.aggregate([
           { $match: { createdAt: { $gte: since30d } } },
           { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
@@ -63,7 +59,7 @@ const getDashboard = async (req, res) => {
         totalTrips,
         totalBookings,
         activeTrucks,
-        revenueIndicator: revenueAgg[0]?.total || 0,
+        completedBookings,
         bookingsTrend,
         topRoutes,
         recentBookings,
@@ -212,26 +208,6 @@ const setAdminRole = async (req, res) => {
   }
 };
 
-// Fleet overview for the live-tracking admin page — any trip that's
-// reported a GPS ping recently, regardless of its own Trip.status (which,
-// unlike Booking.status, never actually transitions to "ongoing" in this
-// codebase — see tripLocationController.js).
-const LIVE_WINDOW_MINUTES = 5;
-
-const listLiveTrips = async (req, res) => {
-  try {
-    const since = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60 * 1000);
-    const trips = await Trip.find({ "currentLocation.updatedAt": { $gte: since } })
-      .populate("transporter", "name email mobile")
-      .populate("truck", "regNumber truckType")
-      .sort({ "currentLocation.updatedAt": -1 });
-
-    res.status(200).json({ success: true, trips });
-  } catch (error) {
-    sendServerError(res, error, "adminController");
-  }
-};
-
 // FR-11.4 — list/search all registered trucks, their verification status,
 // and owning transporter. Distinct from truckController.listQueue (which is
 // pending-first, verification-workflow-focused) — this is a general
@@ -321,18 +297,11 @@ const deactivateTrip = async (req, res) => {
     const affectedBookings = await Booking.find({ trip: trip._id, status: { $in: ["pending", "confirmed"] } });
     await Promise.all(
       affectedBookings.map(async (booking) => {
-        const { wasPaid } = await cancelBookingWithRefund(booking, {
+        await markBookingCancelled(booking, {
           cancelledBy: req.auth.id,
           reason: req.body.reason,
         });
         await notify(booking.shipper, "booking_cancelled", { bookingId: booking._id, tripId: trip._id });
-        if (wasPaid) {
-          await notify(booking.shipper, "wallet_credited", {
-            bookingId: booking._id,
-            amount: booking.priceEstimate,
-            reason: "refund",
-          });
-        }
       })
     );
 
@@ -413,16 +382,13 @@ const forceCancelBooking = async (req, res) => {
     const before = booking.status;
     const wasCapacityHeld = ["confirmed", "ongoing"].includes(booking.status);
 
-    const { wasPaid } = await cancelBookingWithRefund(booking, { cancelledBy: req.auth.id, reason: req.body.reason });
+    await markBookingCancelled(booking, { cancelledBy: req.auth.id, reason: req.body.reason });
 
     if (trip && wasCapacityHeld) {
       // Atomic $inc — see bookingController.cancelBooking for why a
       // read-then-write here would be a real capacity-accounting bug under
       // concurrent cancellations.
       const releaseInc = { availableCapacity: booking.capacityRequested };
-      if (trip.availableVolumeCbm != null && booking.volumeRequested) {
-        releaseInc.availableVolumeCbm = booking.volumeRequested;
-      }
       const updatedTrip = await Trip.findOneAndUpdate(
         { _id: trip._id },
         { $inc: releaseInc },
@@ -447,13 +413,6 @@ const forceCancelBooking = async (req, res) => {
 
     await notify(booking.shipper, "booking_cancelled", { bookingId: booking._id });
     if (trip) await notify(trip.transporter, "booking_cancelled", { bookingId: booking._id });
-    if (wasPaid) {
-      await notify(booking.shipper, "wallet_credited", {
-        bookingId: booking._id,
-        amount: booking.priceEstimate,
-        reason: "refund",
-      });
-    }
 
     res.status(200).json({ success: true, msg: "Booking force-cancelled", booking });
   } catch (error) {
@@ -485,38 +444,6 @@ const updateSettings = async (req, res) => {
     });
 
     res.status(200).json({ success: true, msg: "Settings updated", settings });
-  } catch (error) {
-    sendServerError(res, error, "adminController");
-  }
-};
-
-// A dedicated endpoint rather than folding into updateSettings above —
-// that one's contract is exactly {verificationGateEnabled}; a separate
-// endpoint per settings concern (same split already used for the SMS/email
-// integration endpoints) avoids loosening an existing, working contract.
-const updateCommission = async (req, res) => {
-  try {
-    const { error } = updateCommissionValidation.validate(req.body);
-    if (error) {
-      return res.status(400).json({ success: false, msg: error.details[0].message });
-    }
-
-    const settings = await PlatformSetting.getSettings();
-    const before = settings.commissionPercent;
-    settings.commissionPercent = req.body.commissionPercent;
-    await settings.save();
-
-    await logAdminAction({
-      actor: req.auth.id,
-      action: "settings.commission.update",
-      targetType: "PlatformSetting",
-      targetId: settings._id,
-      before: { commissionPercent: before },
-      after: { commissionPercent: settings.commissionPercent },
-      scope: req.auth.adminScope,
-    });
-
-    res.status(200).json({ success: true, msg: "Commission rate updated", settings });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -565,8 +492,8 @@ const ensurePublic = async (url) => {
 
 // One endpoint for the whole branding concern (name + logo + favicon +
 // contact email/mobile) rather than one per field — matches how the
-// razorpay/sms/email integration endpoints each cover several related
-// fields under one save. Public read is GET /meta/branding
+// sms/email integration endpoints each cover several related fields under
+// one save. Public read is GET /meta/branding
 // (metaController.getBranding); this is the admin write side.
 const updateBranding = async (req, res) => {
   try {
@@ -648,7 +575,7 @@ const exportBookingsCsv = async (req, res) => {
   }
 };
 
-const exportRevenueByRouteCsv = async (req, res) => {
+const exportBookingsByRouteCsv = async (req, res) => {
   try {
     const rows = await Booking.aggregate([
       { $match: { status: { $in: ["confirmed", "ongoing", "completed"] } } },
@@ -658,17 +585,15 @@ const exportRevenueByRouteCsv = async (req, res) => {
         $group: {
           _id: { fromCity: "$tripDoc.fromCity", toCity: "$tripDoc.toCity" },
           bookings: { $sum: 1 },
-          revenue: { $sum: "$priceEstimate" },
         },
       },
-      { $sort: { revenue: -1 } },
+      { $sort: { bookings: -1 } },
     ]);
 
-    sendCsv(res, "revenue-by-route.csv", rows, [
+    sendCsv(res, "bookings-by-route.csv", rows, [
       { label: "From", value: (r) => r._id.fromCity },
       { label: "To", value: (r) => r._id.toCity },
       { label: "Bookings", value: (r) => r.bookings },
-      { label: "Revenue", value: (r) => r.revenue },
     ]);
   } catch (error) {
     sendServerError(res, error, "adminController");
@@ -719,7 +644,6 @@ module.exports = {
   getUserDetail,
   setUserStatus,
   setAdminRole,
-  listLiveTrips,
   listTrucks,
   listTrips,
   deactivateTrip,
@@ -727,10 +651,9 @@ module.exports = {
   forceCancelBooking,
   getSettings,
   updateSettings,
-  updateCommission,
   updateBranding,
   exportBookingsCsv,
-  exportRevenueByRouteCsv,
+  exportBookingsByRouteCsv,
   exportUserGrowthCsv,
   exportVerificationTurnaroundCsv,
 };

@@ -2,8 +2,8 @@ import styled from "styled-components";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 // $variant="admin" reads theme.admin.* — same additive opt-in pattern as
-// Table.jsx/Card.jsx. Wallet.jsx (the one consumer-facing usage) renders
-// exactly as before by omitting the prop.
+// Table.jsx/Card.jsx. A consumer-facing usage renders exactly as before by
+// omitting the prop.
 const Bar = styled.div`
   display: flex;
   align-items: center;
@@ -73,8 +73,8 @@ const PageSizeSelect = styled.select`
 // select), pageSizeOptions, variant="admin" (admin palette). Passing
 // onPageSizeChange also switches on the "enhanced" layout — an exact
 // "Showing X–Y of Z" range plus first/last jump buttons — regardless of
-// variant, so a consumer-palette table (e.g. Wallet.jsx) can opt into the
-// same polish as admin tables without borrowing the admin color scheme.
+// variant, so a consumer-palette table can opt into the same polish as
+// admin tables without borrowing the admin color scheme.
 export const Pagination = ({
   page,
   pages,

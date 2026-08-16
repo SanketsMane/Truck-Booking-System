@@ -14,10 +14,17 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Not required — a message can be image-only. sendMessageValidation
+    // enforces that at least one of text/image is present before this ever
+    // reaches the model.
     text: {
       type: String,
-      required: true,
       trim: true,
+      default: "",
+    },
+
+    image: {
+      url: { type: String },
     },
 
     readBy: {

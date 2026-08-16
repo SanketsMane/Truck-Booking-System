@@ -5,7 +5,7 @@ import { listAdminDisputes, resolveAdminDispute } from "../../api/disputes";
 import { getAdminBookingChat } from "../../api/admin";
 import { PageContainer, Stack, Row, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
-import { Field, Select, Input, Textarea } from "../../components/ui/Form";
+import { Field, Select, Textarea } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
 import {
@@ -31,14 +31,12 @@ import { formatDateTime, formatINR } from "../../utils/format";
 const CATEGORY_LABELS = {
   no_show: "No-show",
   damaged_goods: "Damaged goods",
-  payment_issue: "Payment issue",
   behavior: "Behavior",
   other: "Other",
 };
 
 const badgeStatus = (status) => (status === "resolved" ? "completed" : status === "rejected" ? "rejected" : "pending");
 
-const MONEY_ACTIONS = ["refund_shipper", "payout_transporter"];
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const TopTd = styled(Td)`
@@ -163,24 +161,16 @@ const ChatPanel = ({ dispute, onClose }) => {
 const ResolutionForm = ({ dispute, onCancel, onSubmit, submitting }) => {
   const [status, setStatus] = useState("resolved");
   const [resolutionAction, setResolutionAction] = useState("none");
-  const [resolutionAmount, setResolutionAmount] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
-
-  const needsAmount = MONEY_ACTIONS.includes(resolutionAction);
 
   const handleSubmit = () => {
     if (!resolutionNote.trim()) {
       toast.error("Add a resolution note");
       return;
     }
-    if (needsAmount && !(Number(resolutionAmount) > 0)) {
-      toast.error("Enter an amount for this action");
-      return;
-    }
     onSubmit(dispute._id, {
       status,
       resolutionAction,
-      resolutionAmount: needsAmount ? Number(resolutionAmount) : undefined,
       resolutionNote: resolutionNote.trim(),
     });
   };
@@ -202,25 +192,11 @@ const ResolutionForm = ({ dispute, onCancel, onSubmit, submitting }) => {
               <Field label="Action">
                 <Select value={resolutionAction} onChange={(e) => setResolutionAction(e.target.value)}>
                   <option value="none">No action</option>
-                  <option value="refund_shipper">Refund shipper</option>
-                  <option value="payout_transporter">Extra payout to transporter</option>
                   <option value="warning_issued">Warning issued</option>
                   <option value="account_suspended">Account suspended</option>
                 </Select>
               </Field>
             </div>
-            {needsAmount && (
-              <div style={{ minWidth: 140 }}>
-                <Field label="Amount (INR)">
-                  <Input
-                    type="number"
-                    min="1"
-                    value={resolutionAmount}
-                    onChange={(e) => setResolutionAmount(e.target.value)}
-                  />
-                </Field>
-              </div>
-            )}
           </Row>
           <Field label="Resolution note">
             <Textarea

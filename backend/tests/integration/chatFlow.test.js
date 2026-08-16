@@ -200,4 +200,98 @@ describe("chat flow", () => {
     const listRes = await shipperAgent.get(`/chat/${threadId}/messages`);
     expect(listRes.body.messages).toEqual([]);
   });
+
+  it("accepts an image-only message and rejects a malformed imageUrl", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(5);
+    const { bookingId } = await createAndAcceptBooking(transporterAgent, shipperAgent);
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    const bogus = await shipperAgent.post(`/chat/${threadId}/messages`).send({ imageUrl: "not-a-file-ref" });
+    expect(bogus.status).toBe(400);
+
+    const fileId = new mongoose.Types.ObjectId().toString();
+    const imageOnly = await shipperAgent.post(`/chat/${threadId}/messages`).send({ imageUrl: `/files/${fileId}` });
+    expect(imageOnly.status).toBe(201);
+    expect(imageOnly.body.message.image.url).toBe(`/files/${fileId}`);
+    expect(imageOnly.body.message.text).toBe("");
+
+    const both = await transporterAgent
+      .post(`/chat/${threadId}/messages`)
+      .send({ text: "see attached", imageUrl: `/files/${fileId}` });
+    expect(both.status).toBe(201);
+    expect(both.body.message.text).toBe("see attached");
+    expect(both.body.message.image.url).toBe(`/files/${fileId}`);
+  });
+
+  it("GET /chat/:threadId returns a populated summary for a participant, 404 for a stranger", async () => {
+    const { transporterAgent, transporter, shipperAgent } = await newActors(6);
+    const { bookingId } = await createAndAcceptBooking(transporterAgent, shipperAgent, {
+      fromCity: "Mumbai",
+      toCity: "Pune",
+    });
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    const getRes = await shipperAgent.get(`/chat/${threadId}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.thread.counterparty.name).toBe(transporter.name);
+    expect(getRes.body.thread.counterparty).not.toHaveProperty("mobile");
+    expect(getRes.body.thread.booking.trip.fromCity).toBe("Mumbai");
+    expect(getRes.body.thread.booking.status).toBe("confirmed");
+
+    const { agent: strangerAgent } = await signupUser(app, { email: emailFor(60), name: "Stranger", roles: ["shipper"] });
+    const strangerRes = await strangerAgent.get(`/chat/${threadId}`);
+    expect(strangerRes.status).toBe(404);
+  });
+
+  it("inbox: a still-pending, un-messaged thread is hidden; sending a message or accepting the booking surfaces it", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(7);
+    const trip = await postTestTrip(transporterAgent);
+    const pendingRes = await shipperAgent
+      .post("/bookings")
+      .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
+    const pendingBookingId = pendingRes.body.booking._id;
+
+    // Not yet in either side's inbox — no message, still pending.
+    const shipperInboxBefore = await shipperAgent.get("/chat/inbox");
+    expect(shipperInboxBefore.status).toBe(200);
+    expect(shipperInboxBefore.body.threads).toEqual([]);
+    const transporterInboxBefore = await transporterAgent.get("/chat/inbox");
+    expect(transporterInboxBefore.body.threads).toEqual([]);
+
+    // Transporter accepting the request is enough to surface it, with no message sent.
+    await transporterAgent.put(`/bookings/${pendingBookingId}/accept`);
+    const shipperInboxAfterAccept = await shipperAgent.get("/chat/inbox");
+    expect(shipperInboxAfterAccept.body.threads).toHaveLength(1);
+    expect(shipperInboxAfterAccept.body.threads[0].booking._id).toBe(pendingBookingId);
+    expect(shipperInboxAfterAccept.body.threads[0].unreadCount).toBe(0);
+
+    // A second, still-pending booking (never accepted) stays hidden until a message is sent.
+    const trip2 = await postTestTrip(transporterAgent, { fromCity: "Nagpur", toCity: "Indore" });
+    const pendingRes2 = await shipperAgent
+      .post("/bookings")
+      .send({ tripId: trip2._id, capacityRequested: 3, goodsDescription: "Steel rods" });
+    const pendingBookingId2 = pendingRes2.body.booking._id;
+    const threadRes2 = await shipperAgent.get(`/chat/booking/${pendingBookingId2}`);
+    const threadId2 = threadRes2.body.thread._id;
+
+    expect((await shipperAgent.get("/chat/inbox")).body.threads).toHaveLength(1);
+
+    await shipperAgent.post(`/chat/${threadId2}/messages`).send({ text: "still interested?" });
+    const shipperInboxAfterMsg = await shipperAgent.get("/chat/inbox");
+    expect(shipperInboxAfterMsg.body.threads).toHaveLength(2);
+    expect(shipperInboxAfterMsg.body.threads.map((t) => t.booking._id)).toContain(pendingBookingId2);
+
+    // Transporter's inbox now shows the message as unread, and it clears after marking read.
+    const transporterInbox = await transporterAgent.get("/chat/inbox");
+    const entry = transporterInbox.body.threads.find((t) => t.booking._id === pendingBookingId2);
+    expect(entry.unreadCount).toBe(1);
+    await transporterAgent.put(`/chat/${threadId2}/read`);
+    const transporterInboxAfterRead = await transporterAgent.get("/chat/inbox");
+    expect(transporterInboxAfterRead.body.threads.find((t) => t.booking._id === pendingBookingId2).unreadCount).toBe(0);
+
+    // Most-recently-active conversation sorts first.
+    expect(shipperInboxAfterMsg.body.threads[0].booking._id).toBe(pendingBookingId2);
+  });
 });

@@ -45,9 +45,10 @@ const Profile = lazy(() => import("../pages/Profile"));
 const Notifications = lazy(() => import("../pages/Notifications"));
 const MyBookings = lazy(() => import("../pages/MyBookings"));
 const BookingDetail = lazy(() => import("../pages/BookingDetail"));
+const ChatInbox = lazy(() => import("../pages/ChatInbox"));
+const ChatThread = lazy(() => import("../pages/ChatThread"));
 const Support = lazy(() => import("../pages/Support"));
 const Disputes = lazy(() => import("../pages/Disputes"));
-const Wallet = lazy(() => import("../pages/Wallet"));
 
 const MyTrucks = lazy(() => import("../pages/MyTrucks"));
 const PostTrip = lazy(() => import("../pages/PostTrip"));
@@ -61,10 +62,6 @@ const AdminUserDetail = lazy(() => import("../pages/admin/UserDetail"));
 const AdminTrucks = lazy(() => import("../pages/admin/Trucks"));
 const AdminTrips = lazy(() => import("../pages/admin/Trips"));
 const AdminBookings = lazy(() => import("../pages/admin/Bookings"));
-const AdminPayments = lazy(() => import("../pages/admin/Payments"));
-const AdminPlatformWallet = lazy(() => import("../pages/admin/PlatformWallet"));
-const AdminWithdrawals = lazy(() => import("../pages/admin/Withdrawals"));
-const AdminLiveTracking = lazy(() => import("../pages/admin/LiveTracking"));
 const AdminReviews = lazy(() => import("../pages/admin/Reviews"));
 const AdminSupport = lazy(() => import("../pages/admin/Support"));
 const AdminDisputes = lazy(() => import("../pages/admin/Disputes"));
@@ -211,6 +208,22 @@ export const Routing = () => (
           }
         />
         <Route
+          path="/chat"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <ChatInbox />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/chat/:threadId"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <ChatThread />
+            </Suspense>
+          }
+        />
+        <Route
           path="/support"
           element={
             <Suspense fallback={<RouteFallback />}>
@@ -223,14 +236,6 @@ export const Routing = () => (
           element={
             <Suspense fallback={<RouteFallback />}>
               <Disputes />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/wallet"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <Wallet />
             </Suspense>
           }
         />
@@ -333,38 +338,6 @@ export const Routing = () => (
           element={
             <Suspense fallback={<RouteFallback />}>
               <AdminBookings />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/admin/payments"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <AdminPayments />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/admin/platform-wallet"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <AdminPlatformWallet />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/admin/withdrawals"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <AdminWithdrawals />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/admin/live-tracking"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <AdminLiveTracking />
             </Suspense>
           }
         />

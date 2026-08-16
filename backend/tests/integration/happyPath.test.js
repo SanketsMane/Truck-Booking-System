@@ -3,7 +3,7 @@ const app = require("../../app");
 const { signupUser, makeAdmin, submitVerification } = require("../helpers");
 
 // SRS §8.3's mandated end-to-end path: signup -> verification -> trip
-// posting -> search -> booking -> accept -> pay -> pickup -> drop -> rate.
+// posting -> search -> booking -> accept -> pickup -> drop -> rate.
 // One continuous test asserting the state transition at each step, rather
 // than several independent tests re-establishing the same setup — the
 // whole point is that each step's *output* is valid input for the next.
@@ -13,7 +13,7 @@ it("walks the full shipper/transporter booking lifecycle", async () => {
     name: "Test Transporter",
     roles: ["transporter"],
   });
-  const { agent: shipperAgent, user: shipper } = await signupUser(app, {
+  const { agent: shipperAgent } = await signupUser(app, {
     email: "shipper@happypath.test",
     name: "Test Shipper",
     roles: ["shipper"],
@@ -98,36 +98,15 @@ it("walks the full shipper/transporter booking lifecycle", async () => {
   const tripAfterAccept = await request(app).get(`/trips/${tripId}`);
   expect(tripAfterAccept.body.trip.availableCapacity).toBe(15);
 
-  // --- Payment gate blocks pickup until paid ---
-  const prematurePickup = await shipperAgent.put(`/bookings/${bookingId}/confirm-pickup`);
-  expect(prematurePickup.status).toBe(400);
-
-  // --- Fund the shipper's wallet (admin credit) and pay ---
-  const creditRes = await adminAgent
-    .post(`/admin/wallets/${shipper._id}/adjust`)
-    .send({ amount: priceEstimate, direction: "credit", reason: "test funding" });
-  expect(creditRes.status).toBe(200);
-
-  const payRes = await shipperAgent.post(`/bookings/${bookingId}/pay/wallet`);
-  expect(payRes.status).toBe(200);
-  expect(payRes.body.booking.paymentStatus).toBe("paid");
-
-  // --- Pickup -> ongoing ---
+  // --- Pickup -> ongoing (no payment gate — settlement happens off-app) ---
   const pickupRes = await shipperAgent.put(`/bookings/${bookingId}/confirm-pickup`);
   expect(pickupRes.status).toBe(200);
   expect(pickupRes.body.booking.status).toBe("ongoing");
 
-  // --- Drop -> completed, commission split into transporter + platform wallets ---
+  // --- Drop -> completed ---
   const dropRes = await transporterAgent.put(`/bookings/${bookingId}/confirm-drop`);
   expect(dropRes.status).toBe(200);
   expect(dropRes.body.booking.status).toBe("completed");
-
-  const transporterWallet = await transporterAgent.get("/wallet/me");
-  // 10% default commission (PlatformSetting.commissionPercent) -> transporter nets 90%.
-  expect(transporterWallet.body.wallet.balance).toBe(4500);
-
-  const platformWallet = await adminAgent.get("/admin/platform-wallet");
-  expect(platformWallet.body.wallet.balance).toBe(500);
 
   // --- Both parties rate each other ---
   const shipperRates = await shipperAgent

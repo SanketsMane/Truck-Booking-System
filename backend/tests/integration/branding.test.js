@@ -23,7 +23,7 @@ describe("platform branding", () => {
     const res = await request(app).get("/meta/branding");
     expect(res.status).toBe(200);
     expect(res.body.branding).toEqual({
-      platformName: "ShareTruck",
+      platformName: "Truckgee",
       logoUrl: "",
       faviconUrl: "",
       contactEmail: "",
@@ -33,7 +33,7 @@ describe("platform branding", () => {
 
   it("PUT /admin/settings/branding — 403 for a non-full-scope admin", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(2), name: "Admin" });
-    await makeAdmin(user, "finance");
+    await makeAdmin(user, "support");
 
     const res = await agent.put("/admin/settings/branding").send({ platformName: "Acme Freight" });
     expect(res.status).toBe(403);

@@ -4,7 +4,6 @@ const cookie = require("cookie");
 const User = require("../models/userModel");
 const { setIO } = require("./io");
 const registerChatHandlers = require("./chatHandlers");
-const registerLocationHandlers = require("./locationHandlers");
 
 // Same checks as the HTTP authMiddleware — a banned or logged-out session
 // shouldn't be able to open (or keep) a live socket connection either.
@@ -36,7 +35,6 @@ const initSocket = (io) => {
   io.on("connection", (socket) => {
     socket.join(`user:${socket.auth.id}`);
     registerChatHandlers(io, socket);
-    registerLocationHandlers(io, socket);
   });
 };
 

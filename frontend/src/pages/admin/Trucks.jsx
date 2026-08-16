@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import styled from "styled-components";
 import { toast } from "react-toastify";
+import { ExternalLink, Truck as TruckIcon } from "lucide-react";
 import { listAdminTrucks } from "../../api/admin";
 import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
@@ -28,6 +30,21 @@ import {
 import { formatDateTime, formatTons } from "../../utils/format";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+// Same muted-icon cell treatment as admin/Trips.jsx's route/truck cells —
+// keeps the reg. number legible as "this is a vehicle" at a glance instead
+// of an unlabeled string, and ties the two truck-referencing pages together.
+const IconCell = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+
+  svg {
+    color: ${({ theme }) => theme.admin.color.textMuted};
+    flex: none;
+  }
+`;
 
 // FR-11.4 — browse/search every registered truck across the platform.
 // Deliberately no review action here (that lives on the verification
@@ -127,13 +144,24 @@ export const Trucks = () => {
                     trucks.map((t, i) => (
                       <Tr key={t._id}>
                         <IndexTd>{(page - 1) * pageSize + i + 1}</IndexTd>
-                        <Td>{t.regNumber}</Td>
+                        <Td>
+                          <IconCell>
+                            <TruckIcon size={13} strokeWidth={2.2} />
+                            {t.regNumber}
+                          </IconCell>
+                        </Td>
                         <Td>
                           {t.truckType}
                           {t.bodyType ? ` · ${t.bodyType}` : ""}
                         </Td>
                         <Td>{formatTons(t.totalCapacity)}</Td>
-                        <Td>{t.owner?.name || t.owner?.email || "—"}</Td>
+                        <Td>
+                          {t.owner ? (
+                            <Link to={`/admin/users/${t.owner._id}`}>{t.owner.name || t.owner.email || "—"}</Link>
+                          ) : (
+                            "—"
+                          )}
+                        </Td>
                         <Td>{formatDateTime(t.createdAt)}</Td>
                         <Td>
                           <StatusBadge status={t.status} />
@@ -141,6 +169,7 @@ export const Trucks = () => {
                         <Td>
                           {t.owner && (
                             <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
+                              <ExternalLink size={14} strokeWidth={2.4} />
                               View owner
                             </Button>
                           )}

@@ -17,12 +17,11 @@ import {
   ResultsCount,
   ClearFiltersButton,
 } from "../components/ui/Toolbar";
-import { formatDateTime, formatINR } from "../utils/format";
+import { formatDateTime } from "../utils/format";
 
 const CATEGORY_LABELS = {
   no_show: "No-show",
   damaged_goods: "Damaged goods",
-  payment_issue: "Payment issue",
   behavior: "Behavior",
   other: "Other",
 };
@@ -181,14 +180,8 @@ export const Disputes = () => {
                                 <Td colSpan={7}>
                                   <Stack $gap={1}>
                                     <Muted style={{ whiteSpace: "pre-wrap" }}>{d.description}</Muted>
-                                    {(d.status === "resolved" || d.status === "rejected") && (
-                                      <>
-                                        {d.resolutionNote && <Muted>Resolution: {d.resolutionNote}</Muted>}
-                                        {d.resolutionAmount > 0 && (
-                                          <Muted>Amount: {formatINR(d.resolutionAmount)}</Muted>
-                                        )}
-                                      </>
-                                    )}
+                                    {(d.status === "resolved" || d.status === "rejected") &&
+                                      d.resolutionNote && <Muted>Resolution: {d.resolutionNote}</Muted>}
                                   </Stack>
                                 </Td>
                               </DetailRow>

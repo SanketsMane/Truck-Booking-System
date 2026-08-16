@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import * as authApi from "../api/auth";
 import { connectSocket, disconnectSocket } from "../api/socket";
 import { listMyNotifications } from "../api/notifications";
+import { listInbox } from "../api/chat";
 import { describeNotification } from "../utils/notificationCopy";
 import { setUnauthorizedHandler } from "../api/client";
 
@@ -13,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const navigate = useNavigate();
   const bouncedRef = useRef(false);
 
@@ -68,11 +70,27 @@ export const AuthProvider = ({ children }) => {
   // together, so any page can read unreadCount without its own socket
   // wiring. See Navbar/DashboardShell for the badge, Notifications.jsx for
   // clearing it.
+  // Sum of each inbox conversation's unreadCount — kept live the same way
+  // as unreadCount above, but recomputed via a real inbox fetch (rather
+  // than a simple increment/decrement) whenever a thread gets marked read,
+  // since "how many are still unread across every thread" isn't knowable
+  // from a single event in isolation.
+  const refreshChatUnreadCount = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { threads } = await listInbox();
+      setChatUnreadCount((threads || []).reduce((sum, t) => sum + (t.unreadCount || 0), 0));
+    } catch {
+      // Leave the last known count in place on failure.
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) {
       disconnectSocket();
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnreadCount(0);
+      setChatUnreadCount(0);
       return undefined;
     }
 
@@ -85,9 +103,11 @@ export const AuthProvider = ({ children }) => {
         if (!cancelled) setUnreadCount(notifications?.length || 0);
       })
       .catch(() => {});
+    refreshChatUnreadCount();
 
     const handleNewNotification = (n) => {
       setUnreadCount((count) => count + 1);
+      if (n.type === "new_chat_message") setChatUnreadCount((count) => count + 1);
       const { text, to } = describeNotification(n);
       toast.info(text, to ? { onClick: () => navigate(to) } : undefined);
     };
@@ -97,7 +117,7 @@ export const AuthProvider = ({ children }) => {
       cancelled = true;
       socket.off("notification:new", handleNewNotification);
     };
-  }, [user, navigate]);
+  }, [user, navigate, refreshChatUnreadCount]);
 
   const clearUnreadCount = useCallback(() => setUnreadCount(0), []);
   const decrementUnreadCount = useCallback(() => setUnreadCount((count) => Math.max(0, count - 1)), []);
@@ -119,6 +139,8 @@ export const AuthProvider = ({ children }) => {
     unreadCount,
     clearUnreadCount,
     decrementUnreadCount,
+    chatUnreadCount,
+    refreshChatUnreadCount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

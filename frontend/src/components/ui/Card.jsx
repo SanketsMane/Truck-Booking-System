@@ -2,7 +2,7 @@ import styled, { css } from "styled-components";
 
 // $variant="admin" reads theme.admin.* instead of theme.color.* — same
 // additive opt-in pattern as Table.jsx, so the consumer-facing app's cards
-// (Home, Wallet, booking pages) render exactly as before.
+// (Home, Profile, booking pages) render exactly as before.
 export const Card = styled.div`
   background: ${({ theme, $variant }) => ($variant === "admin" ? theme.admin.color.surface : theme.color.surface)};
   border: 1px solid ${({ theme, $variant }) => ($variant === "admin" ? theme.admin.color.border : theme.color.border)};

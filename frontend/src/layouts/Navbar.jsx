@@ -258,7 +258,7 @@ export const Navbar = () => {
   return (
     <Bar ref={barRef}>
       <Brand to="/">
-        <BrandLogo size={32} iconSize={18} />
+        <BrandLogo size={40} />
         {platformName}
       </Brand>
 

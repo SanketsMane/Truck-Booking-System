@@ -1,54 +1,91 @@
 const app = require("../../app");
 const User = require("../../models/userModel");
-const { signupUser, makeAdmin } = require("../helpers");
+const { signupUser, makeAdmin, disableVerificationGate, postTestTrip } = require("../helpers");
 
 const emailFor = (seed) => `user${seed}@example.test`;
+
+beforeEach(async () => {
+  await disableVerificationGate();
+});
+
+// A dispute can only be raised on a completed booking, so the scoped-write
+// exemplar below (PUT /admin/disputes/:id/resolve, "support" scope) needs
+// one driven all the way through the lifecycle first — same pattern as
+// supportAndRatingModeration.test.js's buildCompletedRating.
+const buildDispute = async (seed) => {
+  const { agent: transporterAgent } = await signupUser(app, {
+    email: `scope-transporter-${seed}@example.test`,
+    name: "Transporter",
+    roles: ["transporter"],
+  });
+  const { agent: shipperAgent } = await signupUser(app, {
+    email: `scope-shipper-${seed}@example.test`,
+    name: "Shipper",
+    roles: ["shipper"],
+  });
+
+  const trip = await postTestTrip(transporterAgent);
+  const bookingRes = await shipperAgent
+    .post("/bookings")
+    .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
+  const bookingId = bookingRes.body.booking._id;
+
+  await transporterAgent.put(`/bookings/${bookingId}/accept`);
+  await shipperAgent.put(`/bookings/${bookingId}/confirm-pickup`);
+  await transporterAgent.put(`/bookings/${bookingId}/confirm-drop`);
+
+  const disputeRes = await shipperAgent
+    .post("/disputes")
+    .send({ bookingId, category: "no_show", description: "Truck never arrived at pickup" });
+
+  return disputeRes.body.dispute._id;
+};
 
 describe("scoped admin roles (requireAdminScope)", () => {
   it("lets any admin scope reach a read-only admin endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(1), name: "Admin" });
-    await makeAdmin(user, "finance");
+    await makeAdmin(user, "support");
 
     const res = await agent.get("/admin/dashboard");
     expect(res.status).toBe(200);
   });
 
-  it("lets a finance-scoped admin reach a finance-gated write endpoint", async () => {
+  it("lets a support-scoped admin reach a support-gated write endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(2), name: "Admin" });
-    await makeAdmin(user, "finance");
-    const { user: target } = await signupUser(app, { email: emailFor(3), name: "Target", roles: ["shipper"] });
+    await makeAdmin(user, "support");
+    const disputeId = await buildDispute(2);
 
     const res = await agent
-      .post(`/admin/wallets/${target._id}/adjust`)
-      .send({ amount: 10, direction: "credit", reason: "test" });
+      .put(`/admin/disputes/${disputeId}/resolve`)
+      .send({ status: "resolved", resolutionAction: "warning_issued", resolutionNote: "Warned the transporter" });
     expect(res.status).toBe(200);
   });
 
-  it("blocks a finance-scoped admin from a full-only write endpoint", async () => {
+  it("blocks a support-scoped admin from a full-only write endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(4), name: "Admin" });
-    await makeAdmin(user, "finance");
+    await makeAdmin(user, "support");
     const { user: target } = await signupUser(app, { email: emailFor(5), name: "Target", roles: ["shipper"] });
 
     const res = await agent.put(`/admin/users/${target._id}/status`).send({ status: "suspended", reason: "x" });
     expect(res.status).toBe(403);
   });
 
-  it("blocks a finance-scoped admin from a verification-only write endpoint", async () => {
+  it("blocks a support-scoped admin from a verification-only write endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(6), name: "Admin" });
-    await makeAdmin(user, "finance");
+    await makeAdmin(user, "support");
 
     const res = await agent.put("/trucks/000000000000000000000000/review").send({ status: "verified" });
     expect(res.status).toBe(403);
   });
 
-  it("blocks a support-scoped admin from a finance-gated write endpoint", async () => {
+  it("blocks a verification-scoped admin from a support-gated write endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(7), name: "Admin" });
-    await makeAdmin(user, "support");
-    const { user: target } = await signupUser(app, { email: emailFor(8), name: "Target", roles: ["shipper"] });
+    await makeAdmin(user, "verification");
+    const disputeId = await buildDispute(7);
 
     const res = await agent
-      .post(`/admin/wallets/${target._id}/adjust`)
-      .send({ amount: 10, direction: "credit", reason: "test" });
+      .put(`/admin/disputes/${disputeId}/resolve`)
+      .send({ status: "resolved", resolutionAction: "none", resolutionNote: "n/a" });
     expect(res.status).toBe(403);
   });
 
@@ -56,11 +93,12 @@ describe("scoped admin roles (requireAdminScope)", () => {
     const { agent, user } = await signupUser(app, { email: emailFor(9), name: "Admin" });
     await makeAdmin(user, "full");
     const { user: target } = await signupUser(app, { email: emailFor(10), name: "Target", roles: ["shipper"] });
+    const disputeId = await buildDispute(9);
 
-    const financeRes = await agent
-      .post(`/admin/wallets/${target._id}/adjust`)
-      .send({ amount: 10, direction: "credit", reason: "test" });
-    expect(financeRes.status).toBe(200);
+    const supportRes = await agent
+      .put(`/admin/disputes/${disputeId}/resolve`)
+      .send({ status: "resolved", resolutionAction: "none", resolutionNote: "n/a" });
+    expect(supportRes.status).toBe(200);
 
     const fullRes = await agent.put(`/admin/users/${target._id}/status`).send({ status: "suspended", reason: "x" });
     expect(fullRes.status).toBe(200);

@@ -5,17 +5,13 @@ import { ImagePlus } from "lucide-react";
 import {
   getAdminSettings,
   updateAdminSettings,
-  updateCommission,
   updateBranding,
   getIntegrations,
   updateSmsIntegration,
   testSmsIntegration,
   updateEmailIntegration,
   testEmailIntegration,
-  updateRazorpayIntegration,
-  testRazorpayIntegration,
   updateKycIntegration,
-  updatePayoutIntegration,
 } from "../../api/admin";
 import { uploadFile } from "../../api/files";
 import { useBranding, brandingAssetUrl } from "../../context/BrandingContext";
@@ -308,7 +304,7 @@ const UploadField = ({ label, hint, imageSrc, uploading, onPick, renderPreview }
 
 // The flagship card — platform name, logo, favicon, and contact details,
 // all saved together via PUT /admin/settings/branding (one endpoint per
-// settings concern, same split as commission/sms/email/razorpay). Reads its
+// settings concern, same split as sms/email). Reads its
 // initial values from BrandingContext (already fetched on app load) rather
 // than a second round-trip to /admin/settings, and calls refreshBranding()
 // after a successful save so this admin's own navbar/footer/favicon update
@@ -413,7 +409,7 @@ const BrandingCard = () => {
               <Input
                 value={form.platformName}
                 onChange={(e) => setForm((f) => ({ ...f, platformName: e.target.value }))}
-                placeholder="ShareTruck"
+                placeholder="Truckgee"
                 maxLength={60}
               />
             </Field>
@@ -436,7 +432,7 @@ const BrandingCard = () => {
                   <>
                     <TabMock>
                       <TabMockIcon>{src && <img src={src} alt="" />}</TabMockIcon>
-                      <TabMockLabel>{form.platformName || "ShareTruck"}</TabMockLabel>
+                      <TabMockLabel>{form.platformName || "Truckgee"}</TabMockLabel>
                     </TabMock>
                     <UploadTile $hasImage={Boolean(src)} style={{ width: "100%", height: 64, borderRadius: "0 0 10px 10px" }}>
                       {src ? (
@@ -562,80 +558,6 @@ const VerificationGateCard = () => {
   );
 };
 
-const CommissionCard = () => {
-  const [percent, setPercent] = useState("10");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { settings } = await getAdminSettings();
-        setPercent(String(settings?.commissionPercent ?? 10));
-      } catch (error) {
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    const value = Number(percent);
-    if (Number.isNaN(value) || value < 0 || value > 100) {
-      toast.error("Enter a commission percentage between 0 and 100");
-      return;
-    }
-    setSaving(true);
-    try {
-      await updateCommission(value);
-      toast.success("Commission rate updated");
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card>
-      {loading ? (
-        <Row style={{ justifyContent: "center", padding: "30px 0" }}>
-          <Spinner $size={24} />
-        </Row>
-      ) : (
-        <form onSubmit={handleSave}>
-          <Stack $gap={3}>
-            <Stack $gap={1}>
-              <SectionTitle>Commission rate</SectionTitle>
-              <Muted>
-                The platform's cut of every completed booking. Taken automatically when a booking is marked
-                delivered — the rest goes to the transporter's wallet.
-              </Muted>
-            </Stack>
-            <Row $gap={2} style={{ alignItems: "flex-end" }}>
-              <Field label="Commission %" style={{ marginBottom: 0, maxWidth: 140 }}>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={percent}
-                  onChange={(e) => setPercent(e.target.value)}
-                />
-              </Field>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </Row>
-          </Stack>
-        </form>
-      )}
-    </Card>
-  );
-};
-
 const SMS_PROVIDERS = [
   { value: "console", label: "None — log to server console (dev only)" },
   { value: "twilio", label: "Twilio" },
@@ -682,30 +604,10 @@ const EMAIL_FIELDS = {
   ],
 };
 
-const RAZORPAY_PROVIDERS = [
-  { value: "none", label: "Not configured" },
-  { value: "razorpay", label: "Razorpay" },
-];
-
-const RAZORPAY_FIELDS = {
-  razorpay: [
-    { key: "keyId", label: "Key ID", placeholder: "rzp_test_…" },
-    { key: "keySecret", label: "Key secret", secret: true },
-    {
-      key: "webhookSecret",
-      label: "Webhook secret",
-      secret: true,
-      help: "From the webhook you configure in the Razorpay dashboard, pointing at /webhooks/razorpay.",
-    },
-  ],
-};
-
-// KYC and payout share the same seam shape (backend/utils/kycProvider.js,
-// payoutProvider.js): "manual" is a fully-working default (human review /
-// manual transfer), not a gap to close — or a webhook a real vendor
-// integration posts to. Neither has a "test" endpoint, so their cards
-// render with onTest omitted (ProviderCard hides the test row
-// automatically when onTest isn't passed).
+// KYC's "manual" is a fully-working default (human review), not a gap to
+// close — or a webhook a real vendor integration posts to. It has no
+// "test" endpoint, so its card renders with onTest omitted (ProviderCard
+// hides the test row automatically when onTest isn't passed).
 const customHttpFields = () => ({
   custom_http: [
     { key: "url", label: "Webhook URL", placeholder: "https://api.example.com/webhook" },
@@ -720,13 +622,6 @@ const KYC_PROVIDERS = [
 
 const KYC_FIELDS = customHttpFields();
 
-const PAYOUT_PROVIDERS = [
-  { value: "manual", label: "Manual payout (default)" },
-  { value: "custom_http", label: "Custom webhook" },
-];
-
-const PAYOUT_FIELDS = customHttpFields();
-
 const emptyValues = (fields) => Object.fromEntries(fields.map((f) => [f.key, ""]));
 
 const ProviderCard = ({
@@ -740,17 +635,17 @@ const ProviderCard = ({
   testLabel,
   testPlaceholder,
   onTest,
-  // Some providers (Razorpay) have no natural free-text value to test
-  // with — testing just pings the API using the already-saved keys —
-  // default true preserves the SMS/email cards' existing behavior.
+  // A provider with no natural free-text value to test with — testing
+  // just pings the API using the already-saved keys — default true
+  // preserves the SMS/email cards' existing behavior.
   testNeedsValue = true,
   testButtonLabel,
-  // SMS/email/Razorpay's default ("console"/"none") is a real gap — nothing
-  // gets delivered until an admin acts, so "Not configured" in warning
-  // amber is the right signal. KYC/payout's default ("manual") is a
-  // supported, fully-working mode, not a problem — these two pass
-  // unconfiguredLabel="Manual"/configuredLabel="Automated" so the badge
-  // reads as informational (neutral gray) rather than a false alarm.
+  // SMS/email's default ("console") is a real gap — nothing gets delivered
+  // until an admin acts, so "Not configured" in warning amber is the right
+  // signal. KYC's default ("manual") is a supported, fully-working mode,
+  // not a problem — it passes unconfiguredLabel="Manual"/
+  // configuredLabel="Automated" so the badge reads as informational
+  // (neutral gray) rather than a false alarm.
   configuredLabel = "Configured",
   unconfiguredLabel = "Not configured",
   unconfiguredBadgeStatus = "pending",
@@ -939,7 +834,6 @@ export const Settings = () => {
         <SettingsNav>
           <SettingsNavLink href="#branding">Branding</SettingsNavLink>
           <SettingsNavLink href="#general">General</SettingsNavLink>
-          <SettingsNavLink href="#payments">Payments</SettingsNavLink>
           <SettingsNavLink href="#integrations">Integrations</SettingsNavLink>
         </SettingsNav>
 
@@ -950,48 +844,6 @@ export const Settings = () => {
 
           <SettingsSection id="general">
             <VerificationGateCard />
-          </SettingsSection>
-
-          <SettingsSection id="payments">
-            <SubsectionTitle>Payments</SubsectionTitle>
-            <Stack $gap={4}>
-              <CommissionCard />
-
-              <ProviderCard
-                title="Razorpay"
-                description="Payment gateway used for wallet top-ups and direct booking payments."
-                providers={RAZORPAY_PROVIDERS}
-                fieldDefs={RAZORPAY_FIELDS}
-                status={integrations?.razorpay}
-                loading={loadingIntegrations}
-                onSave={async (provider, config) => {
-                  const res = await updateRazorpayIntegration(provider, config);
-                  await loadIntegrations();
-                  return res;
-                }}
-                testLabel="Razorpay"
-                testButtonLabel="Test connection"
-                testNeedsValue={false}
-                onTest={() => testRazorpayIntegration()}
-              />
-
-              <ProviderCard
-                title="Payout provider"
-                description="Approved withdrawals are paid out by an admin, by default. Connect a webhook to pay transporters automatically instead."
-                providers={PAYOUT_PROVIDERS}
-                fieldDefs={PAYOUT_FIELDS}
-                status={integrations?.payout}
-                loading={loadingIntegrations}
-                onSave={async (provider, config) => {
-                  const res = await updatePayoutIntegration(provider, config);
-                  await loadIntegrations();
-                  return res;
-                }}
-                configuredLabel="Automated"
-                unconfiguredLabel="Manual"
-                unconfiguredBadgeStatus="manual"
-              />
-            </Stack>
           </SettingsSection>
 
           <SettingsSection id="integrations">

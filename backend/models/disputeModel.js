@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 
 // A real dispute workflow, distinct from SupportRequest (general help
 // tickets, no resolution detail) and Rating.flagged (review moderation
-// only) — a dispute needs a required booking link, a real status machine,
-// and can move money on resolution.
+// only) — a dispute needs a required booking link and a real status
+// machine.
 const disputeSchema = new mongoose.Schema(
   {
     booking: {
@@ -28,7 +28,7 @@ const disputeSchema = new mongoose.Schema(
 
     category: {
       type: String,
-      enum: ["no_show", "damaged_goods", "payment_issue", "behavior", "other"],
+      enum: ["no_show", "damaged_goods", "behavior", "other"],
       required: true,
     },
 
@@ -46,14 +46,7 @@ const disputeSchema = new mongoose.Schema(
 
     resolutionAction: {
       type: String,
-      enum: ["none", "refund_shipper", "payout_transporter", "warning_issued", "account_suspended"],
-    },
-
-    // Only set when resolutionAction moves money (refund_shipper /
-    // payout_transporter) — see disputeController.resolveDispute.
-    resolutionAmount: {
-      type: Number,
-      min: 0,
+      enum: ["none", "warning_issued", "account_suspended"],
     },
 
     resolutionNote: {

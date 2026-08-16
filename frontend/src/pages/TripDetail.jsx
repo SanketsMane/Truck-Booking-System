@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Truck, ShieldCheck } from "lucide-react";
@@ -7,16 +7,19 @@ import { getTrip } from "../api/trips";
 import { createBooking } from "../api/bookings";
 import { BASE_URL } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useBranding } from "../context/BrandingContext";
 import ReviewList from "../components/ReviewList";
 import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
-import { Field, Input, Textarea } from "../components/ui/Form";
+import { Field, Textarea } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
-import { formatDate, formatDateTime, formatINR, formatTons, formatCbm, normalizePoint } from "../utils/format";
+import { formatDate, formatDateTime, formatINR, formatTons, normalizePoint } from "../utils/format";
+import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const HeroPhoto = styled.div`
   position: relative;
@@ -132,14 +135,18 @@ const StatusNotice = {
 export const TripDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const { platformName } = useBranding();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
-  const [capacityRequested, setCapacityRequested] = useState("");
-  const [volumeRequested, setVolumeRequested] = useState("");
+  // Pre-filled from the capacity entered on the home page's search form,
+  // carried through the search results link (?capacity=, always in tons)
+  // — still fully editable, in either tons or kg.
+  const capacityAmount = useUnitAmount(searchParams.get("capacity") || "");
   const [goodsDescription, setGoodsDescription] = useState("");
   const [handlingNotes, setHandlingNotes] = useState("");
   const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
@@ -169,10 +176,10 @@ export const TripDetail = () => {
   const canBook = trip && trip.status === "published" && trip.availableCapacity > 0;
 
   const estimatedPrice = useMemo(() => {
-    const tons = Number(capacityRequested);
+    const tons = Number(capacityAmount.tons);
     if (!trip || !tons || Number.isNaN(tons)) return 0;
     return tons * trip.pricePerTon;
-  }, [capacityRequested, trip]);
+  }, [capacityAmount.tons, trip]);
 
   const handleBookClick = () => {
     if (!user) {
@@ -184,17 +191,11 @@ export const TripDetail = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const tons = Number(capacityRequested);
+    const tons = Number(capacityAmount.tons);
     const nextErrors = {};
-    if (!tons || tons <= 0) nextErrors.capacityRequested = "Enter how many tons you need";
+    if (!tons || tons <= 0) nextErrors.capacityRequested = "Enter how much capacity you need";
     else if (tons > trip.availableCapacity) {
       nextErrors.capacityRequested = `Only ${formatTons(trip.availableCapacity)} available`;
-    }
-    if (trip.volumeCbm != null && volumeRequested) {
-      const cbm = Number(volumeRequested);
-      if (cbm > trip.availableVolumeCbm) {
-        nextErrors.volumeRequested = `Only ${formatCbm(trip.availableVolumeCbm)} available`;
-      }
     }
     if (!goodsDescription.trim()) nextErrors.goodsDescription = "Describe what you're shipping";
     if (!pickupPoint.address.trim()) nextErrors.pickupPoint = "Pickup point is required";
@@ -206,7 +207,6 @@ export const TripDetail = () => {
       const res = await createBooking({
         tripId: id,
         capacityRequested: tons,
-        volumeRequested: trip.volumeCbm != null && volumeRequested ? Number(volumeRequested) : undefined,
         goodsDescription: goodsDescription.trim(),
         handlingNotes: handlingNotes.trim() || undefined,
         pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
@@ -294,14 +294,6 @@ export const TripDetail = () => {
                 <CapacityBarFill $pct={capacityPct} />
               </CapacityBarTrack>
             </Stack>
-            {trip.volumeCbm != null && (
-              <CardRow>
-                <Muted>Available volume</Muted>
-                <strong>
-                  {formatCbm(trip.availableVolumeCbm)} / {formatCbm(trip.volumeCbm)}
-                </strong>
-              </CardRow>
-            )}
           </Stack>
         </Card>
 
@@ -355,7 +347,11 @@ export const TripDetail = () => {
                   ? `★ ${Number(trip.transporter.ratingAvg).toFixed(1)} (${trip.transporter.ratingCount} ratings)`
                   : "No ratings yet"}
               </Muted>
-              {trip.transporter?.createdAt && <Muted>On ShareTruck since {formatDate(trip.transporter.createdAt)}</Muted>}
+              {trip.transporter?.createdAt && (
+                <Muted>
+                  On {platformName} since {formatDate(trip.transporter.createdAt)}
+                </Muted>
+              )}
             </Stack>
           </Row>
         </Card>
@@ -376,17 +372,17 @@ export const TripDetail = () => {
                   <SectionTitle>Request to book</SectionTitle>
 
                   <Field
-                    label="Capacity needed (tons)"
+                    label="Capacity needed"
                     error={formErrors.capacityRequested}
                     help={`Up to ${formatTons(trip.availableCapacity)} available`}
                   >
-                    <Input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      max={trip.availableCapacity}
-                      value={capacityRequested}
-                      onChange={(e) => setCapacityRequested(e.target.value)}
+                    <UnitAmountInput
+                      value={capacityAmount.displayValue}
+                      unit={capacityAmount.unit}
+                      onValueChange={capacityAmount.onValueChange}
+                      onUnitChange={capacityAmount.onUnitChange}
+                      minTons={0.1}
+                      maxTons={trip.availableCapacity}
                       autoFocus
                     />
                   </Field>
@@ -395,23 +391,6 @@ export const TripDetail = () => {
                     <Muted>Estimated price</Muted>
                     <strong>{formatINR(estimatedPrice)}</strong>
                   </CardRow>
-
-                  {trip.volumeCbm != null && (
-                    <Field
-                      label="Volume needed (m³, optional)"
-                      error={formErrors.volumeRequested}
-                      help={`Up to ${formatCbm(trip.availableVolumeCbm)} available`}
-                    >
-                      <Input
-                        type="number"
-                        min="0.1"
-                        step="0.1"
-                        max={trip.availableVolumeCbm}
-                        value={volumeRequested}
-                        onChange={(e) => setVolumeRequested(e.target.value)}
-                      />
-                    </Field>
-                  )}
 
                   <Field label="What are you shipping?" error={formErrors.goodsDescription}>
                     <Textarea

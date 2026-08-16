@@ -4,17 +4,37 @@ import styled from "styled-components";
 import { toast } from "react-toastify";
 import { getTrip, editTrip, cancelTrip } from "../api/trips";
 import { listMyBookings, acceptBooking, rejectBooking } from "../api/bookings";
-import { useLocationBroadcaster } from "../hooks/useLocationBroadcaster";
-import LiveTruckMap from "../components/LiveTruckMap";
-import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
+import { PageContainer, Stack, Row, PageTitle, SectionTitle, SubHeading, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
-import { Field, Input, ErrorText } from "../components/ui/Form";
+import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, formatINR, formatTons, toDateTimeInputValue, normalizePoint } from "../utils/format";
+import { useUnitAmount } from "../hooks/useUnitAmount";
+
+const HeaderTop = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space(4)};
+  flex-wrap: wrap;
+`;
+
+const PriceTag = styled.div`
+  text-align: right;
+  flex-shrink: 0;
+`;
+
+const PriceValue = styled.div`
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: ${({ theme }) => theme.color.accent};
+  line-height: 1.2;
+`;
 
 const CapacityBarTrack = styled.div`
   height: 8px;
@@ -30,16 +50,73 @@ const CapacityBarFill = styled.div`
   transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 `;
 
+// Same route-timeline treatment as TripDetail (the shipper-facing view of
+// this same trip) — kept as its own local copy rather than a shared import
+// since neither page exports these, matching how CapacityBarTrack/Fill are
+// already duplicated per-page in this codebase.
+const RouteTimeline = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const TimelineRow = styled.div`
+  display: flex;
+  gap: 14px;
+`;
+
+const TimelineMarker = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 4px;
+`;
+
+const TimelineDot = styled.div`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ theme, $variant }) => ($variant === "drop" ? theme.color.text : theme.color.accent)};
+`;
+
+const TimelineLine = styled.div`
+  width: 2px;
+  flex: 1;
+  min-height: 26px;
+  background: ${({ theme }) => theme.color.border};
+  margin: 4px 0;
+`;
+
+const TimelineContent = styled.div`
+  padding-bottom: ${({ theme }) => theme.space(4)};
+  flex: 1;
+  min-width: 0;
+`;
+
 const Price = styled.span`
   font-weight: 800;
   color: ${({ theme }) => theme.color.accent};
+`;
+
+// Groups related edit fields under a small heading with a top divider —
+// same treatment as PostTrip's capacity step, so editing a trip here reads
+// like a continuation of posting it there.
+const FieldGroup = styled(Stack).attrs({ $gap: 3 })`
+  padding-top: ${({ theme, $first }) => ($first ? "0" : theme.space(4))};
+  border-top: 1px solid ${({ theme, $first }) => ($first ? "transparent" : theme.color.border)};
+`;
+
+// A pending booking needs a decision from the transporter — an accent
+// border pulls it forward against confirmed/rejected ones sitting below.
+const BookingCard = styled(Card)`
+  border-color: ${({ theme, $pending }) => ($pending ? theme.color.accent : theme.color.border)};
 `;
 
 const EDITABLE_STATUSES = ["published", "full"];
 
 export const ManageTrip = () => {
   const { id } = useParams();
-  const { isSharing, start, stop, error: locationError } = useLocationBroadcaster(id);
 
   const [trip, setTrip] = useState(null);
   const [loadingTrip, setLoadingTrip] = useState(true);
@@ -49,7 +126,7 @@ export const ManageTrip = () => {
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState("");
   const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
   const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
-  const [totalCapacity, setTotalCapacity] = useState("");
+  const totalCapacityAmount = useUnitAmount();
   const [pricePerTon, setPricePerTon] = useState("");
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -68,7 +145,7 @@ export const ManageTrip = () => {
         setEstimatedArrivalAt(trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "");
         setPickupPoint(normalizePoint(trip.pickupPoint));
         setDropPoint(normalizePoint(trip.dropPoint));
-        setTotalCapacity(String(trip.totalCapacity));
+        totalCapacityAmount.setTons(trip.totalCapacity);
         setPricePerTon(String(trip.pricePerTon));
       })
       .catch((error) => {
@@ -115,7 +192,7 @@ export const ManageTrip = () => {
 
   const validateEdit = () => {
     const errors = {};
-    const total = Number(totalCapacity);
+    const total = Number(totalCapacityAmount.tons);
     const price = Number(pricePerTon);
     if (!total || total <= 0) errors.totalCapacity = "Enter a total capacity";
     else if (total < bookedCapacity) {
@@ -133,7 +210,7 @@ export const ManageTrip = () => {
     if (!validateEdit()) return;
 
     const updates = {};
-    if (Number(totalCapacity) !== trip.totalCapacity) updates.totalCapacity = Number(totalCapacity);
+    if (Number(totalCapacityAmount.tons) !== trip.totalCapacity) updates.totalCapacity = Number(totalCapacityAmount.tons);
     if (Number(pricePerTon) !== trip.pricePerTon) updates.pricePerTon = Number(pricePerTon);
     if (pickupPoint.address.trim() !== normalizePoint(trip.pickupPoint).address) {
       updates.pickupPoint = { ...pickupPoint, address: pickupPoint.address.trim() };
@@ -237,57 +314,76 @@ export const ManageTrip = () => {
   const canEdit = EDITABLE_STATUSES.includes(trip.status);
   const canCancel = !["completed", "cancelled"].includes(trip.status);
   const capacityPct = trip.totalCapacity ? Math.min(100, Math.round((bookedCapacity / trip.totalCapacity) * 100)) : 0;
+  const pendingCount = bookings.filter((b) => b.status === "pending").length;
 
   return (
     <PageContainer>
       <Stack $gap={5}>
-        <Row $gap={3} $wrap style={{ justifyContent: "space-between" }}>
-          <Stack $gap={1}>
-            <PageTitle>
-              {trip.fromCity} → {trip.toCity}
-            </PageTitle>
-            <Muted>Manage trip</Muted>
+        <HeaderTop>
+          <Stack $gap={2}>
+            <Row $gap={3} $wrap>
+              <PageTitle>
+                {trip.fromCity} → {trip.toCity}
+              </PageTitle>
+              <StatusBadge status={trip.status} />
+            </Row>
+            <Muted>Departs {formatDateTime(trip.departureAt)}</Muted>
+            {trip.estimatedArrivalAt && <Muted>Est. arrival {formatDateTime(trip.estimatedArrivalAt)}</Muted>}
           </Stack>
-          <StatusBadge status={trip.status} />
-        </Row>
+          <PriceTag>
+            <PriceValue>{formatINR(trip.pricePerTon)}</PriceValue>
+            <Muted>per ton</Muted>
+          </PriceTag>
+        </HeaderTop>
+
+        <Card>
+          <Stack $gap={3}>
+            <SectionTitle>Capacity</SectionTitle>
+            <Stack $gap={2}>
+              <CardRow>
+                <Muted>Capacity booked</Muted>
+                <strong>
+                  {formatTons(bookedCapacity)} / {formatTons(trip.totalCapacity)}
+                </strong>
+              </CardRow>
+              <CapacityBarTrack>
+                <CapacityBarFill $pct={capacityPct} />
+              </CapacityBarTrack>
+            </Stack>
+          </Stack>
+        </Card>
+
+        <Card>
+          <Stack $gap={3}>
+            <SectionTitle>Route</SectionTitle>
+            <RouteTimeline>
+              <TimelineRow>
+                <TimelineMarker>
+                  <TimelineDot $variant="pickup" />
+                  <TimelineLine />
+                </TimelineMarker>
+                <TimelineContent>
+                  <Muted>Pickup point</Muted>
+                  <div>{normalizePoint(trip.pickupPoint).address}</div>
+                </TimelineContent>
+              </TimelineRow>
+              <TimelineRow>
+                <TimelineMarker>
+                  <TimelineDot $variant="drop" />
+                </TimelineMarker>
+                <TimelineContent style={{ paddingBottom: 0 }}>
+                  <Muted>Drop point</Muted>
+                  <div>{normalizePoint(trip.dropPoint).address}</div>
+                </TimelineContent>
+              </TimelineRow>
+            </RouteTimeline>
+          </Stack>
+        </Card>
 
         <Card>
           {!editMode ? (
             <Stack $gap={3}>
-              <CardRow>
-                <Muted>Departs</Muted>
-                <span>{formatDateTime(trip.departureAt)}</span>
-              </CardRow>
-              {trip.estimatedArrivalAt && (
-                <CardRow>
-                  <Muted>Est. arrival</Muted>
-                  <span>{formatDateTime(trip.estimatedArrivalAt)}</span>
-                </CardRow>
-              )}
-              <Stack $gap={2}>
-                <CardRow>
-                  <Muted>Capacity booked</Muted>
-                  <strong>
-                    {formatTons(bookedCapacity)} / {formatTons(trip.totalCapacity)}
-                  </strong>
-                </CardRow>
-                <CapacityBarTrack>
-                  <CapacityBarFill $pct={capacityPct} />
-                </CapacityBarTrack>
-              </Stack>
-              <CardRow>
-                <Muted>Price</Muted>
-                <Price>{formatINR(trip.pricePerTon)} / ton</Price>
-              </CardRow>
-              <CardRow>
-                <Muted>Pickup</Muted>
-                <span>{normalizePoint(trip.pickupPoint).address}</span>
-              </CardRow>
-              <CardRow>
-                <Muted>Drop</Muted>
-                <span>{normalizePoint(trip.dropPoint).address}</span>
-              </CardRow>
-
+              <SectionTitle>Manage this trip</SectionTitle>
               <Row $gap={3} $wrap>
                 {canEdit && (
                   <Button $variant="secondary" onClick={() => setEditMode(true)}>
@@ -303,40 +399,52 @@ export const ManageTrip = () => {
               {!canEdit && <Muted>This trip can't be edited while it's {trip.status}.</Muted>}
             </Stack>
           ) : (
-            <Stack $gap={4}>
+            <Stack $gap={5}>
               <SectionTitle>Edit trip</SectionTitle>
-              <Field label="Departure date & time" error={editErrors.departureAt}>
-                <Input type="datetime-local" value={departureAt} onChange={(e) => setDepartureAt(e.target.value)} />
-              </Field>
-              <Field label="Estimated arrival (optional)">
-                <Input
-                  type="datetime-local"
-                  value={estimatedArrivalAt}
-                  onChange={(e) => setEstimatedArrivalAt(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="Total capacity (tons)"
-                error={editErrors.totalCapacity}
-                help={`${formatTons(bookedCapacity)} already booked`}
-              >
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={totalCapacity}
-                  onChange={(e) => setTotalCapacity(e.target.value)}
-                />
-              </Field>
-              <Field label="Price per ton (INR)" error={editErrors.pricePerTon}>
-                <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
-              </Field>
-              <Field label="Pickup point" error={editErrors.pickupPoint}>
-                <LocationAutocomplete value={pickupPoint} onChange={setPickupPoint} />
-              </Field>
-              <Field label="Drop point" error={editErrors.dropPoint}>
-                <LocationAutocomplete value={dropPoint} onChange={setDropPoint} />
-              </Field>
+
+              <FieldGroup $first>
+                <SubHeading>Schedule</SubHeading>
+                <Field label="Departure date & time" error={editErrors.departureAt}>
+                  <Input type="datetime-local" value={departureAt} onChange={(e) => setDepartureAt(e.target.value)} />
+                </Field>
+                <Field label="Estimated arrival (optional)">
+                  <Input
+                    type="datetime-local"
+                    value={estimatedArrivalAt}
+                    onChange={(e) => setEstimatedArrivalAt(e.target.value)}
+                  />
+                </Field>
+              </FieldGroup>
+
+              <FieldGroup>
+                <SubHeading>Capacity &amp; price</SubHeading>
+                <Field
+                  label="Total capacity"
+                  error={editErrors.totalCapacity}
+                  help={`${formatTons(bookedCapacity)} already booked`}
+                >
+                  <UnitAmountInput
+                    value={totalCapacityAmount.displayValue}
+                    unit={totalCapacityAmount.unit}
+                    onValueChange={totalCapacityAmount.onValueChange}
+                    onUnitChange={totalCapacityAmount.onUnitChange}
+                    minTons={0.1}
+                  />
+                </Field>
+                <Field label="Price per ton (INR)" error={editErrors.pricePerTon}>
+                  <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
+                </Field>
+              </FieldGroup>
+
+              <FieldGroup>
+                <SubHeading>Route</SubHeading>
+                <Field label="Pickup point" error={editErrors.pickupPoint}>
+                  <LocationAutocomplete value={pickupPoint} onChange={setPickupPoint} />
+                </Field>
+                <Field label="Drop point" error={editErrors.dropPoint}>
+                  <LocationAutocomplete value={dropPoint} onChange={setDropPoint} />
+                </Field>
+              </FieldGroup>
 
               <Row $gap={3}>
                 <Button $fullWidth onClick={handleSave} disabled={saving}>
@@ -350,33 +458,16 @@ export const ManageTrip = () => {
           )}
         </Card>
 
-        {bookings.some((b) => b.status === "ongoing") && (
-          <Card>
-            <Stack $gap={3}>
-              <CardRow>
-                <Stack $gap={1}>
-                  <SectionTitle>Share live location</SectionTitle>
-                  <Muted>
-                    Shippers on this trip can see the truck move on a map while you're sharing. Keep this tab open
-                    and your phone charged — it only tracks while the page is open.
-                  </Muted>
-                </Stack>
-                <Button
-                  $variant={isSharing ? "danger" : "primary"}
-                  onClick={isSharing ? stop : start}
-                  $size="sm"
-                >
-                  {isSharing ? "Stop sharing" : "Start sharing"}
-                </Button>
-              </CardRow>
-              {locationError && <ErrorText>{locationError}</ErrorText>}
-              {isSharing && <LiveTruckMap tripId={id} />}
-            </Stack>
-          </Card>
-        )}
-
         <Stack $gap={3}>
-          <SectionTitle>Bookings</SectionTitle>
+          <Row style={{ justifyContent: "space-between" }}>
+            <SectionTitle>Bookings</SectionTitle>
+            {!loadingBookings && bookings.length > 0 && (
+              <Muted>
+                {bookings.length} request{bookings.length === 1 ? "" : "s"}
+                {pendingCount > 0 ? ` · ${pendingCount} awaiting you` : ""}
+              </Muted>
+            )}
+          </Row>
           {loadingBookings ? (
             <Row $gap={2}>
               <Spinner />
@@ -387,7 +478,7 @@ export const ManageTrip = () => {
           ) : (
             <Stack $gap={3}>
               {bookings.map((booking) => (
-                <Card key={booking._id}>
+                <BookingCard key={booking._id} $pending={booking.status === "pending"}>
                   <Stack $gap={3}>
                     <CardRow>
                       <Row $gap={3}>
@@ -411,6 +502,10 @@ export const ManageTrip = () => {
                     </Row>
 
                     <Muted>{booking.goodsDescription}</Muted>
+
+                    {booking.status === "rejected" && booking.rejectReason && (
+                      <Muted>Rejected: {booking.rejectReason}</Muted>
+                    )}
 
                     <Row $gap={3} $wrap>
                       {booking.status === "pending" && (
@@ -437,7 +532,7 @@ export const ManageTrip = () => {
                       </Button>
                     </Row>
                   </Stack>
-                </Card>
+                </BookingCard>
               ))}
             </Stack>
           )}

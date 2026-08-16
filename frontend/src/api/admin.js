@@ -23,8 +23,6 @@ export const setAdminUserStatus = (id, { status, reason }) =>
 export const setAdminRole = (id, { isAdmin, adminScope, reason }) =>
   api.put(`/admin/users/${id}/admin-role`, { isAdmin, adminScope, reason });
 
-export const listLiveTrips = () => api.get("/admin/live-trips");
-
 export const listAdminTrucks = (opts) => api.get(withPaginationParams("/admin/trucks", opts));
 
 export const listAdminTrips = (opts) => api.get(withPaginationParams("/admin/trips", opts));
@@ -56,42 +54,10 @@ export const updateEmailIntegration = (provider, config) =>
 
 export const testEmailIntegration = (to) => api.post("/admin/integrations/email/test", { to });
 
-export const updateRazorpayIntegration = (provider, config) =>
-  api.put("/admin/integrations/razorpay", { provider, config });
-
-export const testRazorpayIntegration = () => api.post("/admin/integrations/razorpay/test", {});
-
 export const updateKycIntegration = (provider, config) =>
   api.put("/admin/integrations/kyc", { provider, config });
 
-export const updatePayoutIntegration = (provider, config) =>
-  api.put("/admin/integrations/payout", { provider, config });
-
-export const updateCommission = (commissionPercent) =>
-  api.put("/admin/settings/commission", { commissionPercent });
-
 export const updateBranding = (branding) => api.put("/admin/settings/branding", branding);
-
-export const listAdminPayments = (opts) => api.get(withPaginationParams("/admin/payments", opts));
-
-export const listAdminWallets = (opts) => api.get(withPaginationParams("/admin/wallets", opts));
-
-export const adjustAdminWallet = (userId, { amount, direction, reason }) =>
-  api.post(`/admin/wallets/${userId}/adjust`, { amount, direction, reason });
-
-export const getPlatformWallet = () => api.get("/admin/platform-wallet");
-
-export const listPlatformWalletTransactions = (opts) =>
-  api.get(withPaginationParams("/admin/platform-wallet/transactions", opts));
-
-export const listAdminWithdrawals = (opts) => api.get(withPaginationParams("/admin/withdrawals", opts));
-
-export const approveAdminWithdrawal = (id) => api.put(`/admin/withdrawals/${id}/approve`, {});
-
-export const rejectAdminWithdrawal = (id, reason) => api.put(`/admin/withdrawals/${id}/reject`, { reason });
-
-export const markAdminWithdrawalPaid = (id, payoutReference) =>
-  api.put(`/admin/withdrawals/${id}/mark-paid`, { payoutReference });
 
 // SRS-06.1 — read-only, for moderation (e.g. reviewing a dispute's
 // conversation). Requires the "support" admin scope server-side.

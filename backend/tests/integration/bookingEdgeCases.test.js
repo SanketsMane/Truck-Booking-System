@@ -70,39 +70,19 @@ describe("booking edge cases", () => {
     expect(booking.status).toBe("confirmed");
   });
 
-  it("cancelling a paid, confirmed booking outside the window refunds the shipper and releases capacity", async () => {
-    const { transporterAgent, shipperAgent, shipper } = await newActors(4);
+  it("cancelling a confirmed booking outside the window releases capacity", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(4);
     const trip = await postTestTrip(transporterAgent); // 2 days out by default — outside the 6h window
 
     const bookingRes = await shipperAgent
       .post("/bookings")
       .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
     const bookingId = bookingRes.body.booking._id;
-    const price = bookingRes.body.booking.priceEstimate;
     await transporterAgent.put(`/bookings/${bookingId}/accept`);
-
-    // Fund and pay via a direct admin-scope grant on this same test user, to
-    // avoid pulling in a whole second admin actor just to seed the wallet.
-    shipper.isAdmin = true;
-    shipper.adminScope = "finance";
-    await shipper.save();
-    await shipperAgent.post(`/admin/wallets/${shipper._id}/adjust`).send({
-      amount: price,
-      direction: "credit",
-      reason: "test funding",
-    });
-    shipper.isAdmin = false;
-    shipper.adminScope = undefined;
-    await shipper.save();
-
-    await shipperAgent.post(`/bookings/${bookingId}/pay/wallet`);
 
     const cancelRes = await shipperAgent.put(`/bookings/${bookingId}/cancel`).send({ reason: "changed mind" });
     expect(cancelRes.status).toBe(200);
     expect(cancelRes.body.booking.status).toBe("cancelled");
-
-    const walletRes = await shipperAgent.get("/wallet/me");
-    expect(walletRes.body.wallet.balance).toBe(price); // refunded back
 
     const tripRes = await request(app).get(`/trips/${trip._id}`);
     expect(tripRes.body.trip.availableCapacity).toBe(20); // released back

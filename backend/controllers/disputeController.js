@@ -4,7 +4,6 @@ const Trip = require("../models/tripModel");
 const User = require("../models/userModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
-const { applyWalletEntry, withWalletSession } = require("../utils/walletService");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
 const { raiseDisputeValidation, resolveDisputeValidation } = require("../validators/disputeValidation");
 const sendServerError = require("../utils/sendServerError");
@@ -102,7 +101,7 @@ const listAllDisputes = async (req, res) => {
 };
 
 // Loads a fresh copy for the 404-vs-400 distinction after an atomic claim
-// misses — same pattern as adminWalletController's describeMissedClaim.
+// misses.
 const describeMissedClaim = async (id) => {
   const existing = await Dispute.findById(id);
   if (!existing) return { status: 404, msg: "Dispute not found" };
@@ -110,15 +109,10 @@ const describeMissedClaim = async (id) => {
 };
 
 // requireAdminScope("support"). The open/under_review -> resolved/rejected
-// transition is claimed atomically (findOneAndUpdate inside the same
-// transaction as the wallet credit) so two concurrent resolve calls on the
-// same dispute — a double-click, or two support-scoped admins — can't both
-// pass the "not already resolved?" check and both credit the beneficiary.
-// A refund/payout resolution moves money through the same wallet-session
-// pattern already proven in adminWalletController.adjustWallet — a straight
-// credit, audit-logged and linked back to this dispute, same "admin can
-// override but it's on the record" contract (no paired debit anywhere, by
-// the same design as wallet.adjust elsewhere in this codebase).
+// transition is claimed atomically (findOneAndUpdate with a status guard)
+// so two concurrent resolve calls on the same dispute — a double-click, or
+// two support-scoped admins — can't both pass the "not already resolved?"
+// check.
 const resolveDispute = async (req, res) => {
   try {
     const { error } = resolveDisputeValidation.validate(req.body);
@@ -126,49 +120,21 @@ const resolveDispute = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { status, resolutionAction, resolutionAmount, resolutionNote } = req.body;
+    const { status, resolutionAction, resolutionNote } = req.body;
 
-    const dispute = await withWalletSession(async (session) => {
-      const claimed = await Dispute.findOneAndUpdate(
-        { _id: req.params.id, status: { $nin: ["resolved", "rejected"] } },
-        {
-          $set: {
-            status,
-            resolutionAction,
-            resolutionAmount,
-            resolutionNote,
-            resolvedBy: req.auth.id,
-            resolvedAt: new Date(),
-          },
+    const dispute = await Dispute.findOneAndUpdate(
+      { _id: req.params.id, status: { $nin: ["resolved", "rejected"] } },
+      {
+        $set: {
+          status,
+          resolutionAction,
+          resolutionNote,
+          resolvedBy: req.auth.id,
+          resolvedAt: new Date(),
         },
-        { new: true, session }
-      ).populate("booking");
-      if (!claimed) return null;
-
-      let beneficiary;
-      if (resolutionAction === "refund_shipper") {
-        beneficiary = claimed.booking.shipper;
-      } else if (resolutionAction === "payout_transporter") {
-        const trip = await Trip.findById(claimed.booking.trip).select("transporter").session(session);
-        beneficiary = trip?.transporter;
-      }
-
-      if (beneficiary) {
-        await applyWalletEntry({
-          walletFilter: { ownerType: "user", user: beneficiary },
-          amount: resolutionAmount,
-          direction: "credit",
-          type: "dispute_resolution",
-          booking: claimed.booking._id,
-          dispute: claimed._id,
-          note: resolutionNote,
-          createdBy: req.auth.id,
-          session,
-        });
-      }
-
-      return claimed;
-    });
+      },
+      { new: true }
+    );
 
     if (!dispute) {
       const missed = await describeMissedClaim(req.params.id);
@@ -180,7 +146,7 @@ const resolveDispute = async (req, res) => {
       action: "dispute.resolve",
       targetType: "Dispute",
       targetId: dispute._id,
-      after: { status: dispute.status, resolutionAction, resolutionAmount },
+      after: { status: dispute.status, resolutionAction },
       reason: resolutionNote,
       scope: req.auth.adminScope,
     });

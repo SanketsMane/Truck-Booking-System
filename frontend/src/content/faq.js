@@ -13,7 +13,7 @@ export const FAQ_CATEGORIES = [
         id: "how-to-book",
         question: "How do I book truck capacity?",
         answer:
-          "Search your route and date from the home page, compare the available trips by price and capacity, and send a booking request. Once the transporter accepts, pay through the app to confirm pickup — you can track the shipment live from there.",
+          "Search your route and date from the home page, compare the available trips by price and capacity, and send a booking request. Once the transporter accepts, coordinate pickup directly with them — you can follow the booking's status (confirmed, picked up, delivered) from there.",
       },
       {
         id: "kyc-verification",
@@ -27,34 +27,46 @@ export const FAQ_CATEGORIES = [
         answer:
           "Yes. Add the second role from your Profile page at any time — no separate account needed.",
       },
+      {
+        id: "platform-role",
+        question: "Does the platform transport my goods itself?",
+        answer:
+          "No. It's a technology platform that connects shippers and transporters — the actual transportation is carried out by the transporter you book, not by us.",
+      },
+      {
+        id: "multiple-options",
+        question: "Will I see multiple transporter options?",
+        answer:
+          "If more than one transporter has suitable available capacity for your route and date, you'll see all of them and can compare before choosing.",
+      },
+      {
+        id: "how-different",
+        question: "How is this different from booking a truck the traditional way?",
+        answer:
+          "Traditionally you hire an entire truck for your shipment. Here, you find a truck that's already travelling your way and, where suitable space is available, use only the capacity your shipment actually needs.",
+      },
     ],
   },
   {
-    category: "Payments",
+    category: "Pricing & payment",
     items: [
       {
-        id: "how-payment-works",
-        question: "How do I pay for a booking?",
+        id: "how-pricing-works",
+        question: "How does payment work?",
         answer:
-          "From your wallet balance, or with a card/UPI through our payment gateway. Either way, the payment is held until the delivery is confirmed — it isn't released to the transporter until then.",
+          "The platform doesn't process any payment — you and the other party agree directly on price, method (cash, UPI, bank transfer, whatever works for you), and timing. The price shown on a trip is a reference estimate the transporter sets, so you can compare options before you book.",
       },
       {
-        id: "payment-window",
-        question: "What happens if I don't pay in time?",
+        id: "price-factors",
+        question: "What determines the price?",
         answer:
-          "A confirmed booking has to be paid within 12 hours of the transporter accepting it. If it isn't, the booking is cancelled automatically so the capacity doesn't sit reserved indefinitely.",
+          "The route, your shipment's weight and volume, vehicle type, available capacity, pickup/drop requirements and timing all factor in — along with the price the transporter has set for that trip.",
       },
       {
         id: "commission",
         question: "Does the platform take a cut?",
         answer:
-          "Yes, a transparent commission is deducted automatically once a delivery is confirmed — the rest goes straight to the transporter's wallet. The rate is shown on every trip before you book.",
-      },
-      {
-        id: "withdrawals",
-        question: "As a transporter, how do I get paid out?",
-        answer:
-          "Delivery earnings land in your in-app wallet as soon as a booking is confirmed delivered. From there, request a withdrawal to your bank account or UPI ID whenever you like.",
+          "No. It's completely free to use — no commission, no platform fee, no hidden charges, for shippers or transporters.",
       },
     ],
   },
@@ -73,6 +85,18 @@ export const FAQ_CATEGORIES = [
         answer:
           "A booking request that isn't accepted or rejected within its response window expires automatically, so you're never left waiting indefinitely — you're free to book a different trip.",
       },
+      {
+        id: "transporter-reject",
+        question: "Can a transporter reject my booking request?",
+        answer:
+          "Yes — a transporter can decline based on capacity, route, cargo type, timing or other requirements. If they decline, you're free to book a different trip right away.",
+      },
+      {
+        id: "transporter-cancels",
+        question: "What if a transporter cancels after accepting my request?",
+        answer:
+          "It happens rarely, but you're not left stuck — you can book another trip immediately. Repeated cancellations show up in that transporter's rating, so it affects their reputation on the platform.",
+      },
     ],
   },
   {
@@ -85,10 +109,22 @@ export const FAQ_CATEGORIES = [
           "You can raise a dispute directly from that booking's detail page. Our team reviews it and resolves it — this is separate from a general Support request, and is the fastest way to flag a specific booking problem.",
       },
       {
+        id: "loss-damage",
+        question: "What if my goods are lost, stolen or damaged in transit?",
+        answer:
+          "Agree on responsibility and insurance directly with the transporter before you hand over your shipment — the platform itself doesn't provide cargo insurance or cover loss/damage. If you're not comfortable with the terms a transporter offers, don't proceed with that booking.",
+      },
+      {
         id: "ratings",
         question: "How does rating work?",
         answer:
           "After a booking is completed, both sides can rate and review each other. Ratings are visible on profiles, so a track record builds up on both the shipper and transporter side over time.",
+      },
+      {
+        id: "verified-meaning",
+        question: "What does a 'verified' badge actually mean?",
+        answer:
+          "It means that account's KYC documents (Aadhaar, PAN, driving licence, or business certificate) were reviewed and approved by our team — it reflects document verification, not a guarantee of every future shipment.",
       },
       {
         id: "data-shared",
@@ -99,19 +135,48 @@ export const FAQ_CATEGORIES = [
     ],
   },
   {
+    category: "Shipments & documentation",
+    items: [
+      {
+        id: "shipment-accuracy",
+        question: "Who's responsible for accurate shipment details?",
+        answer:
+          "The shipper is responsible for giving accurate weight, quantity, dimensions and a clear description of the goods. The transporter is responsible for accurate vehicle and route information.",
+      },
+      {
+        id: "restricted-goods",
+        question: "Can I ship anything?",
+        answer:
+          "No — shipments must comply with applicable law and can't include prohibited or restricted goods. Some goods need special handling, packaging, permits or insurance, so check with your transporter before booking if you're unsure.",
+      },
+      {
+        id: "gst-eway",
+        question: "What about GST invoices and e-way bills?",
+        answer:
+          "Shippers and transporters are each responsible for their own tax, invoicing, e-way bill and transportation documentation — the platform doesn't generate these for you.",
+      },
+    ],
+  },
+  {
     category: "For transporters",
     items: [
       {
         id: "post-a-trip",
         question: "How do I list spare capacity?",
         answer:
-          "Register your truck and complete verification, then post a trip with your route, departure date, and the capacity (and volume, if relevant) you have spare. It's searchable the moment it's published.",
+          "Register your truck and complete verification, then post a trip with your route, departure date, and the capacity you have spare. It's searchable the moment it's published.",
       },
       {
-        id: "weight-and-volume",
-        question: "What if my truck's limit is space, not weight?",
+        id: "no-obligation",
+        question: "Do I have to accept every shipment request I get?",
         answer:
-          "You can list both a weight capacity and a volume capacity (in cubic metres) on a trip — useful for bulky-but-light loads that would hit a volume limit before a weight one.",
+          "No. Review each request's details and accept or decline based on your own capacity, route and cargo fit.",
+      },
+      {
+        id: "keep-listing-updated",
+        question: "What if my available space changes after I post a trip?",
+        answer:
+          "Update or remove your listing as soon as your available capacity changes, so shippers only ever see accurate, bookable space.",
       },
     ],
   },

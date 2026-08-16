@@ -1,12 +1,6 @@
 const mongoose = require("mongoose");
 const { MongoMemoryReplSet } = require("mongodb-memory-server");
 
-// A single-node replica set, not a plain standalone server — the wallet
-// ledger (utils/walletService.js's withWalletSession/applyWalletEntry),
-// used by booking payment/payout, admin wallet adjustments, withdrawal
-// approve/reject, and dispute resolution, runs real multi-document
-// transactions, which MongoDB only supports on a replica set (even a
-// single-node one) or a sharded cluster — never on a standalone mongod.
 let replset;
 
 // The app under test logs plenty in its normal request path (SMS-provider

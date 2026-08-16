@@ -2,17 +2,20 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { Check, Truck as TruckIcon } from "lucide-react";
 import { postTrip } from "../api/trips";
 import { listMyTrucks } from "../api/trucks";
-import { PageContainer, Stack, Row, SectionTitle, Muted, EmptyState } from "../components/ui/Layout";
+import { PageContainer, Stack, Row, PageTitle, SectionTitle, SubHeading, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { CityAutocomplete } from "../components/ui/CityAutocomplete";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
-import { formatINR, formatTons, formatCbm, toDateTimeInputValue } from "../utils/format";
+import { formatINR, formatTons, toDateTimeInputValue } from "../utils/format";
+import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const STEPS = ["Route", "Truck", "Capacity", "Review"];
 
@@ -23,13 +26,37 @@ const StepRow = styled(Row)`
 
 const StepPill = styled.button`
   flex: none;
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px 7px 12px;
   border-radius: ${({ theme }) => theme.radius.pill};
   font-size: 13px;
   font-weight: 700;
-  border: 1px solid ${({ theme, $active }) => (($active) ? theme.color.accent : theme.color.border)};
+  border: 1px solid
+    ${({ theme, $active, $done }) => ($active ? theme.color.accent : $done ? theme.color.borderStrong : theme.color.border)};
   background: ${({ theme, $active }) => ($active ? theme.color.accentSoft : "transparent")};
-  color: ${({ theme, $active }) => ($active ? theme.color.accent : theme.color.textMuted)};
+  color: ${({ theme, $active, $done }) => ($active ? theme.color.accent : $done ? theme.color.text : theme.color.textMuted)};
+  opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme, $active }) => ($active ? theme.color.accent : theme.color.borderStrong)};
+  }
+`;
+
+const StepMarker = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 11px;
+  background: ${({ theme, $active, $done }) =>
+    $done ? theme.color.accent : $active ? theme.color.accent : theme.color.surfaceRaised};
+  color: ${({ theme, $active, $done }) => ($done || $active ? theme.color.onAccent : theme.color.textFaint)};
 `;
 
 const Price = styled.span`
@@ -47,6 +74,24 @@ const TruckOption = styled.button`
   color: ${({ theme }) => theme.color.text};
   opacity: ${({ $disabled }) => ($disabled ? 0.55 : 1)};
   cursor: ${({ $disabled }) => ($disabled ? "not-allowed" : "pointer")};
+  transition: border-color 0.15s ease, background 0.15s ease;
+`;
+
+const TruckThumb = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) => theme.color.accentSoft};
+  color: ${({ theme }) => theme.color.accentStrong};
+`;
+
+const FieldGroup = styled(Stack).attrs({ $gap: 3 })`
+  padding-top: ${({ theme, $first }) => ($first ? "0" : theme.space(4))};
+  border-top: 1px solid ${({ theme, $first }) => ($first ? "transparent" : theme.color.border)};
 `;
 
 export const PostTrip = () => {
@@ -67,10 +112,8 @@ export const PostTrip = () => {
   const [selectedTruckId, setSelectedTruckId] = useState("");
 
   // Step 3 — capacity
-  const [totalCapacity, setTotalCapacity] = useState("");
-  const [availableCapacity, setAvailableCapacity] = useState("");
-  const [volumeCbm, setVolumeCbm] = useState("");
-  const [availableVolumeCbm, setAvailableVolumeCbm] = useState("");
+  const totalCapacityAmount = useUnitAmount();
+  const availableCapacityAmount = useUnitAmount();
   const [pricePerTon, setPricePerTon] = useState("");
   const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
   const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
@@ -116,8 +159,8 @@ export const PostTrip = () => {
 
   const validateCapacity = () => {
     const errors = {};
-    const total = Number(totalCapacity);
-    const avail = Number(availableCapacity);
+    const total = Number(totalCapacityAmount.tons);
+    const avail = Number(availableCapacityAmount.tons);
     const price = Number(pricePerTon);
     if (!total || total <= 0) errors.totalCapacity = "Enter total capacity for this trip";
     else if (selectedTruck && total > selectedTruck.totalCapacity) {
@@ -125,13 +168,6 @@ export const PostTrip = () => {
     }
     if (!avail || avail <= 0) errors.availableCapacity = "Enter capacity available to sell";
     else if (total && avail > total) errors.availableCapacity = "Can't exceed total capacity";
-    if (volumeCbm.trim() || availableVolumeCbm.trim()) {
-      const vol = Number(volumeCbm);
-      const availVol = Number(availableVolumeCbm);
-      if (!vol || vol <= 0) errors.volumeCbm = "Enter total volume, or leave both volume fields blank";
-      if (!availVol || availVol <= 0) errors.availableVolumeCbm = "Enter available volume, or leave both volume fields blank";
-      else if (vol && availVol > vol) errors.availableVolumeCbm = "Can't exceed total volume";
-    }
     if (!price || price <= 0) errors.pricePerTon = "Enter a price per ton";
     if (!pickupPoint.address.trim()) errors.pickupPoint = "Pickup point is required";
     if (!dropPoint.address.trim()) errors.dropPoint = "Drop point is required";
@@ -151,10 +187,8 @@ export const PostTrip = () => {
         estimatedArrivalAt: estimatedArrivalAt ? new Date(estimatedArrivalAt).toISOString() : undefined,
         pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
         dropPoint: { ...dropPoint, address: dropPoint.address.trim() },
-        totalCapacity: Number(totalCapacity),
-        availableCapacity: Number(availableCapacity),
-        volumeCbm: volumeCbm.trim() ? Number(volumeCbm) : undefined,
-        availableVolumeCbm: volumeCbm.trim() ? Number(availableVolumeCbm) : undefined,
+        totalCapacity: Number(totalCapacityAmount.tons),
+        availableCapacity: Number(availableCapacityAmount.tons),
         pricePerTon: Number(pricePerTon),
       });
       toast.success(res.msg || "Trip published");
@@ -173,13 +207,35 @@ export const PostTrip = () => {
   return (
     <PageContainer>
       <Stack $gap={5}>
+        <Stack $gap={1}>
+          <PageTitle>Post a trip</PageTitle>
+          <Muted>
+            {fromCity.trim() && toCity.trim()
+              ? `${fromCity} → ${toCity} · share your spare capacity with shippers`
+              : "Share your spare capacity with shippers in a few quick steps."}
+          </Muted>
+        </Stack>
 
         <StepRow $gap={2}>
-          {STEPS.map((label, i) => (
-            <StepPill key={label} type="button" $active={i === step} onClick={() => goToStep(i)} disabled={i > maxStep}>
-              {i + 1}. {label}
-            </StepPill>
-          ))}
+          {STEPS.map((label, i) => {
+            const done = i < maxStep;
+            const active = i === step;
+            return (
+              <StepPill
+                key={label}
+                type="button"
+                $active={active}
+                $done={done}
+                onClick={() => goToStep(i)}
+                disabled={i > maxStep}
+              >
+                <StepMarker $active={active} $done={done}>
+                  {done ? <Check size={11} strokeWidth={3} /> : i + 1}
+                </StepMarker>
+                {label}
+              </StepPill>
+            );
+          })}
         </StepRow>
 
         {step === 0 && (
@@ -264,12 +320,17 @@ export const PostTrip = () => {
                         onClick={() => setSelectedTruckId(truck._id)}
                       >
                         <CardRow>
-                          <Stack $gap={1}>
-                            <strong>{truck.regNumber}</strong>
-                            <Muted>
-                              {truck.truckType} · {formatTons(truck.totalCapacity)} capacity
-                            </Muted>
-                          </Stack>
+                          <Row $gap={3}>
+                            <TruckThumb>
+                              <TruckIcon size={19} strokeWidth={2} />
+                            </TruckThumb>
+                            <Stack $gap={1}>
+                              <strong>{truck.regNumber}</strong>
+                              <Muted>
+                                {truck.truckType} · {formatTons(truck.totalCapacity)} capacity
+                              </Muted>
+                            </Stack>
+                          </Row>
                           <StatusBadge status={truck.status} />
                         </CardRow>
                       </TruckOption>
@@ -295,80 +356,66 @@ export const PostTrip = () => {
 
         {step === 2 && (
           <Card>
-            <Stack $gap={4}>
+            <Stack $gap={5}>
               <SectionTitle>Capacity &amp; price</SectionTitle>
-              <Field
-                label="Total capacity on this trip (tons)"
-                error={capacityErrors.totalCapacity}
-                help={selectedTruck ? `Truck rated for ${formatTons(selectedTruck.totalCapacity)}` : undefined}
-              >
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  max={selectedTruck?.totalCapacity}
-                  value={totalCapacity}
-                  onChange={(e) => setTotalCapacity(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="Capacity available to sell (tons)"
-                error={capacityErrors.availableCapacity}
-                help="Can be less than total if you're keeping some for yourself"
-              >
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  max={totalCapacity || undefined}
-                  value={availableCapacity}
-                  onChange={(e) => setAvailableCapacity(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="Total volume (m³, optional)"
-                error={capacityErrors.volumeCbm}
-                help="Optional — for bulky-but-light goods that run out of space before weight"
-              >
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={volumeCbm}
-                  onChange={(e) => setVolumeCbm(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="Volume available to sell (m³, optional)"
-                error={capacityErrors.availableVolumeCbm}
-                help="Leave both volume fields blank if you don't want to track volume for this trip"
-              >
-                <Input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  max={volumeCbm || undefined}
-                  value={availableVolumeCbm}
-                  onChange={(e) => setAvailableVolumeCbm(e.target.value)}
-                />
-              </Field>
-              <Field label="Price per ton (INR)" error={capacityErrors.pricePerTon}>
-                <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
-              </Field>
-              <Field label="Pickup point" error={capacityErrors.pickupPoint}>
-                <LocationAutocomplete
-                  placeholder="e.g. Hadapsar warehouse, near ring road"
-                  value={pickupPoint}
-                  onChange={setPickupPoint}
-                />
-              </Field>
-              <Field label="Drop point" error={capacityErrors.dropPoint}>
-                <LocationAutocomplete
-                  placeholder="e.g. APMC yard, Nashik"
-                  value={dropPoint}
-                  onChange={setDropPoint}
-                />
-              </Field>
+
+              <FieldGroup $first>
+                <SubHeading>Capacity</SubHeading>
+                <Field
+                  label="Total capacity on this trip"
+                  error={capacityErrors.totalCapacity}
+                  help={selectedTruck ? `Truck rated for ${formatTons(selectedTruck.totalCapacity)}` : undefined}
+                >
+                  <UnitAmountInput
+                    value={totalCapacityAmount.displayValue}
+                    unit={totalCapacityAmount.unit}
+                    onValueChange={totalCapacityAmount.onValueChange}
+                    onUnitChange={totalCapacityAmount.onUnitChange}
+                    minTons={0.1}
+                    maxTons={selectedTruck?.totalCapacity}
+                  />
+                </Field>
+                <Field
+                  label="Capacity available to sell"
+                  error={capacityErrors.availableCapacity}
+                  help="Can be less than total if you're keeping some for yourself"
+                >
+                  <UnitAmountInput
+                    value={availableCapacityAmount.displayValue}
+                    unit={availableCapacityAmount.unit}
+                    onValueChange={availableCapacityAmount.onValueChange}
+                    onUnitChange={availableCapacityAmount.onUnitChange}
+                    minTons={0.1}
+                    maxTons={totalCapacityAmount.tons || undefined}
+                  />
+                </Field>
+              </FieldGroup>
+
+              <FieldGroup>
+                <SubHeading>Price</SubHeading>
+                <Field label="Price per ton (INR)" error={capacityErrors.pricePerTon}>
+                  <Input type="number" min="1" step="1" value={pricePerTon} onChange={(e) => setPricePerTon(e.target.value)} />
+                </Field>
+              </FieldGroup>
+
+              <FieldGroup>
+                <SubHeading>Pickup &amp; drop points</SubHeading>
+                <Field label="Pickup point" error={capacityErrors.pickupPoint}>
+                  <LocationAutocomplete
+                    placeholder="e.g. Hadapsar warehouse, near ring road"
+                    value={pickupPoint}
+                    onChange={setPickupPoint}
+                  />
+                </Field>
+                <Field label="Drop point" error={capacityErrors.dropPoint}>
+                  <LocationAutocomplete
+                    placeholder="e.g. APMC yard, Nashik"
+                    value={dropPoint}
+                    onChange={setDropPoint}
+                  />
+                </Field>
+              </FieldGroup>
+
               <Row $gap={3}>
                 <Button $variant="ghost" onClick={() => setStep(1)}>
                   Back
@@ -416,17 +463,9 @@ export const PostTrip = () => {
                 <CardRow>
                   <Muted>Capacity</Muted>
                   <span>
-                    {formatTons(availableCapacity)} available of {formatTons(totalCapacity)}
+                    {formatTons(availableCapacityAmount.tons)} available of {formatTons(totalCapacityAmount.tons)}
                   </span>
                 </CardRow>
-                {volumeCbm.trim() && (
-                  <CardRow>
-                    <Muted>Volume</Muted>
-                    <span>
-                      {formatCbm(availableVolumeCbm)} available of {formatCbm(volumeCbm)}
-                    </span>
-                  </CardRow>
-                )}
                 <CardRow>
                   <Muted>Price</Muted>
                   <Price>{formatINR(pricePerTon)} / ton</Price>

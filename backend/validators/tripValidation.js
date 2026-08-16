@@ -21,15 +21,6 @@ const postTripValidation = Joi.object({
   dropPoint: locationPointValidation.required(),
   totalCapacity: Joi.number().positive().required(),
   availableCapacity: Joi.number().positive().max(Joi.ref("totalCapacity")).required(),
-  // Optional pair, mirroring totalCapacity/availableCapacity — required
-  // together so a trip never ends up with a volume figure but no available
-  // figure (or vice versa).
-  volumeCbm: Joi.number().positive().optional(),
-  availableVolumeCbm: Joi.when("volumeCbm", {
-    is: Joi.exist(),
-    then: Joi.number().positive().max(Joi.ref("volumeCbm")).required(),
-    otherwise: Joi.forbidden(),
-  }),
   pricePerTon: Joi.number().positive().required(),
 });
 
@@ -39,7 +30,6 @@ const editTripValidation = Joi.object({
   pickupPoint: locationPointValidation,
   dropPoint: locationPointValidation,
   totalCapacity: Joi.number().positive(),
-  volumeCbm: Joi.number().positive(),
   pricePerTon: Joi.number().positive(),
 });
 
