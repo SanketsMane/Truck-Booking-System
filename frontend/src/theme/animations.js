@@ -40,6 +40,21 @@ export const pulseSoft = keyframes`
   50% { opacity: 0.55; }
 `;
 
+// Loading-skeleton shimmer — a light band sweeping left-to-right across a
+// gradient background (see components/ui/Skeleton.jsx), rather than a flat
+// opacity pulse, since a directional sweep reads as "content is arriving"
+// instead of just "something is dim."
+export const shimmer = keyframes`
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+`;
+
+// Terminal-style caret blink for typing-effect text.
+export const blink = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+`;
+
 // SVG-native dash scroll (stroke-dashoffset) for road markings drawn as an
 // actual <line>/<path>, as opposed to roadDash's CSS background-position
 // variant used on plain HTML elements.
@@ -55,5 +70,7 @@ export default {
   wheelSpin,
   roadDash,
   pulseSoft,
+  shimmer,
   dashScroll,
+  blink,
 };
