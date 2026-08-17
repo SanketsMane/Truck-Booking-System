@@ -336,7 +336,7 @@ export const Footer = () => {
       items: [
         { label: "Find Truck Capacity", icon: COLUMN_ICON_MAP.Search, to: "/" },
         { label: "How It Works", icon: COLUMN_ICON_MAP.PlayCircle, to: "/about#how-it-works" },
-        { label: `Why ${platformName}`, icon: COLUMN_ICON_MAP.ShieldCheck, to: "/about#vision" },
+        { label: `Why ${platformName}`, icon: COLUMN_ICON_MAP.ShieldCheck, to: "/for-shippers" },
         { label: "Help Center", icon: COLUMN_ICON_MAP.HelpCircle, to: "/help" },
         { label: "Contact Support", icon: COLUMN_ICON_MAP.Headset, to: "/support" },
       ],
