@@ -405,11 +405,17 @@ export const ManageTrip = () => {
               <FieldGroup $first>
                 <SubHeading>Schedule</SubHeading>
                 <Field label="Departure date & time" error={editErrors.departureAt}>
-                  <Input type="datetime-local" value={departureAt} onChange={(e) => setDepartureAt(e.target.value)} />
+                  <Input
+                    type="datetime-local"
+                    lang="en-GB"
+                    value={departureAt}
+                    onChange={(e) => setDepartureAt(e.target.value)}
+                  />
                 </Field>
                 <Field label="Estimated arrival (optional)">
                   <Input
                     type="datetime-local"
+                    lang="en-GB"
                     value={estimatedArrivalAt}
                     onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                   />

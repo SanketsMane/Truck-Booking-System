@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { MapPin, Loader2, CircleCheck } from "lucide-react";
+import { MapPin, Loader2, CircleCheck, X } from "lucide-react";
 import { Input } from "./Form";
 import { useOnClickOutside } from "../../hooks/useOnClickOutside";
 
@@ -44,6 +44,30 @@ const IconRight = styled.span`
 const LocationInput = styled(Input)`
   padding-left: 40px;
   padding-right: 40px;
+`;
+
+// A real button (not the pointer-events:none IconRight wrapper the loading
+// spinner uses) — sits in the same top-right slot, shown instead of the
+// spinner once a request isn't in flight, so there's only ever one thing
+// there at a time.
+const ClearButton = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: ${({ theme }) => theme.color.textFaint};
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.color.surfaceRaised};
+    color: ${({ theme }) => theme.color.text};
+  }
 `;
 
 const Dropdown = styled.ul`
@@ -175,6 +199,7 @@ export const LocationAutocomplete = ({
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef(null);
+  const inputRef = useRef(null);
   const debounceRef = useRef(null);
   const requestIdRef = useRef(0);
   const skipNextFetch = useRef(false);
@@ -238,6 +263,18 @@ export const LocationAutocomplete = ({
     onChange({ address: text, lat: null, lng: null });
   };
 
+  // Clears both halves of this field's state — the address itself and
+  // whatever city onResolve last resolved it to — so a parent (e.g. Home's
+  // search form) can't act on a stale resolved city after the visible
+  // field goes empty.
+  const handleClear = () => {
+    onChange({ address: "", lat: null, lng: null });
+    onResolve?.("");
+    setSuggestions([]);
+    setOpen(false);
+    inputRef.current?.focus();
+  };
+
   const handleKeyDown = (e) => {
     if (!open || suggestions.length === 0) return;
     if (e.key === "ArrowDown") {
@@ -260,6 +297,7 @@ export const LocationAutocomplete = ({
         {confirmed ? <CircleCheck size={16} /> : <MapPin size={16} />}
       </IconLeft>
       <LocationInput
+        ref={inputRef}
         id={id}
         type="text"
         autoComplete="off"
@@ -273,10 +311,16 @@ export const LocationAutocomplete = ({
         onFocus={() => address.trim().length >= MIN_QUERY_LENGTH && suggestions.length > 0 && setOpen(true)}
         onKeyDown={handleKeyDown}
       />
-      {loading && (
+      {loading ? (
         <IconRight>
           <Loader2 size={16} />
         </IconRight>
+      ) : (
+        address.length > 0 && (
+          <ClearButton type="button" aria-label="Clear" onMouseDown={(e) => e.preventDefault()} onClick={handleClear}>
+            <X size={15} strokeWidth={2.4} />
+          </ClearButton>
+        )
       )}
       {open && !loading && (suggestions.length > 0 || address.trim().length >= MIN_QUERY_LENGTH) && (
         <Dropdown role="listbox">

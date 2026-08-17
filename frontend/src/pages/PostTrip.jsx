@@ -290,6 +290,7 @@ export const PostTrip = () => {
               <Field label="Departure date & time" error={routeErrors.departureAt}>
                 <Input
                   type="datetime-local"
+                  lang="en-GB"
                   min={toDateTimeInputValue()}
                   value={departureAt}
                   onChange={(e) => setDepartureAt(e.target.value)}
@@ -302,6 +303,7 @@ export const PostTrip = () => {
               >
                 <Input
                   type="datetime-local"
+                  lang="en-GB"
                   value={estimatedArrivalAt}
                   onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                 />

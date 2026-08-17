@@ -12,13 +12,11 @@ import {
   IndianRupee,
   MapPin,
   Package,
-  Route,
   Search,
   Send,
   ShieldCheck,
   SignpostBig,
   Truck,
-  Users,
 } from "lucide-react";
 import heroTruckPhotoSrc from "../assets/hero-truck-photo.jpg";
 import verifiedTruckSrc from "../assets/verified-truck.png";
@@ -323,78 +321,6 @@ const RouteFrom = styled(RoutePin)`
   bottom: 4%;
   right: 1%;
 `;
-
-// Floating trust card, top-right over the truck image — tablet+ only (no
-// room at phone width without crowding the truck itself, per "do not make
-// it too tall / no floating elements outside the viewport").
-const StatsCard = styled.div`
-  display: none;
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    display: flex;
-    position: absolute;
-    top: 4%;
-    left: 4%;
-    z-index: 2;
-    align-items: center;
-    background: ${({ theme }) => theme.color.surface};
-    border: 1px solid ${({ theme }) => theme.color.border};
-    border-radius: 16px;
-    box-shadow: ${({ theme }) => theme.shadow.raised};
-    padding: 12px 6px;
-    animation: ${fadeInUp} 0.6s ease 0.1s both;
-  }
-`;
-
-const StatItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-`;
-
-const StatIconWrap = styled.div`
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: ${({ $bg }) => $bg};
-  color: ${({ $color }) => $color};
-`;
-
-const StatNumber = styled.div`
-  font-size: 15px;
-  font-weight: 800;
-  line-height: 1.1;
-  color: ${({ $color }) => $color};
-`;
-
-const StatLabel = styled.div`
-  font-size: 10.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.color.textMuted};
-  white-space: nowrap;
-`;
-
-const StatDivider = styled.div`
-  width: 1px;
-  height: 30px;
-  flex-shrink: 0;
-  background: ${({ theme }) => theme.color.border};
-`;
-
-// Fixed, hardcoded marketing figures per the client's own copy brief —
-// not read from the API. Nothing in this app currently tracks
-// platform-wide "active trucks"/"verified users"/"routes covered" totals,
-// and these are meant as headline trust numbers, not a live metric.
-const HERO_STATS = [
-  { icon: Truck, value: "10,000+", label: "Active Trucks", color: "#1d4ed8", bg: "#e6edfd" },
-  { icon: Users, value: "25,000+", label: "Verified Users", color: "#f26b21", bg: "#fdeae0" },
-  { icon: Route, value: "500+", label: "Routes Covered", color: "#3aa76d", bg: "#e2f3e9" },
-];
 
 const SearchCardWrap = styled.div`
   position: relative;
@@ -1729,22 +1655,6 @@ export const Home = () => {
                     Gurugram
                   </RouteFrom>
                 </RouteViz>
-                <StatsCard>
-                  {HERO_STATS.map(({ icon: Icon, value, label, color, bg }, i) => (
-                    <Fragment key={label}>
-                      {i > 0 && <StatDivider aria-hidden="true" />}
-                      <StatItem>
-                        <StatIconWrap $bg={bg} $color={color}>
-                          <Icon size={16} strokeWidth={2.4} />
-                        </StatIconWrap>
-                        <div>
-                          <StatNumber $color={color}>{value}</StatNumber>
-                          <StatLabel>{label}</StatLabel>
-                        </div>
-                      </StatItem>
-                    </Fragment>
-                  ))}
-                </StatsCard>
               </TruckImageFrame>
             </HeroRight>
           </HeroGrid>
@@ -1796,6 +1706,7 @@ export const Home = () => {
               <Field label="Date & time" error={errors.departureAt}>
                 <Input
                   type="datetime-local"
+                  lang="en-GB"
                   value={departureAt}
                   onChange={(e) => setDepartureAt(e.target.value)}
                 />
