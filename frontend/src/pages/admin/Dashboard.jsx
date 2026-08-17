@@ -178,6 +178,12 @@ const KpiCard = styled(AdminCard)`
   display: flex;
   flex-direction: column;
   gap: 10px;
+  // A grid item's implicit min-width is its content's min-content size
+  // unless overridden — without this, "Completed bookings" (the longest
+  // label) refuses to shrink below its own width and forces the whole
+  // 4-column grid wider than the viewport right at the 768px tablet
+  // breakpoint, where the sidebar simultaneously claims fixed width.
+  min-width: 0;
 `;
 
 const KpiTop = styled.div`
