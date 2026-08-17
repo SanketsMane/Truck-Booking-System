@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import heroTruckPhotoSrc from "../assets/hero-truck-photo.jpg";
+import roadTruckSrc from "../assets/road-truck.png";
 import { getPopularRoutes } from "../api/trips";
 import { PageContainer, Stack, Row, Muted, Body, SectionTitle } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
@@ -681,8 +682,14 @@ const driveRoad = keyframes`
 const RoadTruck = styled.g`
   offset-path: path("${ROAD_PATH_D}");
   offset-rotate: auto;
-  animation: ${driveRoad} 12s linear infinite;
+  animation: ${driveRoad} 22s linear infinite;
 `;
+
+// road-truck.png is 400x266 (≈1.5:1) — height picked to match the previous
+// lucide Truck icon's on-road footprint, width follows the source's own
+// aspect ratio so the illustration isn't stretched.
+const ROAD_TRUCK_HEIGHT = 30;
+const ROAD_TRUCK_WIDTH = Math.round(ROAD_TRUCK_HEIGHT * (400 / 266));
 
 const BandInner = styled.div`
   position: relative;
@@ -1354,9 +1361,13 @@ export const Home = () => {
           />
           <circle cx="1000" cy="30" r="4" fill="#1d4ed8" opacity="0.5" />
           <RoadTruck>
-            <g transform="translate(-16, -16)">
-              <Truck size={32} strokeWidth={2} color="#1d4ed8" />
-            </g>
+            <image
+              href={roadTruckSrc}
+              x={-ROAD_TRUCK_WIDTH / 2}
+              y={-ROAD_TRUCK_HEIGHT / 2}
+              width={ROAD_TRUCK_WIDTH}
+              height={ROAD_TRUCK_HEIGHT}
+            />
           </RoadTruck>
         </BandRoadDecoration>
       </Band>
