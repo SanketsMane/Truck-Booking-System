@@ -113,6 +113,7 @@ export const Footer = () => {
               <GroupTitle>Company</GroupTitle>
               <GroupLink to="/about">About</GroupLink>
               <GroupLink to="/help">Help</GroupLink>
+              <GroupLink to="/faq">FAQ</GroupLink>
               <GroupLink to="/support">Support</GroupLink>
             </LinkGroup>
             <LinkGroup>

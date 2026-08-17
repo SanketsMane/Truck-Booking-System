@@ -32,6 +32,7 @@ const SearchResults = lazy(() => import("../pages/SearchResults"));
 const TripDetail = lazy(() => import("../pages/TripDetail"));
 const About = lazy(() => import("../pages/About"));
 const Help = lazy(() => import("../pages/Help"));
+const Faq = lazy(() => import("../pages/Faq"));
 const Terms = lazy(() => import("../pages/Terms"));
 const Privacy = lazy(() => import("../pages/Privacy"));
 const NotFound = lazy(() => import("../pages/NotFound"));
@@ -101,6 +102,14 @@ export const Routing = () => (
         element={
           <Suspense fallback={<RouteFallback />}>
             <Help />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/faq"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <Faq />
           </Suspense>
         }
       />

@@ -1,182 +1,202 @@
-// Real answers, drawn from how the product actually behaves — not
-// marketing copy. Each item's `id` is a stable anchor other pages can
-// deep-link to (e.g. Home's FAQ teaser links to `/help#cancellations`), and
-// this same array feeds both the visible accordion on Help.jsx and its
-// FAQPage JSON-LD, so the two can't drift out of sync with each other.
-// Kept in its own module (not exported from Help.jsx) so Fast Refresh
-// still treats Help.jsx as a component-only file.
+// Verbatim from "TruckGee — Frequently Asked Questions" — questions,
+// answers and category groupings match that source document exactly; do
+// not paraphrase or add items beyond what it contains. Each item's `id` is
+// a stable anchor other pages can deep-link to (e.g. Home's FAQ accordion
+// links to `/faq#id`), and this same array feeds the FAQ page's visible
+// accordion, its FAQPage JSON-LD, and the Home page teaser, so none of
+// them can drift out of sync with each other.
 export const FAQ_CATEGORIES = [
   {
-    category: "Getting started",
+    category: "For Shippers",
     items: [
       {
-        id: "how-to-book",
-        question: "How do I book truck capacity?",
+        id: "what-is-truckgee",
+        question: "What is TruckGee?",
         answer:
-          "Search your route and date from the home page, compare the available trips by price and capacity, and send a booking request. Once the transporter accepts, coordinate pickup directly with them — you can follow the booking's status (confirmed, picked up, delivered) from there.",
+          "TruckGee is a technology platform that connects shippers with transporters who have available space on trucks already travelling compatible routes.",
       },
       {
-        id: "kyc-verification",
-        question: "How does identity verification (KYC) work?",
+        id: "how-does-truckgee-work",
+        question: "How does TruckGee work?",
         answer:
-          "Before you can accept or confirm a booking, you'll submit a document — Aadhaar, PAN, a driving licence, or a business/GST certificate — from your profile. Our team reviews it, and you're notified once it's approved.",
+          "Enter your pickup location, destination, shipment details and preferred date. TruckGee helps you find available trucks already travelling your route. You can review the available options and send a booking request to a transporter.",
       },
       {
-        id: "shipper-and-transporter",
-        question: "Can I be both a shipper and a transporter?",
+        id: "book-entire-truck",
+        question: "Do I need to book an entire truck?",
         answer:
-          "Yes. Add the second role from your Profile page at any time — no separate account needed.",
+          "No. Where suitable capacity is available, you can use only the space your shipment requires instead of booking an entire truck.",
       },
       {
-        id: "platform-role",
-        question: "Does the platform transport my goods itself?",
+        id: "multiple-transporter-options",
+        question: "Will I get multiple transporter options?",
         answer:
-          "No. It's a technology platform that connects shippers and transporters — the actual transportation is carried out by the transporter you book, not by us.",
+          "If multiple transporters have suitable available capacity for your route and date, you may see multiple options and choose the one that suits your requirements.",
       },
       {
-        id: "multiple-options",
-        question: "Will I see multiple transporter options?",
+        id: "how-is-price-decided",
+        question: "How is the price decided?",
         answer:
-          "If more than one transporter has suitable available capacity for your route and date, you'll see all of them and can compare before choosing.",
+          "Pricing may depend on the route, shipment weight and volume, vehicle type, available capacity, pickup/drop requirements, timing and the price offered by the transporter.",
       },
       {
-        id: "how-different",
-        question: "How is this different from booking a truck the traditional way?",
+        id: "choose-transporter",
+        question: "Can I choose the transporter?",
+        answer: "Yes. You can review the available options and send a request to the transporter you prefer.",
+      },
+      {
+        id: "truckgee-transport-goods",
+        question: "Does TruckGee transport my goods?",
         answer:
-          "Traditionally you hire an entire truck for your shipment. Here, you find a truck that's already travelling your way and, where suitable space is available, use only the capacity your shipment actually needs.",
+          "TruckGee is a technology platform that connects shippers and transporters. The actual transportation is carried out by the transporter selected for the shipment.",
       },
     ],
   },
   {
-    category: "Pricing & payment",
+    category: "For Transporters",
     items: [
       {
-        id: "how-pricing-works",
-        question: "How does payment work?",
-        answer:
-          "The platform doesn't process any payment — you and the other party agree directly on price, method (cash, UPI, bank transfer, whatever works for you), and timing. The price shown on a trip is a reference estimate the transporter sets, so you can compare options before you book.",
+        id: "list-available-truck-space",
+        question: "How can I list my available truck space?",
+        answer: "You can add your route, departure date, vehicle details and available capacity on TruckGee.",
       },
       {
-        id: "price-factors",
-        question: "What determines the price?",
-        answer:
-          "The route, your shipment's weight, vehicle type, available capacity, pickup/drop requirements and timing all factor in — along with the price the transporter has set for that trip.",
+        id: "get-additional-loads",
+        question: "How can I get additional loads?",
+        answer: "TruckGee helps you discover shipment requests that may match your route and available truck capacity.",
       },
       {
-        id: "commission",
-        question: "Does the platform take a cut?",
+        id: "accept-every-request",
+        question: "Do I have to accept every shipment request?",
+        answer: "No. You can review the shipment details and decide whether to accept or reject a request.",
+      },
+      {
+        id: "partially-loaded-truck",
+        question: "Can I list a partially loaded truck?",
+        answer: "Yes. If your truck has suitable unused capacity, you can list the available space for potential shipments.",
+      },
+      {
+        id: "available-space-changes",
+        question: "What if my available space changes?",
         answer:
-          "No. It's completely free to use — no commission, no platform fee, no hidden charges, for shippers or transporters.",
+          "Please update or remove your listing as soon as your available capacity changes so that shippers see accurate information.",
       },
     ],
   },
   {
-    category: "Cancellations",
+    category: "Loss, Theft, Damage & Insurance",
     items: [
       {
-        id: "cancellations",
-        question: "Can I cancel a confirmed booking?",
+        id: "goods-lost-stolen-damaged",
+        question: "What if my goods are lost, stolen or damaged?",
         answer:
-          "Yes, free of charge, up until 6 hours before the trip's departure time. After that cutoff, cancellations aren't permitted through the app.",
+          "Before sending your shipment, please discuss and confirm the applicable responsibility, insurance and other terms directly with the transporter. If the agreed terms do not work for you, please do not proceed with the shipment.",
       },
       {
-        id: "no-response",
-        question: "What if a transporter never responds to my request?",
+        id: "truckgee-insurance",
+        question: "Does TruckGee provide insurance for my goods?",
         answer:
-          "A booking request that isn't accepted or rejected within its response window expires automatically, so you're never left waiting indefinitely — you're free to book a different trip.",
+          "Any insurance requirement or coverage should be discussed and confirmed between the shipper and transporter before the shipment is confirmed. Please make sure you are comfortable with the applicable terms before handing over your goods.",
       },
       {
-        id: "transporter-reject",
-        question: "Can a transporter reject my booking request?",
+        id: "dispute-with-transporter",
+        question: "What if there is a dispute with the transporter?",
         answer:
-          "Yes — a transporter can decline based on capacity, route, cargo type, timing or other requirements. If they decline, you're free to book a different trip right away.",
-      },
-      {
-        id: "transporter-cancels",
-        question: "What if a transporter cancels after accepting my request?",
-        answer:
-          "It happens rarely, but you're not left stuck — you can book another trip immediately. Repeated cancellations show up in that transporter's rating, so it affects their reputation on the platform.",
+          "Please first discuss the matter directly with the transporter and refer to the terms agreed for the shipment. Where applicable, TruckGee may assist with communication or provide relevant platform records.",
       },
     ],
   },
   {
-    category: "Trust & safety",
+    category: "Shipment Information & Documentation",
     items: [
       {
-        id: "disputes",
-        question: "What if something goes wrong with a delivery?",
+        id: "correct-shipment-details",
+        question: "Who is responsible for providing correct shipment details?",
         answer:
-          "You can raise a dispute directly from that booking's detail page. Our team reviews it and resolves it — this is separate from a general Support request, and is the fastest way to flag a specific booking problem.",
+          "The shipper should provide accurate information about the shipment, including its weight, quantity, dimensions, description and any other relevant details. Transporters should provide accurate vehicle and route information.",
       },
       {
-        id: "loss-damage",
-        question: "What if my goods are lost, stolen or damaged in transit?",
+        id: "any-type-of-goods",
+        question: "Can I send any type of goods?",
         answer:
-          "Agree on responsibility and insurance directly with the transporter before you hand over your shipment — the platform itself doesn't provide cargo insurance or cover loss/damage. If you're not comfortable with the terms a transporter offers, don't proceed with that booking.",
+          "No. Shipments must comply with applicable laws and TruckGee's prohibited or restricted-goods policies. Certain goods may require special handling, documentation, permits, packaging, insurance or specialised vehicles.",
       },
       {
-        id: "ratings",
-        question: "How does rating work?",
-        answer:
-          "After a booking is completed, both sides can rate and review each other. Ratings are visible on profiles, so a track record builds up on both the shipper and transporter side over time.",
-      },
-      {
-        id: "verified-meaning",
-        question: "What does a 'verified' badge actually mean?",
-        answer:
-          "It means that account's KYC documents (Aadhaar, PAN, driving licence, or business certificate) were reviewed and approved by our team — it reflects document verification, not a guarantee of every future shipment.",
-      },
-      {
-        id: "data-shared",
-        question: "What information does the other party see about me?",
-        answer:
-          "Once you have an active booking together, they can see your name, city, and rating — enough to coordinate a pickup — plus any chat messages you exchange. Your mobile number and verification documents are never shown to other users.",
-      },
-    ],
-  },
-  {
-    category: "Shipments & documentation",
-    items: [
-      {
-        id: "shipment-accuracy",
-        question: "Who's responsible for accurate shipment details?",
-        answer:
-          "The shipper is responsible for giving accurate weight, quantity, dimensions and a clear description of the goods. The transporter is responsible for accurate vehicle and route information.",
-      },
-      {
-        id: "restricted-goods",
-        question: "Can I ship anything?",
-        answer:
-          "No — shipments must comply with applicable law and can't include prohibited or restricted goods. Some goods need special handling, packaging, permits or insurance, so check with your transporter before booking if you're unsure.",
-      },
-      {
-        id: "gst-eway",
+        id: "gst-eway-bills",
         question: "What about GST invoices and e-way bills?",
         answer:
-          "Shippers and transporters are each responsible for their own tax, invoicing, e-way bill and transportation documentation — the platform doesn't generate these for you.",
+          "Shippers and transporters are responsible for complying with applicable tax, invoicing, e-way bill and transportation documentation requirements.",
       },
     ],
   },
   {
-    category: "For transporters",
+    category: "Booking & Cancellation",
     items: [
       {
-        id: "post-a-trip",
-        question: "How do I list spare capacity?",
+        id: "transporter-reject-request",
+        question: "Can a transporter reject my request?",
         answer:
-          "Register your truck and complete verification, then post a trip with your route, departure date, and the capacity you have spare. It's searchable the moment it's published.",
+          "Yes. A transporter can accept or reject a shipment request based on capacity, route, cargo type, timing or other relevant requirements.",
       },
       {
-        id: "no-obligation",
-        question: "Do I have to accept every shipment request I get?",
-        answer:
-          "No. Review each request's details and accept or decline based on your own capacity, route and cargo fit.",
+        id: "cancel-my-shipment",
+        question: "Can I cancel my shipment?",
+        answer: "Cancellation will be subject to the applicable cancellation terms communicated for the shipment.",
       },
       {
-        id: "keep-listing-updated",
-        question: "What if my available space changes after I post a trip?",
+        id: "transporter-cancels-after-accepting",
+        question: "What if a transporter cancels after accepting my request?",
         answer:
-          "Update or remove your listing as soon as your available capacity changes, so shippers only ever see accurate, bookable space.",
+          "The applicable cancellation and reliability policies will apply. Repeated cancellations may affect a transporter's platform reputation or access, where applicable.",
+      },
+    ],
+  },
+  {
+    category: "Payments",
+    items: [
+      {
+        id: "online-payments",
+        question: "Does TruckGee handle online payments?",
+        answer: "The initial TruckGee MVP focuses on connecting shippers and transporters. Online payments are not part of the initial MVP.",
+      },
+    ],
+  },
+  {
+    category: "Trust & Verification",
+    items: [
+      {
+        id: "transporters-verified",
+        question: "Are transporters verified?",
+        answer:
+          "TruckGee may use appropriate identity, business, vehicle and document verification processes to improve trust and reliability. Only verification information actually completed by TruckGee should be represented as verified.",
+      },
+      {
+        id: "ratings-or-history",
+        question: "Can I see transporter ratings or history?",
+        answer: "Where ratings, reviews or trip history are available, you can use the information provided on the platform to help make your decision.",
+      },
+    ],
+  },
+  {
+    category: "Why TruckGee?",
+    items: [
+      {
+        id: "how-different-from-traditional",
+        question: "How is TruckGee different from traditional truck booking?",
+        answer:
+          "Traditional truck booking: You generally hire an entire truck for your shipment. TruckGee: You can find a truck that is already travelling your way and, where suitable space is available, use only the capacity your shipment needs.",
+      },
+      {
+        id: "benefit-for-shippers",
+        question: "What is the benefit for shippers?",
+        answer:
+          "You don't have to book the entire truck when you only need part of its available capacity. Find suitable available space and potentially move your goods at a lower cost.",
+      },
+      {
+        id: "benefit-for-transporters",
+        question: "What is the benefit for transporters?",
+        answer:
+          "Don't let suitable empty capacity travel unused. List available space on trips you're already making and get opportunities for additional loads.",
       },
     ],
   },

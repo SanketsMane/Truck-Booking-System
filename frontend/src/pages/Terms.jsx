@@ -1,9 +1,13 @@
-import { Link } from "react-router-dom";
 import { PageContainer, PageTitle, SectionTitle, Stack, Body, Muted } from "../components/ui/Layout";
 import { LegalNotice } from "../components/ui/LegalNotice";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useBranding } from "../context/BrandingContext";
 
+// Verbatim from "TruckGee — Terms & Conditions, Consolidated Draft" — do not
+// paraphrase or add sections beyond what that source document contains.
+// {platformName} substitutes for the document's literal "TruckGee" so the
+// rendered text still follows the admin-configurable branding every other
+// page uses; it never changes the actual wording of a clause.
 export const Terms = () => {
   const { platformName } = useBranding();
   usePageMeta({
@@ -14,307 +18,387 @@ export const Terms = () => {
   return (
     <PageContainer>
       <Stack $gap={5}>
-        <PageTitle>Terms of Service</PageTitle>
+        <PageTitle>Terms & Conditions</PageTitle>
 
         <LegalNotice>
-          This page describes how {platformName} actually operates today, in plain language. It is
-          published for transparency but has not yet received a final review by qualified legal
-          counsel. If anything here is unclear, or you'd like more detail on your rights, reach out
-          via <Link to="/support">Support</Link> before you rely on it.
+          <strong>This is a business/product draft and must be reviewed and finalized by an Indian
+          lawyer before launch.</strong> The final terms must match {platformName}'s actual operating
+          model, registered entity, contracts, applicable laws and services. No wording is intended to
+          exclude liability that cannot legally be excluded.
         </LegalNotice>
 
         <Stack $gap={2}>
           <SectionTitle>1. About {platformName}</SectionTitle>
           <Body>
-            {platformName} is a technology platform that connects shippers who need to move goods
-            with transporters who have available capacity on trucks already travelling compatible
-            routes. Unless expressly stated for a particular service, {platformName} does not itself
-            own, operate, or drive any vehicle, take physical possession of goods, or provide cargo
-            insurance merely because a shipment was arranged through the platform.
+            {platformName} is a technology platform that facilitates connections between shippers who
+            need to move goods and transporters who may have available capacity on trucks travelling
+            compatible routes.
+          </Body>
+          <Body>
+            Unless expressly stated for a particular service, {platformName} does not itself own,
+            operate or drive the vehicle, take physical possession or custody of the goods, or provide
+            cargo insurance merely because a shipment is arranged through the platform.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>2. Acceptance of these terms</SectionTitle>
+          <SectionTitle>2. Acceptance of Terms</SectionTitle>
           <Body>
-            By creating an account, listing capacity, submitting a booking request, accepting a
-            request, or otherwise using {platformName}, you agree to these Terms and to our{" "}
-            <Link to="/privacy">Privacy Policy</Link>. If you don't agree, please don't use{" "}
-            {platformName}.
+            By accessing the platform, creating an account, listing capacity, submitting a shipment
+            request, accepting a request or otherwise using {platformName}, the user agrees to these
+            Terms and applicable {platformName} policies.
+          </Body>
+          <Body>If the user does not agree to these Terms, the user should not use the platform.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>3. User Accounts & Information</SectionTitle>
+          <Body>Users must provide accurate, complete and current information and must update it when it changes.</Body>
+          <Body>Users must not impersonate another person or provide false, misleading or fraudulent information.</Body>
+          <Body>
+            {platformName} may restrict, suspend or terminate access where permitted by law if it
+            reasonably believes an account is involved in fraud, misuse, unlawful activity, safety
+            concerns, false information or material violation of these Terms.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>3. Eligibility & your account</SectionTitle>
+          <SectionTitle>4. {platformName}'s Role</SectionTitle>
           <Body>
-            You must be at least 18 years old, hold a valid email address, and provide accurate,
-            current account information to use the platform — and keep it updated when it changes.
-            You must not impersonate another person or provide false or misleading information. You
-            may hold a shipper role, a transporter role, or both, and can add the second role to an
-            existing account at any time.
+            {platformName} provides the digital platform, discovery, matching, communication and
+            booking-request functionality described on the platform.
+          </Body>
+          <Body>
+            {platformName} is not automatically a carrier, transporter, freight forwarder, warehouse
+            operator, insurer, consignee or custodian of goods solely because the platform facilitates
+            a connection.
+          </Body>
+          <Body>
+            The physical transportation of goods is performed by the transporter selected for the
+            shipment, subject to the terms agreed between the relevant parties and applicable law.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>4. Identity verification (KYC)</SectionTitle>
+          <SectionTitle>5. Shipper Responsibilities</SectionTitle>
           <Body>
-            Accounts are accessed by a one-time code sent to your email, or a password if you've set
-            one — keep both secure, since they're how the app confirms it's really you. Certain
-            actions (accepting bookings, publishing trips) require identity verification: we ask
-            transporters and shippers to submit documents such as Aadhaar, PAN, a driving licence, or
-            a business/GST certificate. Only checks {platformName} has actually completed are shown
-            as "verified" — submitting a false document, or someone else's, is a violation of these
-            terms and may result in account suspension.
+            The shipper is responsible for providing accurate information about the shipment,
+            including pickup and delivery locations, commodity description, quantity, weight,
+            dimensions, value where relevant, timing and special handling requirements.
+          </Body>
+          <Body>
+            The shipper must ensure that the goods are legally permitted to be transported and that
+            required invoices, permits, declarations, e-way bills and other applicable documents are
+            available.
+          </Body>
+          <Body>
+            The shipper is responsible for suitable packaging and for disclosing information that
+            could affect vehicle suitability, safety or handling.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>5. {platformName}'s role</SectionTitle>
+          <SectionTitle>6. Transporter Responsibilities</SectionTitle>
           <Body>
-            {platformName} provides the digital platform — discovery, matching, communication, and
-            booking-request functionality. We are not automatically a carrier, transporter, freight
-            forwarder, warehouse operator, insurer, consignee, or custodian of goods solely because
-            the platform facilitated a connection. The physical transportation of goods is performed
-            by the transporter selected for the shipment, subject to the terms agreed between the
-            shipper and transporter and applicable law.
+            The transporter is responsible for providing accurate vehicle, route, departure-date and
+            available-capacity information.
+          </Body>
+          <Body>
+            The transporter is responsible for ensuring that the vehicle and driver used for a
+            shipment meet applicable legal and operational requirements.
+          </Body>
+          <Body>
+            After accepting a shipment, the transporter should fulfil the accepted commitment in
+            accordance with the agreed shipment terms, subject to permitted cancellation or
+            circumstances beyond the transporter's reasonable control.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>6. Shipper responsibilities</SectionTitle>
+          <SectionTitle>7. Capacity Listings & Matching</SectionTitle>
+          <Body>Transporters should list only genuinely available and suitable capacity.</Body>
           <Body>
-            As a shipper, you're responsible for providing accurate information about your shipment —
-            pickup and delivery locations, description, quantity, weight, and any special handling
-            requirements. You must ensure your goods are legally permitted to be transported and that
-            required invoices, permits, declarations, e-way bills, and other applicable documents are
-            available. You're responsible for suitable packaging and for disclosing anything that
-            could affect vehicle suitability, safety, or handling.
+            {platformName} may use route, date, shipment, vehicle and capacity information to display
+            or recommend potentially suitable options.
+          </Body>
+          <Body>
+            A listing or suggested match does not by itself guarantee a shipment or create a confirmed
+            booking. Confirmation occurs only through the applicable booking/request flow.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>7. Transporter responsibilities</SectionTitle>
+          <SectionTitle>8. Booking, Acceptance & Rejection</SectionTitle>
+          <Body>Transporters may accept or reject shipment requests in accordance with the platform flow.</Body>
           <Body>
-            As a transporter, you're responsible for providing accurate vehicle, route,
-            departure-date, and available-capacity information, and for ensuring the vehicle and
-            driver used for a shipment meet applicable legal and operational requirements. You should
-            list only genuinely available and suitable capacity, and after accepting a shipment,
-            fulfil that commitment in line with the agreed terms — subject to permitted cancellation
-            or circumstances beyond your reasonable control.
+            A shipper should not assume that a request is confirmed until the platform indicates
+            confirmation according to the applicable process.
+          </Body>
+          <Body>
+            {platformName} may limit, remove or correct listings that are inaccurate, unavailable,
+            unsafe or inconsistent with platform policies.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>8. Capacity listings & matching</SectionTitle>
+          <SectionTitle>9. Pricing & Commercial Terms</SectionTitle>
           <Body>
-            {platformName} uses route, date, shipment, vehicle, and capacity information to display
-            or recommend potentially suitable options. A listing or suggested match does not by
-            itself guarantee a shipment or create a confirmed booking — confirmation only happens
-            through the booking flow described below. We may limit, remove, or correct listings that
-            are inaccurate, unavailable, unsafe, or inconsistent with our policies.
+            Pricing may depend on route, weight, volume, vehicle type, available capacity, pickup/drop
+            requirements, timing and the commercial terms offered by the transporter.
           </Body>
+          <Body>
+            Unless expressly stated, {platformName} does not guarantee that a displayed price is the
+            lowest price available elsewhere.
+          </Body>
+          <Body>Any taxes, tolls, handling charges or other applicable charges should be clarified for the shipment.</Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>9. Booking, acceptance & rejection</SectionTitle>
-          <Body>
-            A booking request reserves capacity but isn't confirmed until the transporter accepts it,
-            subject to available capacity on the truck. Transporters may accept or reject requests
-            based on capacity, route, cargo type, timing, or other relevant requirements. A shipper
-            should not assume a request is confirmed until the app shows it as confirmed. Requests
-            left unanswered past their response window expire automatically, so you're never left
-            waiting indefinitely.
-          </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>10. Pricing & payment</SectionTitle>
-          <Body>
-            {platformName} is a free platform — we don't charge a commission, a listing fee, or any
-            platform fee to either side. Trip listings and price estimates are set by transporters
-            and shown so shippers can compare options; the price shown is a reference, not an amount
-            {" "}{platformName} collects, holds, or guarantees. Pricing may depend on the route, shipment
-            weight, vehicle type, available capacity, pickup/drop requirements, timing, and the price
-            the transporter has set.
-          </Body>
-          <Body>
-            Once a booking is confirmed, payment — the amount, method (cash, UPI, bank transfer, or
-            anything else you both agree on), and timing — is entirely between the shipper and the
-            transporter. {platformName} does not process, hold, or guarantee any payment, and has no
-            visibility into whether or how it was made.
-          </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>11. Pickup, loading & delivery</SectionTitle>
+          <SectionTitle>10. Pickup, Loading, Unloading & Delivery</SectionTitle>
           <Body>
             The shipper and transporter should clarify pickup, loading, unloading, delivery, waiting
-            time, and any special handling responsibilities before confirming the shipment.{" "}
-            {platformName} may provide communication tools and platform records but does not take
-            physical custody of goods merely because the booking was made through the app.
+            time and any special handling responsibilities before confirming the shipment.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>12. Loss, theft, damage & insurance</SectionTitle>
           <Body>
-            Before handing over a shipment, the shipper and transporter should directly discuss and
-            confirm the applicable responsibility, insurance arrangements, and other shipment-specific
-            terms. If the agreed terms don't work for either party, that party should not proceed
-            with the shipment. {platformName} does not automatically provide cargo insurance and is
-            not the carrier, custodian, or insurer of any shipment. A problem with a specific booking
-            can be raised as a dispute directly from that booking, for our team to review; anything
-            else can go through <Link to="/support">Support</Link>.
+            {platformName} may provide communication and platform records but does not take physical
+            custody of goods merely because the booking was made through {platformName}.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>13. Cancellations & no-shows</SectionTitle>
+          <SectionTitle>11. Loss, Theft, Damage & Insurance Policy</SectionTitle>
           <Body>
-            Either party may cancel a confirmed booking up until the cancellation cutoff shown on
-            that booking, after which cancellations are no longer permitted through the app. Cancel
-            as early as reasonably possible if you can't proceed with a shipment or an accepted
-            commitment — repeated, abusive, or last-minute cancellations may affect your account
-            standing or, for transporters, show up in their rating.
+            Before sending a shipment, the shipper and transporter should directly discuss and confirm
+            the applicable responsibility, insurance arrangements and other shipment-specific terms.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>14. Prohibited & restricted goods</SectionTitle>
+          <Body>If the agreed terms do not work for either party, that party should not proceed with the shipment.</Body>
           <Body>
-            You must not use {platformName} to arrange transportation of goods that are illegal,
-            prohibited, improperly declared, or restricted under applicable law — including illegal
-            drugs or substances, explosives, unlawful weapons, stolen or counterfeit goods, and
-            unlawfully traded wildlife or environmental items. Goods requiring special permits,
-            dangerous-goods handling, temperature control, specialised vehicles, or other regulatory
-            controls may only be carried where all applicable requirements are satisfied. Transporters
-            may refuse shipments where goods, documentation, or conditions are unsuitable or
-            restricted.
+            Any insurance requirement or coverage should be discussed and confirmed between the
+            shipper and transporter before the goods are handed over.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>15. Documentation & legal compliance</SectionTitle>
           <Body>
-            Shippers and transporters are each responsible for complying with applicable requirements
-            relating to GST, invoices, e-way bills, vehicle documents, permits, declarations, and
-            transportation of goods. {platformName} doesn't generate these documents on your behalf —
-            each party is responsible for what it's legally required to provide.
+            {platformName} does not automatically provide cargo insurance unless a specific service
+            expressly states otherwise.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>16. Disputes between users</SectionTitle>
           <Body>
-            Shippers and transporters should first try to resolve shipment-specific issues directly,
-            using the terms agreed for that shipment. Where appropriate, {platformName} may facilitate
-            communication or provide relevant platform records — this doesn't make us a party to the
-            underlying transportation contract, or automatically responsible for the underlying
-            dispute. Nothing in these Terms removes any right or remedy that can't legally be
-            excluded.
+            Claims concerning loss, theft, damage, shortage or non-delivery should be raised through
+            the applicable process and handled according to the shipment terms, evidence, applicable
+            law and the responsibilities of the relevant parties.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>17. Conduct & platform misuse</SectionTitle>
           <Body>
-            You agree to use {platformName}'s chat, ratings, and booking tools honestly and
-            respectfully. No fraud, false listings, fake bookings, false cargo declarations,
-            manipulation of ratings, harassment, unauthorized access, or misuse of another user's
-            information. We may remove content, restrict listings, or suspend accounts where we
-            reasonably believe this section has been violated.
+            {platformName} may facilitate communication or provide relevant platform records where
+            appropriate, but such assistance does not by itself make {platformName} the carrier,
+            custodian or insurer.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>18. Ratings & ability to communicate</SectionTitle>
+          <SectionTitle>12. Cancellation & No-Show Policy</SectionTitle>
           <Body>
-            After a booking is completed, both sides can rate and review each other — this builds a
-            track record that helps future shippers and transporters decide who to work with. Users
-            may communicate directly for shipment-related matters and are responsible for evaluating
-            whether proposed terms are suitable before proceeding; please don't share sensitive
-            personal information unnecessarily, or use information obtained through{" "}
-            {platformName} for unrelated purposes.
+            Cancellation rights, charges and consequences are governed by the applicable booking flow,
+            cancellation terms and shipment-specific terms.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>19. Platform availability & third-party services</SectionTitle>
           <Body>
-            We aim to keep {platformName} available and functional, but uninterrupted or error-free
-            availability can't be guaranteed — we may carry out maintenance, updates, or security
-            measures at any time. We may use third-party providers for hosting, communications,
-            mapping, identity verification, or analytics; their involvement doesn't change the roles
-            of the shipper and transporter in the underlying shipment unless we expressly state
-            otherwise.
+            Shippers and transporters should cancel as early as reasonably possible if they cannot
+            proceed with a shipment or accepted commitment.
           </Body>
-        </Stack>
-
-        <Stack $gap={2}>
-          <SectionTitle>20. Intellectual property</SectionTitle>
           <Body>
-            {platformName}'s software, branding, logos, designs, and platform content are owned by or
-            licensed to us unless otherwise stated. You may not copy, modify, reverse engineer,
-            distribute, or commercially exploit our content or technology except as permitted by law
-            or our written permission.
+            Repeated, abusive or last-minute cancellations may affect platform reputation, access or
+            other consequences under the applicable policy, subject to law.
+          </Body>
+          <Body>
+            Where online payments or refunds are introduced in the future, the applicable
+            payment/refund rules should be displayed before the feature goes live.
+          </Body>
+          <Body>
+            Exceptional events outside a party's reasonable control may be treated differently,
+            subject to applicable law and the shipment terms.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>21. Limitation of liability & indemnity</SectionTitle>
+          <SectionTitle>13. Prohibited & Restricted Goods Policy</SectionTitle>
+          <Body>
+            Users must not use {platformName} to arrange transportation of goods that are illegal,
+            prohibited, improperly declared or restricted under applicable law or {platformName}
+            policy.
+          </Body>
+          <Body>
+            Prohibited categories may include illegal drugs or substances, explosives, unlawful
+            weapons or weapons-related goods, stolen goods, counterfeit goods, unlawfully traded
+            wildlife/environmental items and other goods prohibited by applicable law.
+          </Body>
+          <Body>
+            Goods requiring special permits, dangerous-goods handling, temperature control,
+            specialised vehicles, special packaging, insurance or other regulatory controls may only
+            be accepted where all applicable requirements are satisfied.
+          </Body>
+          <Body>Shippers must accurately declare the nature, quantity, weight, dimensions and relevant characteristics of goods.</Body>
+          <Body>
+            {platformName} may remove listings, refuse requests, restrict accounts or cooperate with
+            lawful authorities where prohibited, unsafe, fraudulent or unlawful activity is suspected.
+          </Body>
+          <Body>
+            Transporters may refuse shipments where goods, documentation, packaging, capacity or other
+            conditions are unsuitable or legally restricted.
+          </Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>14. Documentation & Legal Compliance</SectionTitle>
+          <Body>
+            Shippers and transporters are responsible for complying with applicable requirements
+            relating to GST, invoices, e-way bills, vehicle documents, permits, declarations,
+            packaging and transportation of goods.
+          </Body>
+          <Body>Each party is responsible for documents and information that it is legally required to provide.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>15. Disputes Between Users</SectionTitle>
+          <Body>
+            Shippers and transporters should first try to resolve shipment-specific issues directly
+            using the terms agreed for the shipment.
+          </Body>
+          <Body>
+            Where appropriate, {platformName} may facilitate communication or provide relevant
+            platform records. Such assistance does not make {platformName} a party to the underlying
+            transportation contract or automatically make {platformName} responsible for the
+            underlying dispute.
+          </Body>
+          <Body>Nothing in these Terms removes any rights or remedies that cannot legally be excluded.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>16. Platform Misuse & Fraud</SectionTitle>
+          <Body>
+            Users must not use {platformName} for fraud, unlawful activity, fake bookings, false cargo
+            declarations, manipulation of ratings, unauthorised access, harassment, or activity that
+            could harm other users or the platform.
+          </Body>
+          <Body>
+            {platformName} may take appropriate action, including removing content, restricting
+            listings or suspending accounts, where permitted by law.
+          </Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>17. User Communications</SectionTitle>
+          <Body>
+            Users may communicate directly with one another for shipment-related matters. Users are
+            responsible for evaluating whether the proposed shipment terms are suitable before
+            proceeding.
+          </Body>
+          <Body>
+            Users should not share sensitive personal information unnecessarily or use information
+            obtained through {platformName} for unrelated purposes or harassment.
+          </Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>18. Platform Availability</SectionTitle>
+          <Body>
+            {platformName} will aim to keep the platform available and functional, but uninterrupted
+            or error-free availability cannot be guaranteed.
+          </Body>
+          <Body>{platformName} may carry out maintenance, updates, security measures or changes to platform features.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>19. Third-Party Services</SectionTitle>
+          <Body>
+            {platformName} may use third-party technology or service providers for hosting,
+            communications, maps, identity verification, analytics or other platform functions. Their
+            involvement does not change the roles of the shipper and transporter in the underlying
+            shipment unless expressly stated.
+          </Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>20. Intellectual Property</SectionTitle>
+          <Body>
+            {platformName}'s software, branding, logos, designs, text and platform content are owned
+            by or licensed to {platformName} unless otherwise stated.
+          </Body>
+          <Body>
+            Users may not copy, reproduce, modify, reverse engineer, distribute or commercially
+            exploit {platformName} content or technology except as permitted by law or written
+            permission.
+          </Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>21. Limitation of Platform Role</SectionTitle>
           <Body>
             To the maximum extent permitted by applicable law, {platformName}'s role is limited to
-            providing the platform and services described here. We don't guarantee that a particular
-            transporter, capacity listing, price, route, or shipment outcome will always be available
-            or suitable, and we're not responsible for the condition of goods in transit, the conduct
-            of other users, or losses arising from an arrangement between a shipper and a transporter.
-            Nothing here is intended to exclude any liability that can't legally be excluded. To the
-            extent permitted by law, you may be required to indemnify {platformName} against
-            third-party claims arising from your unlawful conduct, fraud, material breach of these
-            terms, inaccurate shipment information, or misuse of the platform.
+            providing the platform and services expressly described on the platform.
+          </Body>
+          <Body>
+            {platformName} does not guarantee that a particular transporter, capacity listing, price,
+            route, delivery time or shipment outcome will always be available or suitable.
+          </Body>
+          <Body>
+            Any limitation, exclusion or allocation of liability must be interpreted subject to
+            applicable law and must not exclude liability that cannot legally be excluded.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>22. Suspension & termination</SectionTitle>
+          <SectionTitle>22. Indemnity</SectionTitle>
           <Body>
-            You may stop using {platformName} at any time. We may restrict, suspend, or terminate
-            accounts where permitted by law — for fraud, misuse, unlawful activity, safety concerns,
-            false verification information, or material violation of these terms — subject to
-            obligations that arose before termination.
+            To the extent permitted by applicable law, a user may be required to indemnify and hold
+            harmless {platformName} and its personnel from third-party claims, losses or costs arising
+            from the user's unlawful conduct, fraud, material breach of these Terms, inaccurate
+            shipment information or misuse of the platform.
+          </Body>
+          <Body>The final scope and enforceability of this clause should be reviewed by legal counsel.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>23. Suspension & Termination</SectionTitle>
+          <Body>
+            {platformName} may suspend or terminate access where permitted by law for material breach,
+            fraud, safety concerns, unlawful use, repeated misuse or other legitimate
+            platform-protection reasons.
+          </Body>
+          <Body>Users may stop using the platform at any time, subject to obligations that arose before termination.</Body>
+        </Stack>
+
+        <Stack $gap={2}>
+          <SectionTitle>24. Changes to Platform or Terms</SectionTitle>
+          <Body>{platformName} may update platform features and policies from time to time.</Body>
+          <Body>
+            Material changes to these Terms should be communicated in accordance with applicable law.
+            Continued use after an effective update may constitute acceptance where legally permitted.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>23. Changes to these terms</SectionTitle>
+          <SectionTitle>25. Governing Law & Dispute Resolution</SectionTitle>
           <Body>
-            We may update these terms and platform features as the product evolves. Material changes
-            will be reflected on this page; continued use after an update constitutes acceptance
-            where legally permitted.
+            The final version should specify governing law and courts or dispute-resolution mechanisms
+            after review by Indian legal counsel and based on {platformName}'s actual registered
+            entity, place of business and operating structure.
           </Body>
         </Stack>
 
         <Stack $gap={2}>
-          <SectionTitle>24. Governing law & dispute resolution</SectionTitle>
+          <SectionTitle>26. Contact & Grievance Support</SectionTitle>
           <Body>
-            These terms are governed by the laws of India, and any disputes are subject to the
-            jurisdiction of the courts having authority over {platformName}'s place of business,
-            without prejudice to any other rights available to you under applicable consumer
-            protection law.
+            {platformName} should publish an official support/contact channel for account, booking,
+            safety and platform-related concerns.
+          </Body>
+          <Body>
+            For loss, theft, damage, shortage, non-delivery or insurance matters, users should contact
+            the transporter directly first and refer to the terms agreed before shipment.
+          </Body>
+          <Body>
+            The final Terms should include the legally required grievance/contact details, registered
+            entity information and other notices applicable to the business.
           </Body>
         </Stack>
 
-        <Stack $gap={2}>
-          <SectionTitle>25. Contact & grievance redressal</SectionTitle>
-          <Body>
-            Questions about these terms, or a concern that needs to be escalated? Reach out via{" "}
-            <Link to="/support">Support</Link>. For loss, theft, damage, shortage, or non-delivery
-            concerns, please contact the transporter directly first and refer to the terms you agreed
-            before the shipment.
-          </Body>
-        </Stack>
-
-        <Muted>Last updated: 17 August 2026</Muted>
+        <Muted>Consolidated draft. Final legal drafting and review is required before public launch.</Muted>
       </Stack>
     </PageContainer>
   );

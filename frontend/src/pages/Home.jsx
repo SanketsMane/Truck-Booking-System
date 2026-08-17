@@ -8,9 +8,10 @@ import {
   FileCheck,
   Gift,
   IndianRupee,
+  Inbox,
   LifeBuoy,
+  ListChecks,
   MapPin,
-  Scale,
   Search,
   ShieldCheck,
   SignpostBig,
@@ -32,6 +33,7 @@ import { fadeInUp, blink, pulseSoft } from "../theme/animations";
 import { toDateTimeInputValue } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useUnitAmount } from "../hooks/useUnitAmount";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useBranding } from "../context/BrandingContext";
 import { FAQ_CATEGORIES } from "../content/faq";
 
@@ -395,7 +397,11 @@ const SwapRow = styled.div`
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: end;
-  gap: ${({ theme }) => theme.space(2)};
+  gap: ${({ theme }) => theme.space(1)};
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    gap: ${({ theme }) => theme.space(2)};
+  }
 `;
 
 const SearchFieldsRow = styled.div`
@@ -427,10 +433,17 @@ const SwapButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 6px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
   border-radius: 50%;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 6px;
+  }
   border: 1px solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surfaceRaised};
   color: ${({ theme }) => theme.color.text};
@@ -546,11 +559,7 @@ const ValueGrid = styled.div`
   gap: ${({ theme }) => theme.space(5)};
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 `;
 
@@ -698,6 +707,9 @@ const BandInner = styled.div`
   margin: 0 auto;
 `;
 
+// A clean 2x2 grid at tablet+ regardless of viewport width — each audience
+// tab always has exactly 4 steps, so there's no variable column count to
+// chase (unlike the old single 3-step flow this replaced).
 const ProcessGrid = styled.div`
   position: relative;
   display: grid;
@@ -706,31 +718,37 @@ const ProcessGrid = styled.div`
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     grid-template-columns: repeat(2, 1fr);
-    gap: ${({ theme }) => theme.space(11)} ${({ theme }) => theme.space(5)};
-  }
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    grid-template-columns: repeat(3, 1fr);
-    gap: ${({ theme }) => theme.space(6)};
+    gap: ${({ theme }) => theme.space(11)} ${({ theme }) => theme.space(6)};
   }
 `;
 
-// The horizontal dashed line linking all three step numbers — desktop only
-// (below that, steps stack and the connector would need a different, per-
-// pair vertical geometry; see ProcessStepWrap's own ::before for that case).
-// Positioned behind the circles (z-index below ProcessNumber's).
-const ProcessConnector = styled.div`
-  display: none;
+const AudienceTabs = styled.div`
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 auto ${({ theme }) => theme.space(9)};
+  background: ${({ theme }) => theme.color.surface};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.radius.pill};
+  box-shadow: ${({ theme }) => theme.shadow.card};
+`;
 
-  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    display: block;
-    position: absolute;
-    top: 23px;
-    left: 16.6%;
-    right: 16.6%;
-    border-top: 2px dashed ${({ theme }) => theme.color.accent};
-    opacity: 0.3;
-    z-index: 0;
+const AudienceTabsWrap = styled.div`
+  display: flex;
+  justify-content: center;
+`;
+
+const AudienceTab = styled.button`
+  padding: 9px 20px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  font-size: 14px;
+  font-weight: 700;
+  transition: background ${({ theme }) => theme.motion.fast} ease, color ${({ theme }) => theme.motion.fast} ease;
+  color: ${({ theme, $active }) => ($active ? theme.color.onAccent : theme.color.textMuted)};
+  background: ${({ theme, $active }) => ($active ? theme.color.accent : "transparent")};
+
+  &:hover {
+    color: ${({ theme, $active }) => ($active ? theme.color.onAccent : theme.color.text)};
   }
 `;
 
@@ -741,8 +759,8 @@ const ProcessStepWrap = styled.div`
   animation-delay: ${({ $i = 0 }) => 0.15 + $i * 0.12}s;
 
   // Vertical connector between stacked steps — only where the grid is
-  // guaranteed single-column (below tablet); tablet's 2-up and desktop's
-  // 3-up both use ProcessConnector's horizontal line instead.
+  // guaranteed single-column (below tablet); the 2x2 grid at tablet+ has no
+  // single connecting line that would make sense across both rows.
   @media (max-width: 767px) {
     &:not(:last-child)::before {
       content: "";
@@ -1011,28 +1029,55 @@ const VALUE_PROPS = [
     title: "100% free — no commission",
     body: "No platform fee, no listing fee, no hidden cut. Agree a price directly and keep every rupee of it.",
   },
-  {
-    icon: Scale,
-    title: "Backed by real support",
-    body: "If something goes wrong, raise it straight from the booking — our team steps in to resolve it.",
-  },
 ];
 
-const STEPS = [
+// Condensed from TruckGee's "How TruckGee Works" reference doc, which lists
+// each audience's flow as one semicolon-separated run — grouped here into
+// four step cards apiece without introducing any action that source doesn't
+// already describe.
+const SHIPPER_STEPS = [
   {
     icon: Search,
-    title: "Search your route",
-    body: "Tell us where and when — we'll show trucks already heading that way.",
+    title: "Enter pickup, destination & shipment details",
+    body: "Add your shipment weight and other required details, then choose the date.",
+  },
+  {
+    icon: ListChecks,
+    title: "View available trucks",
+    body: "See available trucks and capacity already travelling your route.",
   },
   {
     icon: FileCheck,
-    title: "Compare & book",
-    body: "Pick a truck by price, capacity and transporter rating, then book in minutes.",
+    title: "Review & send a request",
+    body: "Review transporter information and terms, then send a Book Now/request.",
+  },
+  {
+    icon: MapPin,
+    title: "Coordinate pickup & delivery",
+    body: "Wait for transporter acceptance, then coordinate pickup and delivery.",
+  },
+];
+
+const TRANSPORTER_STEPS = [
+  {
+    icon: SignpostBig,
+    title: "Create a route listing",
+    body: "Add your departure date, vehicle details and available capacity.",
+  },
+  {
+    icon: Inbox,
+    title: "Receive shipment requests",
+    body: "Get compatible shipment requests matched to your route.",
+  },
+  {
+    icon: FileCheck,
+    title: "Review & respond",
+    body: "Review the cargo and terms, then accept or reject the request.",
   },
   {
     icon: Truck,
-    title: "Ship with tracking",
-    body: "Follow your shipment live, then settle up directly with the other party — no fees, no middleman.",
+    title: "Coordinate delivery",
+    body: "Coordinate pickup, loading, transit and delivery.",
   },
 ];
 
@@ -1041,12 +1086,12 @@ const STEPS = [
 // (frontend/src/content/faq.js), so the answers can't drift out of sync
 // between the two pages.
 const HOME_FAQ_IDS = [
-  "how-to-book",
-  "commission",
-  "kyc-verification",
-  "cancellations",
-  "disputes",
-  "shipper-and-transporter",
+  "what-is-truckgee",
+  "how-does-truckgee-work",
+  "how-is-price-decided",
+  "online-payments",
+  "cancel-my-shipment",
+  "transporters-verified",
 ];
 const ALL_FAQ_ITEMS = FAQ_CATEGORIES.flatMap((cat) => cat.items);
 const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id === id)).filter(Boolean);
@@ -1070,6 +1115,14 @@ export const Home = () => {
   const [departureAt, setDepartureAt] = useState(toDateTimeInputValue());
   const capacityAmount = useUnitAmount();
   const [errors, setErrors] = useState({});
+  // Below tablet width, the From/To fields are too narrow for the full
+  // "Pickup address or area" placeholder — it truncated mid-word ("Picku…").
+  // Short placeholders instead of letting the browser clip the long ones.
+  const isMobile = useMediaQuery(`(max-width: 767px)`);
+  const fromPlaceholder = isMobile ? "Pick" : "Pickup address or area";
+  const toPlaceholder = isMobile ? "Drop" : "Drop address or area";
+  const [audience, setAudience] = useState("shipper");
+  const audienceSteps = audience === "shipper" ? SHIPPER_STEPS : TRANSPORTER_STEPS;
   const [routes, setRoutes] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
   const typedTagline = useTypingEffect(TAGLINE);
@@ -1235,7 +1288,7 @@ export const Home = () => {
             <SwapRow>
               <Field label="From" error={errors.fromCity}>
                 <LocationAutocomplete
-                  placeholder="Pickup address or area"
+                  placeholder={fromPlaceholder}
                   value={fromPoint}
                   onChange={handleFromChange}
                   onResolve={setFromCityResolved}
@@ -1248,7 +1301,7 @@ export const Home = () => {
               </SwapButton>
               <Field label="To" error={errors.toCity}>
                 <LocationAutocomplete
-                  placeholder="Drop address or area"
+                  placeholder={toPlaceholder}
                   value={toPoint}
                   onChange={handleToChange}
                   onResolve={setToCityResolved}
@@ -1330,11 +1383,32 @@ export const Home = () => {
           <SectionHead style={{ maxWidth: 620 }}>
             <SectionEyebrow>The process</SectionEyebrow>
             <SectionHeading>How it works</SectionHeading>
-            <SectionLede>From search to delivery in three simple steps.</SectionLede>
+            <SectionLede>Two ways to use {platformName} — see the steps for your side.</SectionLede>
           </SectionHead>
+          <AudienceTabsWrap>
+            <AudienceTabs role="tablist" aria-label="How it works, by audience">
+              <AudienceTab
+                type="button"
+                role="tab"
+                aria-selected={audience === "shipper"}
+                $active={audience === "shipper"}
+                onClick={() => setAudience("shipper")}
+              >
+                For shippers
+              </AudienceTab>
+              <AudienceTab
+                type="button"
+                role="tab"
+                aria-selected={audience === "transporter"}
+                $active={audience === "transporter"}
+                onClick={() => setAudience("transporter")}
+              >
+                For transporters
+              </AudienceTab>
+            </AudienceTabs>
+          </AudienceTabsWrap>
           <ProcessGrid>
-            <ProcessConnector aria-hidden="true" />
-            {STEPS.map(({ icon: Icon, title, body }, i) => (
+            {audienceSteps.map(({ icon: Icon, title, body }, i) => (
               <ProcessStepWrap key={title} $i={i}>
                 <ProcessNumber>{String(i + 1).padStart(2, "0")}</ProcessNumber>
                 <ProcessCard>
@@ -1431,8 +1505,8 @@ export const Home = () => {
               ))}
             </Accordion>
           </FaqPanel>
-          <FaqMoreLink to="/help">
-            See all questions in the Help center
+          <FaqMoreLink to="/faq">
+            See all questions in the FAQ
             <ArrowRight size={15} strokeWidth={2.4} />
           </FaqMoreLink>
         </Section>
