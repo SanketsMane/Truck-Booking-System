@@ -661,6 +661,29 @@ const BandRoadDecoration = styled.svg`
   opacity: 0.5;
 `;
 
+// Same 'd' the visible <path> below draws — sharing one string keeps the
+// truck glued to the curve at every viewport width, since offset-path and
+// the <path> it mirrors both resolve in this SVG's own viewBox coordinate
+// system (preserveAspectRatio="none" on the parent makes that stretch
+// uniform for both, so they never drift apart).
+const ROAD_PATH_D = "M -10 70 C 250 20, 550 100, 850 45 S 1150 10, 1210 40";
+
+const driveRoad = keyframes`
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+`;
+
+// The callback from "our old site had a driving-truck animation" — revived
+// here rather than in the hero (kept untouched), riding the road decoration
+// this section already draws. A plain CSS animation (not SMIL) so it's
+// automatically covered by GlobalStyle's prefers-reduced-motion rule, same
+// as every other animation in this file.
+const RoadTruck = styled.g`
+  offset-path: path("${ROAD_PATH_D}");
+  offset-rotate: auto;
+  animation: ${driveRoad} 12s linear infinite;
+`;
+
 const BandInner = styled.div`
   position: relative;
   z-index: 1;
@@ -1322,7 +1345,7 @@ export const Home = () => {
         </BandInner>
         <BandRoadDecoration aria-hidden="true" viewBox="0 0 1200 90" preserveAspectRatio="none">
           <path
-            d="M -10 70 C 250 20, 550 100, 850 45 S 1150 10, 1210 40"
+            d={ROAD_PATH_D}
             fill="none"
             stroke="#1d4ed8"
             strokeWidth="2"
@@ -1330,6 +1353,11 @@ export const Home = () => {
             strokeLinecap="round"
           />
           <circle cx="1000" cy="30" r="4" fill="#1d4ed8" opacity="0.5" />
+          <RoadTruck>
+            <g transform="translate(-16, -16)">
+              <Truck size={32} strokeWidth={2} color="#1d4ed8" />
+            </g>
+          </RoadTruck>
         </BandRoadDecoration>
       </Band>
 
