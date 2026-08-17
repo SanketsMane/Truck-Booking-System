@@ -60,7 +60,7 @@ export const FAQ_CATEGORIES = [
         id: "price-factors",
         question: "What determines the price?",
         answer:
-          "The route, your shipment's weight and volume, vehicle type, available capacity, pickup/drop requirements and timing all factor in — along with the price the transporter has set for that trip.",
+          "The route, your shipment's weight, vehicle type, available capacity, pickup/drop requirements and timing all factor in — along with the price the transporter has set for that trip.",
       },
       {
         id: "commission",

@@ -19,13 +19,14 @@ import {
 } from "lucide-react";
 import heroTruckPhotoSrc from "../assets/hero-truck-photo.jpg";
 import { getPopularRoutes } from "../api/trips";
-import { PageContainer, Stack, Row, Muted, SectionTitle } from "../components/ui/Layout";
+import { PageContainer, Stack, Row, Muted, Body, SectionTitle } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
+import { Accordion, AccordionItem } from "../components/ui/Accordion";
 import { fadeInUp, blink, pulseSoft } from "../theme/animations";
 import { toDateTimeInputValue } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -866,35 +867,40 @@ const RouteEmptyIcon = styled.div`
   color: ${({ theme }) => theme.color.textFaint};
 `;
 
-const FaqGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: ${({ theme }) => theme.space(3)};
+// Frameless card wrapping the reused Accordion (Help.jsx renders the same
+// component full-width on its own page) — the border/radius/shadow here is
+// what makes this read as a distinct "FAQ panel" on the home page rather
+// than a bare list floating in the section.
+const FaqPanel = styled.div`
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 ${({ theme }) => theme.space(6)};
+  background: ${({ theme }) => theme.color.surface};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: 20px;
+  box-shadow: ${({ theme }) => theme.shadow.card};
 
-  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    grid-template-columns: repeat(2, 1fr);
+  // Accordion renders its own top border — redundant against this panel's
+  // own border directly above it.
+  ${Accordion} {
+    border-top: none;
   }
 `;
 
-const FaqCard = styled(Link)`
-  display: block;
-  padding: ${({ theme }) => theme.space(4)};
-  border-radius: ${({ theme }) => theme.radius.md};
-  border: 1px solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface};
-  color: ${({ theme }) => theme.color.text};
-  transition: border-color 0.15s ease, transform 0.15s ease;
+const FaqMoreLink = styled(Link)`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: fit-content;
+  margin: ${({ theme }) => theme.space(6)} auto 0;
+  font-weight: 700;
+  font-size: 14px;
+  color: ${({ theme }) => theme.color.accent};
 
   &:hover {
-    border-color: ${({ theme }) => theme.color.accent};
-    transform: translateY(-2px);
+    text-decoration: underline;
   }
-`;
-
-const FaqQuestion = styled.div`
-  font-weight: 700;
-  font-size: 14.5px;
-  margin-bottom: 4px;
 `;
 
 const CtaBanner = styled.div`
@@ -1000,11 +1006,18 @@ const STEPS = [
   },
 ];
 
-// The 4 highest-value questions for a first-time visitor deciding whether
-// to trust the platform — pulled from the same data Help.jsx renders in
-// full (frontend/src/content/faq.js), so the answers can't drift out of
-// sync between the two pages.
-const HOME_FAQ_IDS = ["how-to-book", "how-pricing-works", "cancellations", "disputes"];
+// The highest-value questions for a first-time visitor deciding whether to
+// trust the platform — pulled from the same data Help.jsx renders in full
+// (frontend/src/content/faq.js), so the answers can't drift out of sync
+// between the two pages.
+const HOME_FAQ_IDS = [
+  "how-to-book",
+  "commission",
+  "kyc-verification",
+  "cancellations",
+  "disputes",
+  "shipper-and-transporter",
+];
 const ALL_FAQ_ITEMS = FAQ_CATEGORIES.flatMap((cat) => cat.items);
 const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id === id)).filter(Boolean);
 
@@ -1367,17 +1380,22 @@ export const Home = () => {
         <Section>
           <SectionHead>
             <SectionEyebrow>Good to know</SectionEyebrow>
-            <SectionTitle>Common questions</SectionTitle>
-            <Muted>The short version — full answers in the Help center.</Muted>
+            <SectionTitle>Frequently asked questions</SectionTitle>
+            <Muted>Everything you need to know before your first booking.</Muted>
           </SectionHead>
-          <FaqGrid>
-            {HOME_FAQS.map((item) => (
-              <FaqCard key={item.id} to={`/help#${item.id}`}>
-                <FaqQuestion>{item.question}</FaqQuestion>
-                <Muted>{item.answer}</Muted>
-              </FaqCard>
-            ))}
-          </FaqGrid>
+          <FaqPanel>
+            <Accordion>
+              {HOME_FAQS.map((item) => (
+                <AccordionItem key={item.id} id={`home-${item.id}`} question={item.question}>
+                  <Body>{item.answer}</Body>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </FaqPanel>
+          <FaqMoreLink to="/help">
+            See all questions in the Help center
+            <ArrowRight size={15} strokeWidth={2.4} />
+          </FaqMoreLink>
         </Section>
       </PageContainer>
 
