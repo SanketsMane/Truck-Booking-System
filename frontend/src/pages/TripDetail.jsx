@@ -227,7 +227,12 @@ export const TripDetail = () => {
         capacityRequested: tons,
         goodsDescription: goodsDescription.trim(),
         handlingNotes: handlingNotes.trim() || undefined,
-        pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
+        // Only the {address, lat, lng} fields the API accepts — pickupPoint
+        // state is seeded from the trip's own pickupPoint (see the effect
+        // above), which also carries a server-only `location` GeoJSON
+        // field; spreading it here round-tripped that field back as input
+        // and the booking validator (rightly) rejects unknown keys.
+        pickupPoint: { address: pickupPoint.address.trim(), lat: pickupPoint.lat, lng: pickupPoint.lng },
       });
       toast.success(res.msg || "Booking request sent");
       navigate(`/bookings/${res.booking._id}`);
