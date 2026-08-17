@@ -23,6 +23,7 @@ import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
 import { BookingStatusTimeline } from "../components/ui/BookingStatusTimeline";
 import { Avatar } from "../components/ui/Avatar";
+import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { Field, Textarea, Select } from "../components/ui/Form";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, normalizePoint } from "../utils/format";
@@ -249,6 +250,7 @@ export const BookingDetail = () => {
   const isShipper = user && String(booking.shipper._id) === user.id;
   const isTransporter = user && String(trip.transporter._id) === user.id;
   const counterparty = isShipper ? trip.transporter : booking.shipper;
+  const counterpartyVerified = isShipper ? booking.transporterVerified : booking.shipperVerified;
 
   const canAcceptReject = isTransporter && booking.status === "pending";
   const canConfirmPickup = (isShipper || isTransporter) && booking.status === "confirmed";
@@ -299,7 +301,10 @@ export const BookingDetail = () => {
         </Card>
 
         <Card>
-          <SectionTitle style={{ marginBottom: 14 }}>{isShipper ? "Transporter" : "Shipper"}</SectionTitle>
+          <Row style={{ justifyContent: "space-between" }}>
+            <SectionTitle style={{ marginBottom: 14 }}>{isShipper ? "Transporter" : "Shipper"}</SectionTitle>
+            <VerifiedBadge verified={counterpartyVerified} />
+          </Row>
           <Row $gap={3}>
             <Avatar name={counterparty?.name} />
             <Stack $gap={1}>

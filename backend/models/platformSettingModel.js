@@ -22,9 +22,15 @@ const platformSettingSchema = new mongoose.Schema(
   {
     _id: { type: String, default: "global" },
 
+    // Off by default — an unverified transporter/truck can still publish a
+    // trip, and an unverified shipper can still get a booking accepted.
+    // Verification status is instead surfaced to the counterparty (see the
+    // transporterVerified/shipperVerified fields tripController.getTrip and
+    // bookingController.getBooking add to their responses) so the accepter
+    // decides for themselves, rather than the system deciding for everyone.
     verificationGateEnabled: {
       type: Boolean,
-      default: true,
+      default: false,
     },
 
     // Admin-configurable branding — surfaced publicly via GET /meta/branding

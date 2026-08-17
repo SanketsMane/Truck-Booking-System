@@ -71,7 +71,11 @@ it("walks the full shipper/transporter booking lifecycle", async () => {
   const tripId = tripRes.body.trip._id;
 
   // --- Search (exact city match, date-range window per SRS-04.1) ---
-  const searchDate = departureAt.slice(0, 10);
+  // searchTrips anchors `date` on IST midnight (this app is India-only), so
+  // the search date must be departureAt's IST calendar date — not a naive
+  // UTC slice, which silently diverges from IST for any departureAt that
+  // falls between 18:30 and 23:59 UTC (already "tomorrow" in IST).
+  const searchDate = new Date(new Date(departureAt).getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const searchRes = await request(app)
     .get("/trips/search")
     .query({ fromCity: "Pune", toCity: "Nashik", date: searchDate });

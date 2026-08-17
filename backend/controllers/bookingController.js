@@ -104,8 +104,11 @@ const createBooking = async (req, res) => {
 };
 
 // FR-06.5 / SRS-05.2 — atomic conditional decrement so two concurrent
-// accepts can never overbook a trip, and SRS-02.3's shipper verification
-// gate applies here (at confirmation), not at request time.
+// accepts can never overbook a trip. SRS-02.3's shipper verification gate
+// (off by default, admin-configurable) would apply here, at confirmation,
+// not at request time — but with it off, getBooking exposes the shipper's
+// real verification status instead, so the transporter accepting sees who
+// they're dealing with and decides for themselves.
 const acceptBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -401,7 +404,19 @@ const getBooking = async (req, res) => {
       return res.status(403).json({ success: false, msg: "Forbidden" });
     }
 
-    res.status(200).json({ success: true, booking });
+    // Just the booleans, not either party's KYC documents/history — same
+    // boundary as tripController.getTrip's transporterVerified field.
+    const [shipperKyc, transporterKyc] = await Promise.all([
+      Verification.findOne({ user: booking.shipper._id, type: "shipper" }).select("status"),
+      Verification.findOne({ user: booking.trip.transporter._id, type: "transporter" }).select("status"),
+    ]);
+    const bookingWithVerification = {
+      ...booking.toObject(),
+      shipperVerified: shipperKyc?.status === "verified",
+      transporterVerified: transporterKyc?.status === "verified",
+    };
+
+    res.status(200).json({ success: true, booking: bookingWithVerification });
   } catch (error) {
     sendServerError(res, error, "bookingController");
   }

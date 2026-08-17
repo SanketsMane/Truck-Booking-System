@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Truck, ShieldCheck, Clock3 } from "lucide-react";
+import { Truck, Clock3 } from "lucide-react";
 import { getTrip } from "../api/trips";
 import { createBooking } from "../api/bookings";
 import { BASE_URL } from "../api/client";
@@ -13,6 +13,7 @@ import { PageContainer, Stack, Row, PageTitle, SectionTitle, Muted, EmptyState }
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Avatar } from "../components/ui/Avatar";
+import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { Button } from "../components/ui/Button";
 import { Field, Textarea } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
@@ -359,15 +360,7 @@ export const TripDetail = () => {
         <Card>
           <Row style={{ justifyContent: "space-between" }}>
             <SectionTitle style={{ marginBottom: 14 }}>Transporter</SectionTitle>
-            {/* A trip only ever reaches this page once it's published, and
-                publishing is gated on the transporter's KYC being verified
-                (SRS-03.3) — so any transporter shown here is, by that
-                system-enforced invariant, always verified. No extra
-                verification lookup needed to show this badge honestly. */}
-            <StatusBadge status="verified">
-              <ShieldCheck size={12} strokeWidth={2.4} style={{ marginRight: 4, verticalAlign: -2 }} />
-              Verified
-            </StatusBadge>
+            <VerifiedBadge verified={trip.transporterVerified} />
           </Row>
           <Row $gap={3}>
             <Avatar name={trip.transporter?.name} />

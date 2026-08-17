@@ -43,9 +43,12 @@ const notifyMatchingSavedSearches = async (trip) => {
   );
 };
 
-// FR-05.5 / SRS-03.3 — a trip only becomes searchable once its truck AND
-// the transporter's own KYC are verified (hard gate, admin-configurable
-// via PlatformSetting.verificationGateEnabled).
+// FR-05.5 / SRS-03.3 — optionally requires the truck AND the transporter's
+// own KYC to be verified before a trip can be published (admin-configurable
+// via PlatformSetting.verificationGateEnabled, off by default). With the
+// gate off, an unverified transporter can still publish — getTrip exposes
+// the real verification status instead, so a shipper booking it can see
+// who they're dealing with and decide for themselves.
 const postTrip = async (req, res) => {
   try {
     const { error } = postTripValidation.validate(req.body);
@@ -226,9 +229,14 @@ const getTrip = async (req, res) => {
     }
 
     const heldMap = await getPendingHeldMap([trip._id]);
+    // Just the boolean, not the transporter's KYC documents/history — same
+    // "no document exposure on this public endpoint" boundary the existing
+    // comment above already draws for the truck's own fields.
+    const transporterKyc = await Verification.findOne({ user: trip.transporter._id, type: "transporter" }).select("status");
     const tripWithVisibility = {
       ...trip.toObject(),
       visibleAvailableCapacity: visibleAvailable(trip, heldMap),
+      transporterVerified: transporterKyc?.status === "verified",
     };
 
     res.status(200).json({ success: true, trip: tripWithVisibility });
