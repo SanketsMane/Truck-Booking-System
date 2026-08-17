@@ -131,7 +131,13 @@ const searchTrips = async (req, res) => {
       return res.status(400).json({ success: false, msg: "date is required" });
     }
 
-    const searchDate = new Date(date);
+    // IST is UTC+5:30 with no DST, and the frontend always sends a plain
+    // YYYY-MM-DD date with no time/zone — parsing that directly with
+    // `new Date(...)` anchors it at UTC midnight, which is 5:30am IST, not
+    // the start of the India calendar day a shipper actually means when
+    // they pick "20 Aug". Anchoring at IST midnight instead keeps the
+    // ±windowDays range centered on the real day, not shifted by 5.5 hours.
+    const searchDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00+05:30`) : new Date(date);
     if (Number.isNaN(searchDate.getTime())) {
       return res.status(400).json({ success: false, msg: "Invalid date" });
     }
