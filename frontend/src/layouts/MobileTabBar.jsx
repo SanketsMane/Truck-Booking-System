@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import { NavLink } from "react-router-dom";
-import { Search, Plus, MessageCircle, Package, User } from "lucide-react";
+import { Search, Plus, Package, User } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const Bar = styled.nav`
@@ -61,7 +61,6 @@ const IconDot = styled.span`
 
 export const MobileTabBar = () => {
   const { user } = useAuth();
-  const isTransporter = user?.roles?.includes("transporter");
 
   return (
     <Bar>
@@ -71,21 +70,15 @@ export const MobileTabBar = () => {
         </IconDot>
         Find Space
       </Item>
-      {isTransporter ? (
-        <Item to="/trips/new">
-          <IconDot>
-            <Plus size={19} strokeWidth={2.3} />
-          </IconDot>
-          Share Space
-        </Item>
-      ) : (
-        <Item to="/support">
-          <IconDot>
-            <MessageCircle size={19} strokeWidth={2.3} />
-          </IconDot>
-          Help
-        </Item>
-      )}
+      {/* Always "Share Space", for every user — matches Navbar's OfferPill,
+          which is likewise shown to guests/shippers/transporters alike as
+          an acquisition CTA rather than gated behind an existing role. */}
+      <Item to="/trips/new">
+        <IconDot>
+          <Plus size={19} strokeWidth={2.3} />
+        </IconDot>
+        Share Space
+      </Item>
       <Item to={user ? "/bookings" : "/login"}>
         <IconDot>
           <Package size={19} strokeWidth={2.3} />
