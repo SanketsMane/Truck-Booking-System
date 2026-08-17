@@ -41,6 +41,13 @@ const pushCopy = (type, payload = {}) => {
       };
     case "truck_status_changed":
       return { body: `Truck ${payload.regNumber || ""} is now ${payload.status}`.trim(), url: "/trucks" };
+    case "truck_delete_request_resolved":
+      return { body: `Your delete request for ${payload.regNumber || "your truck"} was ${payload.status}`, url: "/trucks" };
+    case "truck_deleted":
+      return {
+        body: `Your truck ${payload.regNumber || ""} was removed by an admin${payload.reason ? ` — ${payload.reason}` : ""}`.trim(),
+        url: "/trucks",
+      };
     case "verification_status_changed":
       return { body: `Your ${payload.type || ""} verification is now ${payload.status}`.trim(), url: "/profile" };
     case "account_status_changed":

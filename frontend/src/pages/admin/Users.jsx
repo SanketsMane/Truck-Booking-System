@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { ShieldPlus } from "lucide-react";
-import { listAdminUsers, setAdminRole } from "../../api/admin";
+import { ShieldPlus, Trash2, UserPlus } from "lucide-react";
+import { listAdminUsers, createAdminUser, setAdminRole, setAdminUserStatus, deleteAdminUser } from "../../api/admin";
 import { useAuth } from "../../context/AuthContext";
 import { PageContainer, Row, Stack, Muted, SectionTitle, EmptyState } from "../../components/ui/Layout";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
-import { Field, Select, Textarea } from "../../components/ui/Form";
+import { Field, Input, PasswordInput, Select, Textarea } from "../../components/ui/Form";
+import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { ADMIN_SCOPES } from "../../utils/adminScopes";
 import {
   Toolbar,
@@ -38,6 +39,40 @@ const NameLink = styled(Link)`
   font-weight: 600;
   &:hover {
     color: ${({ theme }) => theme.admin.color.primary};
+  }
+`;
+
+// Same pill-toggle pattern as admin/Settings.jsx's own Switch (and
+// Profile.jsx's copy of it) — kept local here too rather than extracted,
+// following that established precedent — just on admin.color tokens
+// instead of the consumer palette, matching this page's own console
+// styling. "On" = active; suspended AND banned both render "off" (a
+// banned user toggled back on reactivates them, same as a suspended one).
+const StatusSwitch = styled.button`
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme, $on }) => ($on ? theme.admin.color.primary : theme.admin.color.border)};
+  background: ${({ theme, $on }) => ($on ? theme.admin.color.primary : theme.admin.color.bg)};
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: ${({ $on }) => ($on ? "19px" : "1px")};
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: ${({ theme, $on }) => ($on ? theme.admin.color.onPrimary : theme.admin.color.textMuted)};
+    transition: left 0.15s ease;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;
 
@@ -121,6 +156,99 @@ const MakeAdminModal = ({ user, onConfirm, onCancel, submitting }) => {
   );
 };
 
+// "Admin" here is one of the three Role choices (not a second roles[]
+// entry like Shipper/Transporter) — creating an admin sets isAdmin/
+// adminScope directly, mirroring MakeAdminModal's own scope choice, just
+// folded into this form's single Role field instead of a separate step.
+const ROLE_OPTIONS = [
+  { value: "shipper", label: "Shipper" },
+  { value: "transporter", label: "Transporter" },
+  { value: "admin", label: "Admin" },
+];
+
+const initialAddUserForm = { name: "", email: "", password: "", role: "shipper", adminScope: GRANTABLE_SCOPES[0].value };
+
+// Creates a user account directly (name/email/password/role) rather than
+// through the normal email-OTP signup flow — for standing up a known
+// contact, a test account, or another admin without them self-registering
+// first. Same Overlay/ModalCard chrome as MakeAdminModal above, for the
+// same reason that one doesn't reuse ConfirmModal: more than one field.
+const AddUserModal = ({ onConfirm, onCancel, submitting }) => {
+  const [form, setForm] = useState(initialAddUserForm);
+  const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting) onCancel();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, submitting]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onConfirm(form);
+  };
+
+  return (
+    <Overlay onClick={submitting ? undefined : onCancel}>
+      <ModalCard
+        as="form"
+        onSubmit={handleSubmit}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-user-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Stack $gap={3}>
+          <Stack $gap={1}>
+            <SectionTitle id="add-user-title">Add a user</SectionTitle>
+            <Muted>Creates the account directly — no email OTP step.</Muted>
+          </Stack>
+          <Field label="Name">
+            <Input value={form.name} onChange={setField("name")} autoFocus required />
+          </Field>
+          <Field label="Email">
+            <Input type="email" value={form.email} onChange={setField("email")} required />
+          </Field>
+          <Field label="Password" help="At least 8 characters.">
+            <PasswordInput value={form.password} onChange={setField("password")} autoComplete="new-password" required />
+          </Field>
+          <Field label="Role">
+            <Select value={form.role} onChange={setField("role")}>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {form.role === "admin" && (
+            <Field label="Admin scope">
+              <Select value={form.adminScope} onChange={setField("adminScope")}>
+                {GRANTABLE_SCOPES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Row $gap={2} style={{ justifyContent: "flex-end" }}>
+            <Button type="button" $variant="ghost" onClick={onCancel} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create user"}
+            </Button>
+          </Row>
+        </Stack>
+      </ModalCard>
+    </Overlay>
+  );
+};
+
 export const Users = () => {
   const { user: viewer } = useAuth();
   const [search, setSearch] = useState("");
@@ -134,6 +262,22 @@ export const Users = () => {
   const [loading, setLoading] = useState(true);
   const [promoteTarget, setPromoteTarget] = useState(null);
   const [promoting, setPromoting] = useState(false);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  // Bumped after a successful create to re-run the fetch effect below even
+  // though none of its other dependencies (page/pageSize/filters) changed —
+  // the simplest way to make the new user show up without duplicating the
+  // fetch logic here.
+  const [refreshTick, setRefreshTick] = useState(0);
+  // Holds the user being paused/reactivated so the confirm modal can read
+  // both directions off one piece of state — pausing (active -> suspended)
+  // needs a reason and reactivating (suspended/banned -> active) doesn't,
+  // so the modal's own requireReason/title/etc. are derived from
+  // statusTarget.user.status rather than tracked separately.
+  const [statusTarget, setStatusTarget] = useState(null);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   const hasFilters = Boolean(search || role || status);
 
@@ -152,6 +296,63 @@ export const Users = () => {
       toast.error(error.message);
     } finally {
       setPromoting(false);
+    }
+  };
+
+  const handleCreateUser = async (form) => {
+    setCreatingUser(true);
+    try {
+      const { user: created } = await createAdminUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+        adminScope: form.role === "admin" ? form.adminScope : undefined,
+      });
+      toast.success(`${created.name || created.email} was created`);
+      setAddUserOpen(false);
+      setPage(1);
+      setRefreshTick((n) => n + 1);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const handleStatusConfirm = async (reason) => {
+    const nextStatus = statusTarget.user.status === "active" ? "suspended" : "active";
+    setStatusSubmitting(true);
+    try {
+      const { user: updated } = await setAdminUserStatus(statusTarget.user._id, {
+        status: nextStatus,
+        reason: reason || undefined,
+      });
+      toast.success(
+        nextStatus === "active"
+          ? `${updated.name || updated.email}'s access was restored`
+          : `${updated.name || updated.email}'s access was paused`
+      );
+      setUsers((prev) => prev.map((u) => (u._id === updated._id ? { ...u, ...updated } : u)));
+      setStatusTarget(null);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setStatusSubmitting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeletingUser(true);
+    try {
+      await deleteAdminUser(deleteTarget._id);
+      toast.success(`${deleteTarget.name || deleteTarget.email} was deleted`);
+      setDeleteTarget(null);
+      setRefreshTick((n) => n + 1);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setDeletingUser(false);
     }
   };
 
@@ -183,7 +384,7 @@ export const Users = () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [page, pageSize, search, role, status]);
+  }, [page, pageSize, search, role, status, refreshTick]);
 
   const handleFilterChange = (setter) => (e) => {
     setter(e.target.value);
@@ -219,6 +420,12 @@ export const Users = () => {
         <ToolbarSpacer />
         {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
         {!loading && <ResultsCount>{total} user{total === 1 ? "" : "s"}</ResultsCount>}
+        {viewer?.adminScope === "full" && (
+          <Button type="button" $size="sm" onClick={() => setAddUserOpen(true)}>
+            <UserPlus size={14} strokeWidth={2.4} />
+            Add user
+          </Button>
+        )}
       </Toolbar>
 
       <AdminCard $padding="0">
@@ -269,7 +476,18 @@ export const Users = () => {
                         </Td>
                         <Td>{u.city || "—"}</Td>
                         <Td>
-                          <StatusBadge status={u.status} />
+                          <Row $gap={2}>
+                            <StatusBadge status={u.status} />
+                            {viewer?.adminScope === "full" && String(u._id) !== String(viewer.id) && (
+                              <StatusSwitch
+                                type="button"
+                                $on={u.status === "active"}
+                                onClick={() => setStatusTarget({ user: u })}
+                                aria-label={u.status === "active" ? "Pause access" : "Restore access"}
+                                title={u.status === "active" ? "Pause access" : "Restore access"}
+                              />
+                            )}
+                          </Row>
                         </Td>
                         <Td>{formatDate(u.createdAt)}</Td>
                         <Td>
@@ -287,6 +505,18 @@ export const Users = () => {
                               >
                                 <ShieldPlus size={14} strokeWidth={2.4} />
                                 Make admin
+                              </Button>
+                            )}
+                            {viewer?.adminScope === "full" && String(u._id) !== String(viewer.id) && (
+                              <Button
+                                type="button"
+                                $variant="ghost"
+                                $size="sm"
+                                onClick={() => setDeleteTarget(u)}
+                                title="Delete user"
+                              >
+                                <Trash2 size={14} strokeWidth={2.4} />
+                                Delete
                               </Button>
                             )}
                           </Row>
@@ -326,6 +556,42 @@ export const Users = () => {
           onCancel={() => setPromoteTarget(null)}
         />
       )}
+
+      {addUserOpen && (
+        <AddUserModal submitting={creatingUser} onConfirm={handleCreateUser} onCancel={() => setAddUserOpen(false)} />
+      )}
+
+      <ConfirmModal
+        open={Boolean(statusTarget)}
+        title={
+          statusTarget?.user.status === "active"
+            ? `Pause ${statusTarget?.user.name || statusTarget?.user.email}'s access?`
+            : `Restore ${statusTarget?.user.name || statusTarget?.user.email}'s access?`
+        }
+        description={
+          statusTarget?.user.status === "active"
+            ? "They won't be able to log in until you restore access."
+            : "They'll be able to log in again immediately."
+        }
+        requireReason={statusTarget?.user.status === "active"}
+        reasonLabel="Reason"
+        confirmLabel={statusTarget?.user.status === "active" ? "Pause access" : "Restore access"}
+        danger={statusTarget?.user.status === "active"}
+        submitting={statusSubmitting}
+        onConfirm={handleStatusConfirm}
+        onCancel={() => setStatusTarget(null)}
+      />
+
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.name || deleteTarget?.email}?`}
+        description="Permanent — only possible if they have no booking, trip, or truck history. If they do, ban them instead to keep those records intact."
+        confirmLabel="Delete user"
+        danger
+        submitting={deletingUser}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </PageContainer>
   );
 };

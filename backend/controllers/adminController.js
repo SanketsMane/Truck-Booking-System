@@ -1,15 +1,17 @@
+const bcrypt = require("bcrypt");
 const User = require("../models/userModel");
 const Trip = require("../models/tripModel");
 const Truck = require("../models/truckModel");
 const Booking = require("../models/bookingModel");
 const Verification = require("../models/verificationModel");
+const Notification = require("../models/notificationModel");
 const PlatformSetting = require("../models/platformSettingModel");
 const UploadedFile = require("../models/uploadedFileModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const { markBookingCancelled } = require("../utils/bookingCancellation");
 const emailProvider = require("../utils/emailProvider");
-const { accountStatusEmail } = require("../emailTemplates/templates");
+const { welcomeEmail, accountStatusEmail } = require("../emailTemplates/templates");
 const { toCsv } = require("../utils/csv");
 const escapeRegex = require("../utils/escapeRegex");
 const sendServerError = require("../utils/sendServerError");
@@ -23,7 +25,14 @@ const {
   updateSettingsValidation,
   updateBrandingValidation,
   setAdminRoleValidation,
+  createUserValidation,
 } = require("../validators/adminValidation");
+
+// Same cost factor authController.js's signup/resetPassword/setPassword use
+// — kept as a local constant here rather than imported from there, same
+// "no shared coupling between these two controllers" call as
+// adminValidation.js's own local email/password schemas.
+const CREATE_USER_SALT_ROUNDS = 10;
 
 // SRS-10.1 — headline metrics, a bookings trend chart, top routes, recent activity.
 const getDashboard = async (req, res) => {
@@ -89,6 +98,68 @@ const listUsers = async (req, res) => {
       User.countDocuments(filter),
     ]);
     res.status(200).json({ success: true, ...paginatedResponse(users, total, page, limit) });
+  } catch (error) {
+    sendServerError(res, error, "adminController");
+  }
+};
+
+// Creates a user account directly, bypassing the normal OTP signup flow —
+// full-scope-only (route-gated), for cases like seeding a known contact or
+// standing up another admin without them self-registering first.
+// emailVerified is set true (an admin vouching for the address takes the
+// place of the OTP step signup would otherwise require), and — critically
+// — this must NOT call issueSession the way authController.signup does:
+// that sets the *caller's* session cookie, which here would log the
+// creating admin's own browser in as the brand-new user.
+const createUser = async (req, res) => {
+  try {
+    const { error } = createUserValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const { name, password, role, adminScope } = req.body;
+    const email = req.body.email.trim().toLowerCase();
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(409).json({ success: false, msg: "An account with this email already exists" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, CREATE_USER_SALT_ROUNDS);
+    const isAdmin = role === "admin";
+    const created = await User.create({
+      name,
+      email,
+      passwordHash,
+      roles: isAdmin ? [] : [role],
+      isAdmin,
+      adminScope: isAdmin ? adminScope : undefined,
+      emailVerified: true,
+      status: "active",
+    });
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "user.create",
+      targetType: "User",
+      targetId: created._id,
+      before: null,
+      after: { email: created.email, name: created.name, roles: created.roles, isAdmin: created.isAdmin, adminScope: created.adminScope },
+      scope: req.auth.adminScope,
+    });
+
+    const { subject, html } = welcomeEmail({ name: created.name });
+    emailProvider
+      .sendEmail({ to: created.email, subject, html })
+      .catch((err) => console.error(`Failed to send welcome email to ${created.email}:`, err.message));
+
+    // Re-fetched (not the `created` doc directly) so the response shape
+    // matches every other admin user endpoint — passwordHash/otp excluded
+    // by the schema's select:false / this explicit -otp respectively,
+    // rather than hand-stripping fields off the in-memory create() result.
+    const user = await User.findById(created._id).select("-otp");
+    res.status(201).json({ success: true, msg: "User created", user });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -203,6 +274,72 @@ const setAdminRole = async (req, res) => {
     });
 
     res.status(200).json({ success: true, msg: "Admin access updated", user });
+  } catch (error) {
+    sendServerError(res, error, "adminController");
+  }
+};
+
+// Permanently removes a user account — full-scope-only, and only when the
+// account has no booking/trip/truck history. That guard is the load-bearing
+// part: this app's marketplace history depends on Booking.shipper/
+// Trip.transporter/Truck.owner staying resolvable (the other party's own
+// booking/trip records, ratings, and admin reports all populate through
+// them), so hard-deleting a user with any of that would leave orphaned
+// references and break those other users' own history. setUserStatus's
+// "banned" status is the correct tool for revoking a user WITH history —
+// this is for cleaning up an empty/duplicate/test account that never
+// transacted, where there's nothing to preserve.
+const deleteUser = async (req, res) => {
+  try {
+    if (String(req.params.id) === String(req.auth.id)) {
+      return res.status(400).json({ success: false, msg: "You cannot delete your own account" });
+    }
+
+    const user = await User.findById(req.params.id).select("-otp");
+    if (!user) {
+      return res.status(404).json({ success: false, msg: "User not found" });
+    }
+
+    const [bookingCount, tripCount, truckCount] = await Promise.all([
+      Booking.countDocuments({ shipper: user._id }),
+      Trip.countDocuments({ transporter: user._id }),
+      Truck.countDocuments({ owner: user._id }),
+    ]);
+    if (bookingCount || tripCount || truckCount) {
+      return res.status(400).json({
+        success: false,
+        msg: "This user has booking, trip, or truck history and can't be deleted — ban them instead to revoke access while keeping those records intact.",
+      });
+    }
+
+    const before = { email: user.email, name: user.name, roles: user.roles, isAdmin: user.isAdmin, adminScope: user.adminScope };
+
+    // No booking/trip history (just guarded above) means no chat/rating/
+    // dispute/support data either — everything else in this app is
+    // reached through a booking. Verification/Notification are the only
+    // records genuinely owned outright by the account itself.
+    await Promise.all([
+      Verification.deleteMany({ user: user._id }),
+      Notification.deleteMany({ user: user._id }),
+      User.deleteOne({ _id: user._id }),
+    ]);
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "user.delete",
+      targetType: "User",
+      targetId: user._id,
+      before,
+      after: null,
+      // Optional chaining, not req.body.reason — unlike every other
+      // logAdminAction call above (all on PUT/POST routes with a required
+      // body), this is a DELETE with no body required, so req.body can be
+      // undefined rather than {} when the client sends no reason.
+      reason: req.body?.reason,
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, msg: "User deleted" });
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
@@ -509,6 +646,10 @@ const updateBranding = async (req, res) => {
       faviconUrl: settings.faviconUrl,
       contactEmail: settings.contactEmail,
       contactMobile: settings.contactMobile,
+      facebookUrl: settings.facebookUrl,
+      instagramUrl: settings.instagramUrl,
+      linkedinUrl: settings.linkedinUrl,
+      youtubeUrl: settings.youtubeUrl,
     };
 
     await reclaimSupersededFile(settings.logoUrl, value.logoUrl);
@@ -521,6 +662,10 @@ const updateBranding = async (req, res) => {
     settings.faviconUrl = value.faviconUrl || "";
     settings.contactEmail = value.contactEmail || "";
     settings.contactMobile = value.contactMobile || "";
+    settings.facebookUrl = value.facebookUrl || "";
+    settings.instagramUrl = value.instagramUrl || "";
+    settings.linkedinUrl = value.linkedinUrl || "";
+    settings.youtubeUrl = value.youtubeUrl || "";
     await settings.save();
     await refreshBrandingCache();
 
@@ -536,6 +681,10 @@ const updateBranding = async (req, res) => {
         faviconUrl: settings.faviconUrl,
         contactEmail: settings.contactEmail,
         contactMobile: settings.contactMobile,
+        facebookUrl: settings.facebookUrl,
+        instagramUrl: settings.instagramUrl,
+        linkedinUrl: settings.linkedinUrl,
+        youtubeUrl: settings.youtubeUrl,
       },
       scope: req.auth.adminScope,
     });
@@ -641,9 +790,11 @@ const exportVerificationTurnaroundCsv = async (req, res) => {
 module.exports = {
   getDashboard,
   listUsers,
+  createUser,
   getUserDetail,
   setUserStatus,
   setAdminRole,
+  deleteUser,
   listTrucks,
   listTrips,
   deactivateTrip,

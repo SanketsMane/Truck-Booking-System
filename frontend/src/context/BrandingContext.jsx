@@ -13,6 +13,10 @@ const DEFAULT_BRANDING = {
   faviconUrl: "",
   contactEmail: "",
   contactMobile: "",
+  facebookUrl: "",
+  instagramUrl: "",
+  linkedinUrl: "",
+  youtubeUrl: "",
 };
 
 // A relative /files/:id path from the backend becomes an absolute,

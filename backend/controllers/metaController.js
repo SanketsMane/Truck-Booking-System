@@ -37,6 +37,10 @@ const getBranding = async (req, res) => {
         faviconUrl: settings.faviconUrl || "",
         contactEmail: settings.contactEmail || "",
         contactMobile: settings.contactMobile || "",
+        facebookUrl: settings.facebookUrl || "",
+        instagramUrl: settings.instagramUrl || "",
+        linkedinUrl: settings.linkedinUrl || "",
+        youtubeUrl: settings.youtubeUrl || "",
       },
     });
   } catch (error) {

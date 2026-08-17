@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { Link, NavLink as RouterNavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink as RouterNavLink, useLocation, useNavigate } from "react-router-dom";
 import { Bell, LogOut, ChevronDown, Globe, Menu, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useBranding } from "../context/BrandingContext";
@@ -405,6 +405,7 @@ export const Navbar = () => {
   const { user, logout, unreadCount } = useAuth();
   const { platformName } = useBranding();
   const navigate = useNavigate();
+  const location = useLocation();
   const barRef = useRef(null);
   const menuRef = useRef(null);
   const langRef = useRef(null);
@@ -429,10 +430,14 @@ export const Navbar = () => {
 
   // Closing the drawer on every route change (not just an explicit tap on
   // its own X/overlay) means a nav link click doesn't leave it open behind
-  // the newly-navigated page.
+  // the newly-navigated page. Depends on location.pathname, not navigate —
+  // navigate is a stable reference from react-router and never changes, so
+  // keying off it would only run this once, on mount. Syncing to an
+  // external system (the router's current path), not derived state.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMobileOpen(false);
-  }, [navigate]);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     setMenuOpen(false);

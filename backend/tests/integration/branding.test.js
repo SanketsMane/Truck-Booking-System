@@ -28,6 +28,10 @@ describe("platform branding", () => {
       faviconUrl: "",
       contactEmail: "",
       contactMobile: "",
+      facebookUrl: "",
+      instagramUrl: "",
+      linkedinUrl: "",
+      youtubeUrl: "",
     });
   });
 
@@ -55,6 +59,33 @@ describe("platform branding", () => {
       .put("/admin/settings/branding")
       .send({ platformName: "Acme Freight", contactMobile: "12345" });
     expect(badMobile.status).toBe(400);
+
+    const badSocialUrl = await agent
+      .put("/admin/settings/branding")
+      .send({ platformName: "Acme Freight", facebookUrl: "not-a-url" });
+    expect(badSocialUrl.status).toBe(400);
+  });
+
+  it("PUT /admin/settings/branding — saves social links, and GET /meta/branding reflects them (unset ones stay empty)", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(7), name: "Admin" });
+    await makeAdmin(user, "full");
+
+    const res = await agent.put("/admin/settings/branding").send({
+      platformName: "Acme Freight",
+      facebookUrl: "https://facebook.com/acmefreight",
+      instagramUrl: "https://instagram.com/acmefreight",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.settings.facebookUrl).toBe("https://facebook.com/acmefreight");
+    expect(res.body.settings.instagramUrl).toBe("https://instagram.com/acmefreight");
+    expect(res.body.settings.linkedinUrl).toBe("");
+    expect(res.body.settings.youtubeUrl).toBe("");
+
+    const publicRead = await request(app).get("/meta/branding");
+    expect(publicRead.body.branding.facebookUrl).toBe("https://facebook.com/acmefreight");
+    expect(publicRead.body.branding.instagramUrl).toBe("https://instagram.com/acmefreight");
+    expect(publicRead.body.branding.linkedinUrl).toBe("");
+    expect(publicRead.body.branding.youtubeUrl).toBe("");
   });
 
   it("full-scope admin updates branding, and GET /meta/branding reflects it immediately (proves the cache refresh)", async () => {
@@ -76,6 +107,10 @@ describe("platform branding", () => {
       faviconUrl: "",
       contactEmail: "hello@acmefreight.test",
       contactMobile: "9876543210",
+      facebookUrl: "",
+      instagramUrl: "",
+      linkedinUrl: "",
+      youtubeUrl: "",
     });
 
     // GET /meta/branding reads PlatformSetting directly, not the in-memory

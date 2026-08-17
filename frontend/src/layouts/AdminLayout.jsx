@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Settings as SettingsIcon,
   FileClock,
+  Trash2,
 } from "lucide-react";
 import DashboardShell from "./DashboardShell";
 
@@ -52,6 +53,12 @@ const NAV = [
       { to: "/admin/reviews", label: "Reviews", description: "Flagged ratings and moderation", icon: Star },
       { to: "/admin/support", label: "Support", description: "Open support requests", icon: LifeBuoy },
       { to: "/admin/disputes", label: "Disputes", description: "Booking disputes awaiting resolution", icon: AlertTriangle },
+      {
+        to: "/admin/truck-deletions",
+        label: "Truck Deletions",
+        description: "Deletion requests and permanent-delete history",
+        icon: Trash2,
+      },
     ],
   },
   {

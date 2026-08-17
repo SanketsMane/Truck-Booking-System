@@ -15,6 +15,9 @@ export const getAdminDashboard = () => api.get("/admin/dashboard");
 
 export const listAdminUsers = (opts) => api.get(withPaginationParams("/admin/users", opts));
 
+export const createAdminUser = ({ name, email, password, role, adminScope }) =>
+  api.post("/admin/users", { name, email, password, role, adminScope });
+
 export const getAdminUserDetail = (id) => api.get(`/admin/users/${id}`);
 
 export const setAdminUserStatus = (id, { status, reason }) =>
@@ -23,7 +26,19 @@ export const setAdminUserStatus = (id, { status, reason }) =>
 export const setAdminRole = (id, { isAdmin, adminScope, reason }) =>
   api.put(`/admin/users/${id}/admin-role`, { isAdmin, adminScope, reason });
 
+export const deleteAdminUser = (id) => api.del(`/admin/users/${id}`);
+
 export const listAdminTrucks = (opts) => api.get(withPaginationParams("/admin/trucks", opts));
+
+export const deleteAdminTruck = (id, reason) => api.del(`/admin/trucks/${id}`, { reason });
+
+export const listAdminTruckDeleteRequests = (opts) =>
+  api.get(withPaginationParams("/admin/truck-delete-requests", opts));
+
+export const resolveAdminTruckDeleteRequest = (id, payload) =>
+  api.put(`/admin/truck-delete-requests/${id}/resolve`, payload);
+
+export const listDeletedTrucks = (opts) => api.get(withPaginationParams("/admin/deleted-trucks", opts));
 
 export const listAdminTrips = (opts) => api.get(withPaginationParams("/admin/trips", opts));
 

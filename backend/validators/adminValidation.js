@@ -1,5 +1,6 @@
 const Joi = require("joi");
 const { MOBILE_PATTERN } = require("../config/marketplaceConfig");
+const { PASSWORD_MIN_LENGTH } = require("../config/authConfig");
 
 const setUserStatusValidation = Joi.object({
   status: Joi.string().valid("active", "suspended", "banned").required(),
@@ -37,6 +38,21 @@ const updateBrandingValidation = Joi.object({
     .pattern(MOBILE_PATTERN)
     .allow("", null)
     .messages({ "string.pattern.base": "Enter a valid 10-digit Indian mobile number" }),
+  // Real external links (unlike logoUrl/faviconUrl's internal /files/:id
+  // paths), so these get an actual .uri() check — they're rendered as
+  // <a href> in the footer, not fetched through our own API.
+  facebookUrl: Joi.string().trim().uri({ scheme: ["http", "https"] }).allow("", null).messages({
+    "string.uri": "Enter a valid URL (starting with http:// or https://)",
+  }),
+  instagramUrl: Joi.string().trim().uri({ scheme: ["http", "https"] }).allow("", null).messages({
+    "string.uri": "Enter a valid URL (starting with http:// or https://)",
+  }),
+  linkedinUrl: Joi.string().trim().uri({ scheme: ["http", "https"] }).allow("", null).messages({
+    "string.uri": "Enter a valid URL (starting with http:// or https://)",
+  }),
+  youtubeUrl: Joi.string().trim().uri({ scheme: ["http", "https"] }).allow("", null).messages({
+    "string.uri": "Enter a valid URL (starting with http:// or https://)",
+  }),
 });
 
 const setAdminRoleValidation = Joi.object({
@@ -46,6 +62,26 @@ const setAdminRoleValidation = Joi.object({
     .when("isAdmin", { is: true, then: Joi.required(), otherwise: Joi.optional().allow(null) }),
 });
 
+// Local email/password schemas rather than importing authValidation.js's —
+// same reasoning as updateBrandingValidation above. `role` is a single
+// choice ("shipper"/"transporter"/"admin") rather than authValidation's
+// signup `roles` array, matching the Add User form's one Role field;
+// `adminScope` is only meaningful (and only required) when `role` is
+// "admin", mirroring setAdminRoleValidation's isAdmin/adminScope pairing.
+const createUserValidation = Joi.object({
+  name: Joi.string().trim().min(1).required(),
+  email: Joi.string().trim().lowercase().email({ tlds: { allow: false } }).required().messages({
+    "string.email": "Enter a valid email address",
+  }),
+  password: Joi.string().min(PASSWORD_MIN_LENGTH).required().messages({
+    "string.min": `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+  }),
+  role: Joi.string().valid("shipper", "transporter", "admin").required(),
+  adminScope: Joi.string()
+    .valid("full", "verification", "support")
+    .when("role", { is: "admin", then: Joi.required(), otherwise: Joi.forbidden() }),
+});
+
 module.exports = {
   setUserStatusValidation,
   forceCancelBookingValidation,
@@ -53,4 +89,5 @@ module.exports = {
   updateSettingsValidation,
   updateBrandingValidation,
   setAdminRoleValidation,
+  createUserValidation,
 };

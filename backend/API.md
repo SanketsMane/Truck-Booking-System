@@ -114,8 +114,11 @@ Booking states: `pending → confirmed → ongoing → completed`, or `pending �
 |---|---|---|---|
 | GET | `/dashboard` | — | Metrics, 30-day bookings trend, top routes, recent activity. |
 | GET | `/users` | `search?, role?, status?` | |
+| POST | `/users` | `{ name, email, password, role, adminScope? }` | Creates a user directly, no OTP step. `role` is `"shipper"\|"transporter"\|"admin"`; `adminScope` required when `role` is `"admin"`. `full` scope required. Audit-logged. |
 | GET | `/users/:id` | — | Profile + verifications + trucks + booking history. |
 | PUT | `/users/:id/status` | `{ status, reason? }` | `reason` required for suspend/ban. Audit-logged. |
+| PUT | `/users/:id/admin-role` | `{ isAdmin, adminScope?, reason? }` | Grants/revokes admin access. `adminScope` required when `isAdmin` is `true`. `full` scope required; can't target yourself. Audit-logged. |
+| DELETE | `/users/:id` | `{ reason? }` | Permanently deletes the account. 400 if the user has any booking/trip/truck history — ban them instead (`PUT /users/:id/status`) to preserve those records. `full` scope required; can't target yourself. Audit-logged. |
 | GET | `/trips` | `search?, status?` | |
 | PUT | `/trips/:id/deactivate` | `{ reason }` | Cascades to cancel affected bookings. Audit-logged. |
 | GET | `/bookings` | `status?` | |

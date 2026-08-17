@@ -7,6 +7,7 @@ const integrationController = require("../controllers/integrationController");
 const disputeController = require("../controllers/disputeController");
 const chatController = require("../controllers/chatController");
 const auditLogController = require("../controllers/auditLogController");
+const truckDeletionController = require("../controllers/truckDeletionController");
 const authMiddleware = require("../middleWare/middleWare");
 const { requireAdmin, requireAdminScope } = require("../middleWare/middleWare");
 
@@ -22,11 +23,17 @@ router.post("/integrations/email/test", requireAdminScope("full"), integrationCo
 router.put("/integrations/kyc", requireAdminScope("full"), integrationController.updateKyc);
 
 router.get("/users", adminController.listUsers);
+router.post("/users", requireAdminScope("full"), adminController.createUser);
 router.get("/users/:id", adminController.getUserDetail);
 router.put("/users/:id/status", requireAdminScope("full"), adminController.setUserStatus);
 router.put("/users/:id/admin-role", requireAdminScope("full"), adminController.setAdminRole);
+router.delete("/users/:id", requireAdminScope("full"), adminController.deleteUser);
 
 router.get("/trucks", adminController.listTrucks);
+router.delete("/trucks/:id", requireAdminScope("full"), truckDeletionController.deleteTruckDirect);
+router.get("/truck-delete-requests", truckDeletionController.listAllDeleteRequests);
+router.put("/truck-delete-requests/:id/resolve", requireAdminScope("full"), truckDeletionController.resolveDeleteRequest);
+router.get("/deleted-trucks", truckDeletionController.listDeletedTrucks);
 router.get("/trips", adminController.listTrips);
 router.put("/trips/:id/deactivate", requireAdminScope("full"), adminController.deactivateTrip);
 

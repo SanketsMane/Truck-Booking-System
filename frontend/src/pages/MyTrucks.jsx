@@ -16,15 +16,23 @@ import {
   X,
   CheckCircle2,
   Weight,
+  Trash2,
 } from "lucide-react";
-import { listMyTrucks, registerTruck, addTruckDocuments, addTruckPhotos } from "../api/trucks";
+import {
+  listMyTrucks,
+  registerTruck,
+  addTruckDocuments,
+  addTruckPhotos,
+  raiseTruckDeleteRequest,
+  listMyTruckDeleteRequests,
+} from "../api/trucks";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { BASE_URL } from "../api/client";
 import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
-import { Field, Input } from "../components/ui/Form";
+import { Field, Input, Textarea } from "../components/ui/Form";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Pagination } from "../components/ui/Pagination";
 import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
@@ -39,6 +47,7 @@ import {
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { formatTons } from "../utils/format";
 import { normalizeRegNumber, isValidRegNumber } from "../utils/regNumber";
+import { fadeIn, scaleIn } from "../theme/animations";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -540,10 +549,88 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
   );
 };
 
+const Overlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 21, 15, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+  animation: ${fadeIn} 0.15s ease;
+`;
+
+const ModalCard = styled(Card)`
+  width: 100%;
+  max-width: 440px;
+  animation: ${scaleIn} 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+`;
+
+// Not built on the shared ConfirmModal (used across the admin side for
+// reason-only destructive actions) because this needs a second field — a
+// type-the-reg-number confirmation step, so a transporter can't fat-finger
+// "Request deletion" on the wrong truck in a long list. Self-contained here
+// rather than extending ConfirmModal's API for every other page that uses it.
+const DeleteRequestModal = ({ truck, onCancel, onSubmit, submitting }) => {
+  const [confirmText, setConfirmText] = useState("");
+  const [reason, setReason] = useState("");
+
+  const regMatches = normalizeRegNumber(confirmText) === truck.regNumber;
+  const reasonTooShort = reason.trim().length < 10;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!regMatches || reasonTooShort) return;
+    onSubmit(reason.trim());
+  };
+
+  return (
+    <Overlay onClick={submitting ? undefined : onCancel}>
+      <ModalCard onClick={(e) => e.stopPropagation()}>
+        <form onSubmit={handleSubmit}>
+          <Stack $gap={3}>
+            <Stack $gap={1}>
+              <SectionTitle>Request truck deletion</SectionTitle>
+              <Muted>
+                This sends a request to our team to permanently remove <strong>{truck.regNumber}</strong>. It stays
+                registered until an admin approves it.
+              </Muted>
+            </Stack>
+
+            <Field label={`Type "${truck.regNumber}" to confirm`}>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={truck.regNumber}
+                autoFocus
+              />
+            </Field>
+
+            <Field label="Reason for deletion" help="Required — shown to the admin reviewing this request.">
+              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Selling the vehicle" />
+            </Field>
+
+            <Row $gap={2} style={{ justifyContent: "flex-end" }}>
+              <Button type="button" $variant="ghost" onClick={onCancel} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" $variant="danger" disabled={submitting || !regMatches || reasonTooShort}>
+                {submitting ? "Submitting…" : "Submit request"}
+              </Button>
+            </Row>
+          </Stack>
+        </form>
+      </ModalCard>
+    </Overlay>
+  );
+};
+
 // One truck's at-a-glance summary — photo/type thumb, reg number, status,
 // and document/photo/capacity counts — with the full management panel
 // (TruckDetailPanel) tucked behind "Manage" so the list stays scannable.
-const TruckCard = ({ truck, expanded, onToggle, onUpdated }) => {
+const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequestDelete }) => {
   const StatusIcon = STATUS_ICON[truck.status];
   const docCount = truck.documents?.length || 0;
   const photoCount = truck.photos?.length || 0;
@@ -596,11 +683,32 @@ const TruckCard = ({ truck, expanded, onToggle, onUpdated }) => {
           </Callout>
         )}
 
-        <Row>
+        {deleteRequest?.status === "rejected" && (
+          <Callout>
+            <ShieldAlert size={15} strokeWidth={2.2} />
+            <span>
+              Your deletion request was rejected
+              {deleteRequest.resolutionNote ? ` — ${deleteRequest.resolutionNote}` : ""}. You can request again below.
+            </span>
+          </Callout>
+        )}
+
+        <Row $gap={2} $wrap style={{ justifyContent: "space-between" }}>
           <Button type="button" $variant="secondary" $size="sm" onClick={onToggle}>
             {expanded ? "Close" : "Manage"}
             {expanded ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
           </Button>
+          {deleteRequest?.status === "pending" ? (
+            <StatusBadge status="pending">
+              <Clock size={12} strokeWidth={2.4} style={{ marginRight: 4, verticalAlign: -2 }} />
+              Deletion requested
+            </StatusBadge>
+          ) : (
+            <Button type="button" $variant="danger" $size="sm" onClick={onRequestDelete}>
+              <Trash2 size={14} strokeWidth={2.2} />
+              Request deletion
+            </Button>
+          )}
         </Row>
 
         {expanded && <TruckDetailPanel truck={truck} onUpdated={onUpdated} />}
@@ -643,12 +751,26 @@ export const MyTrucks = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [expandedId, setExpandedId] = useState(null);
+  const [deleteRequestsByTruck, setDeleteRequestsByTruck] = useState({});
+  const [deleteRequestTarget, setDeleteRequestTarget] = useState(null);
+  const [submittingDeleteRequest, setSubmittingDeleteRequest] = useState(false);
+
+  const loadDeleteRequests = () =>
+    listMyTruckDeleteRequests().then(({ requests }) => {
+      // requests come back newest-first — keep only the latest per truck.
+      const byTruck = {};
+      for (const r of requests || []) {
+        if (!byTruck[r.truck]) byTruck[r.truck] = r;
+      }
+      setDeleteRequestsByTruck(byTruck);
+    });
 
   useEffect(() => {
     listMyTrucks()
       .then(({ trucks }) => setTrucks(trucks))
       .catch((err) => toast.error(err.message))
       .finally(() => setLoading(false));
+    loadDeleteRequests().catch((err) => toast.error(err.message));
   }, []);
 
   const handleRegistered = (truck) => {
@@ -658,6 +780,20 @@ export const MyTrucks = () => {
 
   const handleTruckUpdated = (updated) => {
     setTrucks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+  };
+
+  const handleSubmitDeleteRequest = async (reason) => {
+    setSubmittingDeleteRequest(true);
+    try {
+      await raiseTruckDeleteRequest(deleteRequestTarget._id, reason);
+      toast.success("Deletion request submitted — an admin will review it");
+      setDeleteRequestTarget(null);
+      await loadDeleteRequests();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSubmittingDeleteRequest(false);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -755,6 +891,8 @@ export const MyTrucks = () => {
                       expanded={expandedId === truck._id}
                       onToggle={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
                       onUpdated={handleTruckUpdated}
+                      deleteRequest={deleteRequestsByTruck[truck._id]}
+                      onRequestDelete={() => setDeleteRequestTarget(truck)}
                     />
                   ))}
             </Stack>
@@ -776,6 +914,15 @@ export const MyTrucks = () => {
           </>
         )}
       </Stack>
+
+      {deleteRequestTarget && (
+        <DeleteRequestModal
+          truck={deleteRequestTarget}
+          onCancel={() => setDeleteRequestTarget(null)}
+          onSubmit={handleSubmitDeleteRequest}
+          submitting={submittingDeleteRequest}
+        />
+      )}
     </PageContainer>
   );
 };

@@ -37,6 +37,13 @@ export const describeNotification = (n) => {
       };
     case "truck_status_changed":
       return { text: `Truck ${p.regNumber || ""} is now ${p.status}`.trim(), to: "/trucks" };
+    case "truck_delete_request_resolved":
+      return { text: `Your delete request for ${p.regNumber || "your truck"} was ${p.status}`, to: "/trucks" };
+    case "truck_deleted":
+      return {
+        text: `Your truck ${p.regNumber || ""} was removed by an admin${p.reason ? ` — ${p.reason}` : ""}`.trim(),
+        to: "/trucks",
+      };
     case "verification_status_changed":
       return { text: `Your ${p.type || ""} verification is now ${p.status}`.trim(), to: "/profile" };
     case "account_status_changed":

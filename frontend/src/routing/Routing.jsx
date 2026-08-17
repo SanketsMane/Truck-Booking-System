@@ -67,6 +67,7 @@ const AdminBookings = lazy(() => import("../pages/admin/Bookings"));
 const AdminReviews = lazy(() => import("../pages/admin/Reviews"));
 const AdminSupport = lazy(() => import("../pages/admin/Support"));
 const AdminDisputes = lazy(() => import("../pages/admin/Disputes"));
+const AdminTruckDeletions = lazy(() => import("../pages/admin/TruckDeletions"));
 const AdminSettings = lazy(() => import("../pages/admin/Settings"));
 const AdminAuditLog = lazy(() => import("../pages/admin/AuditLog"));
 
@@ -380,6 +381,14 @@ export const Routing = () => (
           element={
             <Suspense fallback={<RouteFallback />}>
               <AdminDisputes />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/truck-deletions"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminTruckDeletions />
             </Suspense>
           }
         />

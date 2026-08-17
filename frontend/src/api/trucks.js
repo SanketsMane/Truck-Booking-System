@@ -18,3 +18,7 @@ export const listTruckQueue = ({ status = "pending" } = {}) =>
 
 export const reviewTruck = (id, { status, reason }) =>
   api.put(`/trucks/${id}/review`, { status, reason });
+
+export const raiseTruckDeleteRequest = (id, reason) => api.post(`/trucks/${id}/delete-request`, { reason });
+
+export const listMyTruckDeleteRequests = () => api.get("/trucks/delete-requests/me");

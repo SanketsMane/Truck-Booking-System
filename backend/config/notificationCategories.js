@@ -14,6 +14,8 @@ const NOTIFICATION_CATEGORIES = {
   new_chat_message: "chat",
   verification_status_changed: "verification",
   truck_status_changed: "verification",
+  truck_delete_request_resolved: "verification",
+  truck_deleted: "verification",
   new_rating: "ratings",
   rating_prompt: "ratings",
   saved_search_match: "search_alerts",

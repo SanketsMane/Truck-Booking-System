@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { ExternalLink, Truck as TruckIcon } from "lucide-react";
-import { listAdminTrucks } from "../../api/admin";
-import { PageContainer, Muted, EmptyState } from "../../components/ui/Layout";
+import { ExternalLink, Truck as TruckIcon, Trash2 } from "lucide-react";
+import { listAdminTrucks, deleteAdminTruck } from "../../api/admin";
+import { PageContainer, Muted, EmptyState, Row } from "../../components/ui/Layout";
 import { Button } from "../../components/ui/Button";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
+import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import {
   Toolbar,
   AdminSearchInput,
@@ -59,6 +60,9 @@ export const Trucks = () => {
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const hasFilters = Boolean(search || status);
 
@@ -84,7 +88,7 @@ export const Trucks = () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [page, pageSize, search, status]);
+  }, [page, pageSize, search, status, reloadToken]);
 
   const handleFilterChange = (setter) => (e) => {
     setter(e.target.value);
@@ -95,6 +99,20 @@ export const Trucks = () => {
     setSearch("");
     setStatus("");
     setPage(1);
+  };
+
+  const handleDeleteConfirm = async (reason) => {
+    setDeleting(true);
+    try {
+      await deleteAdminTruck(deleteTarget._id, reason);
+      toast.success("Truck deleted");
+      setDeleteTarget(null);
+      setReloadToken((n) => n + 1);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -167,12 +185,18 @@ export const Trucks = () => {
                           <StatusBadge status={t.status} />
                         </Td>
                         <Td>
-                          {t.owner && (
-                            <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
-                              <ExternalLink size={14} strokeWidth={2.4} />
-                              View owner
+                          <Row $gap={2}>
+                            {t.owner && (
+                              <Button as={Link} to={`/admin/users/${t.owner._id}`} $variant="secondary" $size="sm">
+                                <ExternalLink size={14} strokeWidth={2.4} />
+                                View owner
+                              </Button>
+                            )}
+                            <Button type="button" $variant="danger" $size="sm" onClick={() => setDeleteTarget(t)}>
+                              <Trash2 size={14} strokeWidth={2.4} />
+                              Delete
                             </Button>
-                          )}
+                          </Row>
                         </Td>
                       </Tr>
                     ))
@@ -200,6 +224,23 @@ export const Trucks = () => {
           </>
         )}
       </AdminCard>
+
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        title="Delete truck permanently"
+        description={
+          deleteTarget
+            ? `${deleteTarget.regNumber} will be permanently removed and archived. This fails if it has an active or upcoming trip.`
+            : ""
+        }
+        requireReason
+        reasonLabel="Reason for deletion"
+        confirmLabel="Delete truck"
+        danger
+        submitting={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </PageContainer>
   );
 };

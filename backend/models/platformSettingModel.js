@@ -43,6 +43,13 @@ const platformSettingSchema = new mongoose.Schema(
     faviconUrl: { type: String, trim: true, default: "" },
     contactEmail: { type: String, trim: true, lowercase: true, default: "" },
     contactMobile: { type: String, trim: true, default: "" },
+    // Social profile URLs shown as icons in the site footer — plain external
+    // links, not uploaded files, so (unlike logoUrl/faviconUrl) there's no
+    // reclaim/ensurePublic step for these in updateBranding.
+    facebookUrl: { type: String, trim: true, default: "" },
+    instagramUrl: { type: String, trim: true, default: "" },
+    linkedinUrl: { type: String, trim: true, default: "" },
+    youtubeUrl: { type: String, trim: true, default: "" },
 
     sms: { type: integrationSchema, default: () => ({ provider: "console" }) },
     email: { type: integrationSchema, default: () => ({ provider: "console" }) },

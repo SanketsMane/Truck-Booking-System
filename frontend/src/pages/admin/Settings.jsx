@@ -21,6 +21,7 @@ import { Button } from "../../components/ui/Button";
 import { Field, Input, Select, Textarea } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/Spinner";
+import { SOCIAL_PLATFORMS } from "../../components/ui/SocialIcons";
 
 const Switch = styled.button`
   position: relative;
@@ -327,6 +328,10 @@ const BrandingCard = () => {
         faviconUrl: branding.faviconUrl,
         contactEmail: branding.contactEmail,
         contactMobile: branding.contactMobile,
+        facebookUrl: branding.facebookUrl,
+        instagramUrl: branding.instagramUrl,
+        linkedinUrl: branding.linkedinUrl,
+        youtubeUrl: branding.youtubeUrl,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,6 +375,10 @@ const BrandingCard = () => {
         faviconUrl: form.faviconUrl,
         contactEmail: form.contactEmail.trim(),
         contactMobile: form.contactMobile.trim(),
+        facebookUrl: form.facebookUrl.trim(),
+        instagramUrl: form.instagramUrl.trim(),
+        linkedinUrl: form.linkedinUrl.trim(),
+        youtubeUrl: form.youtubeUrl.trim(),
       });
       await branding.refreshBranding();
       toast.success("Branding updated");
@@ -484,6 +493,28 @@ const BrandingCard = () => {
               </Field>
             </FieldsGrid>
             <Muted>Shown in the site footer and About page.</Muted>
+          </Stack>
+
+          <Divider />
+
+          <Stack $gap={3}>
+            <SubsectionTitle>Social links</SubsectionTitle>
+            <FieldsGrid>
+              {SOCIAL_PLATFORMS.map(({ key, label }) => (
+                <Field key={key} label={label}>
+                  <Input
+                    type="url"
+                    value={form[key]}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    placeholder={`https://${label.toLowerCase()}.com/yourpage`}
+                  />
+                </Field>
+              ))}
+            </FieldsGrid>
+            <Muted>
+              Optional. Leave blank to hide that icon in the site footer — only platforms with a URL
+              are shown.
+            </Muted>
           </Stack>
 
           <Row>

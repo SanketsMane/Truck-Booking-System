@@ -14,6 +14,10 @@ let cache = {
   faviconUrl: "",
   contactEmail: "",
   contactMobile: "",
+  facebookUrl: "",
+  instagramUrl: "",
+  linkedinUrl: "",
+  youtubeUrl: "",
 };
 
 const refreshBrandingCache = async () => {
@@ -24,6 +28,10 @@ const refreshBrandingCache = async () => {
     faviconUrl: settings.faviconUrl || "",
     contactEmail: settings.contactEmail || "",
     contactMobile: settings.contactMobile || "",
+    facebookUrl: settings.facebookUrl || "",
+    instagramUrl: settings.instagramUrl || "",
+    linkedinUrl: settings.linkedinUrl || "",
+    youtubeUrl: settings.youtubeUrl || "",
   };
   return cache;
 };

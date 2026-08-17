@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Check, Truck as TruckIcon } from "lucide-react";
+import { Check, ShieldAlert, Truck as TruckIcon, X } from "lucide-react";
 import { postTrip } from "../api/trips";
 import { listMyTrucks } from "../api/trucks";
+import { getMyVerifications } from "../api/verification";
 import { PageContainer, Stack, Row, PageTitle, SectionTitle, SubHeading, Muted, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
@@ -93,10 +94,105 @@ const FieldGroup = styled(Stack).attrs({ $gap: 3 })`
   border-top: 1px solid ${({ theme, $first }) => ($first ? "transparent" : theme.color.border)};
 `;
 
+// Shown on every step (not just Review) — the whole point is finding out
+// before investing time filling in Route/Truck/Capacity, not just before
+// the final Publish click. Doesn't block the form (the verification gate
+// is admin-toggleable — see PlatformSetting.verificationGateEnabled — so a
+// hard client-side block could refuse a submission the backend would
+// actually accept); it just sets honest expectations up front instead of
+// letting the transporter discover this for the first time from a failed
+// POST at the very end.
+const VerificationNotice = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: ${({ theme }) => theme.space(3)};
+  padding: ${({ theme }) => theme.space(4)};
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ theme }) => theme.color.warning};
+  background: ${({ theme }) => theme.color.warningSoft};
+
+  svg:first-child {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.color.warning};
+    margin-top: 1px;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 14px;
+    color: ${({ theme }) => theme.color.text};
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: ${({ theme }) => theme.color.textMuted};
+  }
+`;
+
+const DraftNotice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space(3)};
+  padding: 10px ${({ theme }) => theme.space(4)};
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surfaceRaised};
+  font-size: 13px;
+  color: ${({ theme }) => theme.color.textMuted};
+`;
+
+const DraftDismiss = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.textMuted};
+
+  &:hover {
+    color: ${({ theme }) => theme.color.danger};
+  }
+`;
+
+// Session-only (not localStorage) — a draft that outlives the tab is more
+// surprising than helpful (stale trucks/prices creeping back weeks later).
+// This only needs to survive the specific "got sent to /profile or /trucks
+// mid-wizard and came back" round trip the reported bug is about.
+const DRAFT_KEY = "posttrip-draft-v1";
+
+const loadDraft = () => {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearDraft = () => {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // sessionStorage unavailable (private browsing, quota) — draft
+    // persistence is a nice-to-have, not required for the form to work.
+  }
+};
+
 export const PostTrip = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [maxStep, setMaxStep] = useState(0);
+  // Read once, at mount — every field below seeds itself from this instead
+  // of a hardcoded empty default, which is what makes a wizard abandoned
+  // partway through (e.g. sent off to /profile or /trucks to fix
+  // verification) come back exactly as it was left. No setter: clearing the
+  // draft (handleStartOver) does a full page reload, which recomputes this
+  // from a now-empty sessionStorage — never needs to update in place.
+  const [draft] = useState(loadDraft);
+  const [step, setStep] = useState(draft?.step ?? 0);
+  const [maxStep, setMaxStep] = useState(draft?.maxStep ?? 0);
 
   // Step 1 — route. Same LocationAutocomplete + onResolve pattern as
   // Home.jsx's search form (address-level UI backed by LocationIQ, but the
@@ -106,26 +202,35 @@ export const PostTrip = () => {
   // LocationIQ-backed search resolves it to (e.g. "Bengaluru" vs
   // "Bangalore"), silently hiding trips from search. Using the same
   // component + extraction logic on both sides keeps them consistent.
-  const [fromPoint, setFromPoint] = useState({ address: "", lat: null, lng: null });
-  const [toPoint, setToPoint] = useState({ address: "", lat: null, lng: null });
-  const [fromCityResolved, setFromCityResolved] = useState("");
-  const [toCityResolved, setToCityResolved] = useState("");
-  const [departureAt, setDepartureAt] = useState("");
-  const [estimatedArrivalAt, setEstimatedArrivalAt] = useState("");
+  const [fromPoint, setFromPoint] = useState(draft?.fromPoint ?? { address: "", lat: null, lng: null });
+  const [toPoint, setToPoint] = useState(draft?.toPoint ?? { address: "", lat: null, lng: null });
+  const [fromCityResolved, setFromCityResolved] = useState(draft?.fromCityResolved ?? "");
+  const [toCityResolved, setToCityResolved] = useState(draft?.toCityResolved ?? "");
+  const [departureAt, setDepartureAt] = useState(draft?.departureAt ?? "");
+  const [estimatedArrivalAt, setEstimatedArrivalAt] = useState(draft?.estimatedArrivalAt ?? "");
   const [routeErrors, setRouteErrors] = useState({});
 
   // Step 2 — truck
   const [trucks, setTrucks] = useState([]);
   const [loadingTrucks, setLoadingTrucks] = useState(true);
-  const [selectedTruckId, setSelectedTruckId] = useState("");
+  const [selectedTruckId, setSelectedTruckId] = useState(draft?.selectedTruckId ?? "");
 
   // Step 3 — capacity
-  const totalCapacityAmount = useUnitAmount();
-  const availableCapacityAmount = useUnitAmount();
-  const [pricePerTon, setPricePerTon] = useState("");
-  const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
-  const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
+  const totalCapacityAmount = useUnitAmount(draft?.totalCapacityTons ?? "");
+  const availableCapacityAmount = useUnitAmount(draft?.availableCapacityTons ?? "");
+  const [pricePerTon, setPricePerTon] = useState(draft?.pricePerTon ?? "");
+  const [pickupPoint, setPickupPoint] = useState(draft?.pickupPoint ?? { address: "", lat: null, lng: null });
+  const [dropPoint, setDropPoint] = useState(draft?.dropPoint ?? { address: "", lat: null, lng: null });
   const [capacityErrors, setCapacityErrors] = useState({});
+
+  // Transporter's own KYC status — fetched here (not just left to the
+  // backend's final-submit rejection) so the "not verified yet" notice
+  // below can show immediately on load, before any of Route/Truck/
+  // Capacity has been touched. See tripController.postTrip's
+  // verificationGateEnabled check for what actually enforces this;
+  // nothing here blocks the form, it only sets expectations early.
+  const [verifications, setVerifications] = useState([]);
+  const [loadingVerification, setLoadingVerification] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -137,8 +242,66 @@ export const PostTrip = () => {
       .finally(() => setLoadingTrucks(false));
   }, []);
 
+  useEffect(() => {
+    getMyVerifications()
+      .then(({ verifications }) => setVerifications(verifications || []))
+      .catch(() => setVerifications([]))
+      .finally(() => setLoadingVerification(false));
+  }, []);
+
+  // Saves on every change, not just on unmount — a browser refresh, tab
+  // close, or crash mid-flow shouldn't lose progress either, and this is
+  // the only way to also cover those without adding an unload-event
+  // handler that's unreliable on mobile browsers anyway.
+  useEffect(() => {
+    const data = {
+      step,
+      maxStep,
+      fromPoint,
+      toPoint,
+      fromCityResolved,
+      toCityResolved,
+      departureAt,
+      estimatedArrivalAt,
+      selectedTruckId,
+      totalCapacityTons: totalCapacityAmount.tons,
+      availableCapacityTons: availableCapacityAmount.tons,
+      pricePerTon,
+      pickupPoint,
+      dropPoint,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    } catch {
+      // sessionStorage unavailable (private browsing, quota) — draft
+      // persistence is a nice-to-have, not required for the form to work.
+    }
+  }, [
+    step,
+    maxStep,
+    fromPoint,
+    toPoint,
+    fromCityResolved,
+    toCityResolved,
+    departureAt,
+    estimatedArrivalAt,
+    selectedTruckId,
+    totalCapacityAmount.tons,
+    availableCapacityAmount.tons,
+    pricePerTon,
+    pickupPoint,
+    dropPoint,
+  ]);
+
+  const handleStartOver = () => {
+    clearDraft();
+    window.location.reload();
+  };
+
   const selectedTruck = trucks.find((t) => t._id === selectedTruckId);
   const verifiedTrucks = trucks.filter((t) => t.status === "verified");
+  const transporterVerification = verifications.find((v) => v.type === "transporter");
+  const transporterVerified = transporterVerification?.status === "verified";
 
   // Falls back to the raw typed address if no suggestion was picked (LIQ
   // down, or the user just typed a plain city name) — same fallback
@@ -218,6 +381,7 @@ export const PostTrip = () => {
         pricePerTon: Number(pricePerTon),
       });
       toast.success(res.msg || "Trip published");
+      clearDraft();
       navigate("/trips/mine");
     } catch (err) {
       setSubmitError(err.message);
@@ -241,6 +405,32 @@ export const PostTrip = () => {
               : "Share your spare capacity with shippers in a few quick steps."}
           </Muted>
         </Stack>
+
+        {draft && (
+          <DraftNotice>
+            <span>Restored your in-progress trip.</span>
+            <DraftDismiss type="button" onClick={handleStartOver}>
+              <X size={13} strokeWidth={2.6} />
+              Start over
+            </DraftDismiss>
+          </DraftNotice>
+        )}
+
+        {!loadingVerification && !transporterVerified && (
+          <VerificationNotice>
+            <ShieldAlert size={18} strokeWidth={2.2} />
+            <div>
+              <strong>Your transporter profile isn't verified yet.</strong>
+              <p>
+                You can prepare this trip below, but publishing will be blocked until verification is complete —
+                your progress here is saved, so it's still here when you come back.
+              </p>
+            </div>
+            <Button as={Link} to="/profile" target="_blank" rel="noopener noreferrer" $size="sm" $variant="secondary">
+              Verify now
+            </Button>
+          </VerificationNotice>
+        )}
 
         <StepRow $gap={2}>
           {STEPS.map((label, i) => {
@@ -333,7 +523,7 @@ export const PostTrip = () => {
                 <EmptyState>
                   <Stack $gap={3}>
                     <p>You haven't registered a truck yet.</p>
-                    <Button as={Link} to="/trucks" $size="sm">
+                    <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
                       Register a truck
                     </Button>
                   </Stack>
@@ -342,7 +532,7 @@ export const PostTrip = () => {
                 <EmptyState>
                   <Stack $gap={3}>
                     <p>None of your trucks are verified yet. A trip can only go live once its truck is verified.</p>
-                    <Button as={Link} to="/trucks" $size="sm">
+                    <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
                       Manage my trucks
                     </Button>
                   </Stack>
@@ -526,12 +716,12 @@ export const PostTrip = () => {
                   <Stack $gap={3}>
                     <p>{submitError}</p>
                     {truckHint && (
-                      <Button as={Link} to="/trucks" $size="sm">
+                      <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
                         Go to my trucks
                       </Button>
                     )}
                     {kycHint && (
-                      <Button as={Link} to="/profile" $size="sm">
+                      <Button as={Link} to="/profile" target="_blank" rel="noopener noreferrer" $size="sm">
                         Complete verification
                       </Button>
                     )}
