@@ -58,7 +58,11 @@ const getDashboard = async (req, res) => {
           { $limit: 6 },
           { $project: { _id: 0, fromCity: "$_id.fromCity", toCity: "$_id.toCity", count: 1 } },
         ]),
-        Booking.find().populate("shipper", "name").sort({ createdAt: -1 }).limit(5),
+        Booking.find()
+          .populate("shipper", "name")
+          .populate({ path: "trip", select: "fromCity toCity transporter", populate: { path: "transporter", select: "name" } })
+          .sort({ createdAt: -1 })
+          .limit(5),
         User.find().select("name email mobile roles createdAt").sort({ createdAt: -1 }).limit(5),
       ]);
 

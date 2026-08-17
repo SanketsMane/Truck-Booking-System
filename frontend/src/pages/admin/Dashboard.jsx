@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import styled, { css } from "styled-components";
 import { toast } from "react-toastify";
@@ -11,12 +11,17 @@ import {
   TrendingDown,
   Download,
   ArrowUpRight,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle,
+  Users as UsersIcon,
   Inbox,
 } from "lucide-react";
 import * as adminApi from "../../api/admin";
 import { Row } from "../../components/ui/Layout";
 import { Avatar } from "../../components/ui/Avatar";
-import { Spinner } from "../../components/ui/Spinner";
+import { StatusBadge } from "../../components/ui/Badge";
+import { SkeletonBlock } from "../../components/ui/Skeleton";
 import { formatRelative, formatDate } from "../../utils/format";
 
 const REPORTS = [
@@ -89,6 +94,76 @@ const AdminCard = styled.div`
   padding: ${({ $padding }) => $padding || "18px"};
 `;
 
+// Same shimmer as components/ui/Skeleton.jsx's SkeletonBlock, retinted to
+// the admin palette (that one reads theme.color.*, which the light/navy
+// admin surface doesn't use) — same pattern AdminTable.jsx's
+// AdminSkeletonBase already established for table-row loading.
+const DashSkeletonBlock = styled(SkeletonBlock)`
+  background: linear-gradient(
+    90deg,
+    ${({ theme }) => theme.admin.color.bg} 25%,
+    ${({ theme }) => theme.admin.color.border} 37%,
+    ${({ theme }) => theme.admin.color.bg} 63%
+  );
+  background-size: 400% 100%;
+`;
+
+const KpiSkeletonGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+`;
+
+const SkeletonRowLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.admin.color.border};
+  }
+`;
+
+const KpiCardSkeleton = () => (
+  <AdminCard>
+    <Row style={{ justifyContent: "space-between", marginBottom: 10 }}>
+      <DashSkeletonBlock $width="70px" $height="11px" />
+      <DashSkeletonBlock $width="32px" $height="32px" $radius="8px" />
+    </Row>
+    <DashSkeletonBlock $width="50%" $height="30px" />
+  </AdminCard>
+);
+
+const ChartSkeleton = () => (
+  <div>
+    <Row style={{ justifyContent: "space-between", marginBottom: 14 }}>
+      <DashSkeletonBlock $width="140px" $height="15px" />
+      <DashSkeletonBlock $width="120px" $height="26px" $radius="8px" />
+    </Row>
+    <DashSkeletonBlock $height="168px" $radius="8px" />
+  </div>
+);
+
+const ListSkeleton = ({ rows = 5 }) => (
+  <div>
+    {Array.from({ length: rows }).map((_, i) => (
+      <SkeletonRowLine key={i}>
+        <DashSkeletonBlock $width="32px" $height="32px" $radius="50%" />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          <DashSkeletonBlock $width="45%" $height="13px" />
+          <DashSkeletonBlock $width="30%" $height="11px" />
+        </div>
+        <DashSkeletonBlock $width="60px" $height="18px" $radius="999px" />
+      </SkeletonRowLine>
+    ))}
+  </div>
+);
+
 const KpiGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -157,6 +232,75 @@ const KpiTrend = styled.div`
 const KpiTrendMuted = styled.span`
   font-weight: 500;
   color: ${({ theme }) => theme.admin.color.textMuted};
+`;
+
+// Shown instead of KpiTrend on the three KPIs the API doesn't return a
+// historical comparison for — a plain number with nothing underneath it
+// reads as unfinished, but the fix is honest context, not a fabricated
+// percentage.
+const KpiHelper = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.admin.color.textSecondary};
+`;
+
+const PageHeadRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+`;
+
+const LastUpdated = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.admin.color.textMuted};
+`;
+
+const RefreshButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: ${({ theme }) => theme.admin.radius.control};
+  border: 1px solid ${({ theme }) => theme.admin.color.border};
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.admin.color.text};
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  svg {
+    transition: transform 0.4s ease;
+    ${({ $spinning }) => $spinning && css`animation: spin 0.8s linear infinite;`}
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.admin.color.bg};
+    border-color: ${({ theme }) => theme.admin.color.textMuted};
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`;
+
+const ViewAllLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.admin.color.primaryDark};
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const TwoCol = styled.div`
@@ -459,72 +603,93 @@ const ActivityTime = styled.span`
   color: ${({ theme }) => theme.admin.color.textMuted};
 `;
 
-const AdminStatusPill = styled.span`
-  display: inline-flex;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: capitalize;
-  letter-spacing: 0.01em;
-  ${({ theme, $tone }) => {
-    const tones = {
-      success: css`
-        color: ${theme.admin.color.success};
-        background: ${theme.admin.color.successSoft};
-      `,
-      warning: css`
-        color: ${theme.admin.color.warning};
-        background: ${theme.admin.color.warningSoft};
-      `,
-      danger: css`
-        color: ${theme.admin.color.danger};
-        background: ${theme.admin.color.dangerSoft};
-      `,
-      info: css`
-        color: ${theme.admin.color.info};
-        background: ${theme.admin.color.infoSoft};
-      `,
-      neutral: css`
-        color: ${theme.admin.color.textSecondary};
-        background: ${theme.admin.color.bg};
-      `,
-    };
-    return tones[$tone] || tones.neutral;
-  }}
-`;
+const BookingRoute = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.admin.color.textSecondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 
-const STATUS_TONE = {
-  pending: "warning",
-  confirmed: "success",
-  ongoing: "info",
-  completed: "success",
-  rejected: "danger",
-  cancelled: "danger",
-  expired: "neutral",
-};
+  svg {
+    flex: none;
+    color: ${({ theme }) => theme.admin.color.textMuted};
+  }
+`;
 
 const EmptyBlock = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 32px 16px;
   color: ${({ theme }) => theme.admin.color.textSecondary};
   text-align: center;
+
+  svg {
+    color: ${({ theme }) => theme.admin.color.textMuted};
+    margin-bottom: 4px;
+  }
 `;
 
-const CenteredSpinner = styled.div`
-  display: flex;
-  justify-content: center;
-  padding: 100px 0;
+const EmptyTitle = styled.div`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.admin.color.text};
 `;
 
-const AdminEmptyState = ({ icon: Icon = Inbox, children }) => (
+const EmptyDescription = styled.p`
+  margin: 0;
+  max-width: 320px;
+  font-size: 12.5px;
+  line-height: 1.5;
+`;
+
+const ErrorBlock = styled(EmptyBlock)`
+  svg {
+    color: ${({ theme }) => theme.admin.color.danger};
+  }
+`;
+
+const RetryButton = styled.button`
+  margin-top: 4px;
+  padding: 7px 14px;
+  border-radius: ${({ theme }) => theme.admin.radius.control};
+  border: 1px solid ${({ theme }) => theme.admin.color.border};
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.admin.color.text};
+
+  &:hover {
+    background: ${({ theme }) => theme.admin.color.bg};
+  }
+`;
+
+// `children` is the simple one-line form (still used where a title alone
+// says everything); pass `title` + `description` for the fuller two-line
+// empty state the busier sections (chart, lists) use.
+const AdminEmptyState = ({ icon: Icon = Inbox, title, description, children, action }) => (
   <EmptyBlock>
     <Icon size={22} strokeWidth={1.8} />
-    <span>{children}</span>
+    <EmptyTitle>{title || children}</EmptyTitle>
+    {description && <EmptyDescription>{description}</EmptyDescription>}
+    {action}
   </EmptyBlock>
+);
+
+const AdminErrorState = ({ title = "Unable to load data", description = "Something went wrong while loading this data.", onRetry }) => (
+  <ErrorBlock>
+    <AlertCircle size={22} strokeWidth={1.8} />
+    <EmptyTitle>{title}</EmptyTitle>
+    <EmptyDescription>{description}</EmptyDescription>
+    {onRetry && (
+      <RetryButton type="button" onClick={onRetry}>
+        Try again
+      </RetryButton>
+    )}
+  </ErrorBlock>
 );
 
 // Trims the 30-day trend the backend returns down to the last 7 entries
@@ -538,7 +703,15 @@ const RANGE_OPTIONS = [
 ];
 
 const BookingsTrendChart = ({ data }) => {
-  if (!data?.length) return <AdminEmptyState>No booking activity yet.</AdminEmptyState>;
+  if (!data?.length) {
+    return (
+      <AdminEmptyState
+        icon={Package}
+        title="No booking activity yet"
+        description="Bookings will appear here once shippers start creating them."
+      />
+    );
+  }
 
   const max = Math.max(...data.map((d) => d.count), 1);
   const labelEvery = Math.max(1, Math.ceil(data.length / 7));
@@ -573,7 +746,15 @@ const BookingsTrendChart = ({ data }) => {
 };
 
 const TopRoutesList = ({ routes }) => {
-  if (!routes?.length) return <AdminEmptyState icon={RouteIcon}>No route data yet.</AdminEmptyState>;
+  if (!routes?.length) {
+    return (
+      <AdminEmptyState
+        icon={RouteIcon}
+        title="No route data yet"
+        description="Popular routes will appear here as bookings are created."
+      />
+    );
+  }
   const max = Math.max(...routes.map((r) => r.count), 1);
   return (
     <RouteList>
@@ -598,22 +779,37 @@ const TopRoutesList = ({ routes }) => {
 
 export const Dashboard = () => {
   const [dashboard, setDashboard] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // "loading" (first paint, nothing to show yet), "error" (fetch failed,
+  // no stale data to fall back on), "loaded" (dashboard is set) — kept
+  // distinct from `refreshing` below, since a manual refresh has real data
+  // already on screen and shouldn't blank the page back to skeletons.
+  const [status, setStatus] = useState("loading");
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [downloading, setDownloading] = useState(null);
   const [range, setRange] = useState("30d");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { dashboard } = await adminApi.getAdminDashboard();
-        setDashboard(dashboard);
-      } catch (error) {
-        toast.error(error.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const fetchDashboard = useCallback(async ({ isRefresh = false } = {}) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const { dashboard } = await adminApi.getAdminDashboard();
+      setDashboard(dashboard);
+      setStatus("loaded");
+      setLastUpdated(new Date());
+    } catch (error) {
+      if (isRefresh) toast.error(error.message);
+      else setStatus("error");
+    } finally {
+      if (isRefresh) setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    // Fetching on mount, not deriving from props/state — an external
+    // system (the API), same as every other page's mount-time fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDashboard();
+  }, [fetchDashboard]);
 
   const handleDownload = async (key) => {
     setDownloading(key);
@@ -648,21 +844,53 @@ export const Dashboard = () => {
     return dashboard.bookingsTrend.slice(-days);
   }, [dashboard, range]);
 
-  if (loading) {
+  if (status === "loading") {
     return (
       <Page>
-        <CenteredSpinner>
-          <Spinner $size={28} />
-        </CenteredSpinner>
+        <Section>
+          <KpiSkeletonGrid>
+            <KpiCardSkeleton />
+            <KpiCardSkeleton />
+            <KpiCardSkeleton />
+            <KpiCardSkeleton />
+          </KpiSkeletonGrid>
+        </Section>
+        <Section>
+          <TwoCol>
+            <AdminCard>
+              <ChartSkeleton />
+            </AdminCard>
+            <AdminCard>
+              <ListSkeleton rows={4} />
+            </AdminCard>
+          </TwoCol>
+        </Section>
+        <Section>
+          <TwoCol>
+            <AdminCard>
+              <ListSkeleton />
+            </AdminCard>
+            <AdminCard>
+              <ListSkeleton />
+            </AdminCard>
+          </TwoCol>
+        </Section>
       </Page>
     );
   }
 
-  if (!dashboard) {
+  if (status === "error") {
     return (
       <Page>
         <AdminCard>
-          <AdminEmptyState>Couldn't load dashboard data. Try refreshing the page.</AdminEmptyState>
+          <AdminErrorState
+            title="Unable to load the dashboard"
+            description="Something went wrong while loading platform metrics."
+            onRetry={() => {
+              setStatus("loading");
+              fetchDashboard();
+            }}
+          />
         </AdminCard>
       </Page>
     );
@@ -670,6 +898,19 @@ export const Dashboard = () => {
 
   return (
     <Page>
+      <PageHeadRow>
+        {lastUpdated && <LastUpdated>Last updated {formatRelative(lastUpdated)}</LastUpdated>}
+        <RefreshButton
+          type="button"
+          disabled={refreshing}
+          $spinning={refreshing}
+          onClick={() => fetchDashboard({ isRefresh: true })}
+        >
+          <RefreshCw size={13} strokeWidth={2.4} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </RefreshButton>
+      </PageHeadRow>
+
       <Section>
         <KpiGrid>
           <KpiCard>
@@ -680,6 +921,7 @@ export const Dashboard = () => {
               </KpiIconWrap>
             </KpiTop>
             <KpiValue>{dashboard.totalTrips}</KpiValue>
+            <KpiHelper>All trips ever posted on the platform</KpiHelper>
           </KpiCard>
 
           <KpiCard>
@@ -690,7 +932,7 @@ export const Dashboard = () => {
               </KpiIconWrap>
             </KpiTop>
             <KpiValue>{dashboard.totalBookings}</KpiValue>
-            {bookingsWoWTrend && (
+            {bookingsWoWTrend ? (
               <KpiTrend $direction={bookingsWoWTrend.direction}>
                 {bookingsWoWTrend.direction === "up" ? (
                   <TrendingUp size={13} strokeWidth={2.4} />
@@ -700,6 +942,8 @@ export const Dashboard = () => {
                 {Math.abs(bookingsWoWTrend.pct).toFixed(1)}%
                 <KpiTrendMuted>vs prior week</KpiTrendMuted>
               </KpiTrend>
+            ) : (
+              <KpiHelper>All booking requests created</KpiHelper>
             )}
           </KpiCard>
 
@@ -711,6 +955,7 @@ export const Dashboard = () => {
               </KpiIconWrap>
             </KpiTop>
             <KpiValue>{dashboard.activeTrucks}</KpiValue>
+            <KpiHelper>Verified trucks on the platform</KpiHelper>
           </KpiCard>
 
           <KpiCard>
@@ -721,6 +966,7 @@ export const Dashboard = () => {
               </KpiIconWrap>
             </KpiTop>
             <KpiValue>{dashboard.completedBookings}</KpiValue>
+            <KpiHelper>Bookings completed end-to-end</KpiHelper>
           </KpiCard>
         </KpiGrid>
       </Section>
@@ -791,6 +1037,11 @@ export const Dashboard = () => {
                 <SectionTitle>Recent bookings</SectionTitle>
                 <SectionSubtitle>Latest 5 across the platform</SectionSubtitle>
               </div>
+              {dashboard.recentBookings?.length > 0 && (
+                <ViewAllLink to="/admin/bookings">
+                  View all <ArrowRight size={13} strokeWidth={2.4} />
+                </ViewAllLink>
+              )}
             </SectionHead>
             {dashboard.recentBookings?.length ? (
               <ActivityList>
@@ -798,18 +1049,34 @@ export const Dashboard = () => {
                   <ActivityRow key={b._id}>
                     <Avatar name={b.shipper?.name} size={32} />
                     <ActivityBody>
-                      <ActivityTitle>{b.shipper?.name || "Shipper"}</ActivityTitle>
-                      <ActivityMeta>{b.goodsDescription || "—"}</ActivityMeta>
+                      <ActivityTitle as={Link} to={`/bookings/${b._id}`}>
+                        {b.shipper?.name || "Shipper"}
+                      </ActivityTitle>
+                      <BookingRoute>
+                        {b.trip ? (
+                          <>
+                            {b.trip.fromCity} <ArrowUpRight size={11} style={{ transform: "rotate(45deg)" }} />{" "}
+                            {b.trip.toCity}
+                            {b.trip.transporter?.name ? ` · ${b.trip.transporter.name}` : ""}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </BookingRoute>
                     </ActivityBody>
                     <ActivityRight>
-                      <AdminStatusPill $tone={STATUS_TONE[b.status] || "neutral"}>{b.status}</AdminStatusPill>
+                      <StatusBadge status={b.status} />
                       <ActivityTime>{formatRelative(b.createdAt)}</ActivityTime>
                     </ActivityRight>
                   </ActivityRow>
                 ))}
               </ActivityList>
             ) : (
-              <AdminEmptyState icon={Package}>No bookings yet.</AdminEmptyState>
+              <AdminEmptyState
+                icon={Package}
+                title="No bookings yet"
+                description="Bookings will appear here once shippers start booking capacity."
+              />
             )}
           </AdminCard>
 
@@ -819,6 +1086,11 @@ export const Dashboard = () => {
                 <SectionTitle>Recent registrations</SectionTitle>
                 <SectionSubtitle>Latest 5 sign-ups</SectionSubtitle>
               </div>
+              {dashboard.recentRegistrations?.length > 0 && (
+                <ViewAllLink to="/admin/users">
+                  View all <ArrowRight size={13} strokeWidth={2.4} />
+                </ViewAllLink>
+              )}
             </SectionHead>
             {dashboard.recentRegistrations?.length ? (
               <ActivityList>
@@ -834,9 +1106,9 @@ export const Dashboard = () => {
                     <ActivityRight>
                       <Row role="presentation">
                         {(u.roles || []).map((r) => (
-                          <AdminStatusPill key={r} $tone="info">
+                          <StatusBadge key={r} status="verified">
                             {r}
-                          </AdminStatusPill>
+                          </StatusBadge>
                         ))}
                       </Row>
                       <ActivityTime>{formatRelative(u.createdAt)}</ActivityTime>
@@ -845,7 +1117,11 @@ export const Dashboard = () => {
                 ))}
               </ActivityList>
             ) : (
-              <AdminEmptyState>No registrations yet.</AdminEmptyState>
+              <AdminEmptyState
+                icon={UsersIcon}
+                title="No registrations yet"
+                description="New shippers and transporters will appear here as they sign up."
+              />
             )}
           </AdminCard>
         </TwoCol>
