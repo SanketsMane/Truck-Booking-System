@@ -1,25 +1,26 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import styled, { keyframes } from "styled-components";
 import {
   ArrowLeftRight,
   ArrowRight,
+  ArrowUpRight,
+  CheckCircle2,
   Clock3,
-  FileCheck,
   Gift,
+  Headphones,
   IndianRupee,
-  Inbox,
-  LifeBuoy,
-  ListChecks,
   MapPin,
+  Route,
   Search,
+  Send,
   ShieldCheck,
   SignpostBig,
   Truck,
-  XCircle,
+  Users,
 } from "lucide-react";
 import heroTruckPhotoSrc from "../assets/hero-truck-photo.jpg";
-import roadTruckSrc from "../assets/road-truck.png";
+import truckRunnerSrc from "../assets/truck-runner.png";
 import { getPopularRoutes } from "../api/trips";
 import { PageContainer, Stack, Row, Muted, Body, SectionTitle } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
@@ -29,7 +30,7 @@ import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
 import { Accordion, AccordionItem } from "../components/ui/Accordion";
-import { fadeInUp, blink, pulseSoft } from "../theme/animations";
+import { fadeInUp } from "../theme/animations";
 import { toDateTimeInputValue } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useUnitAmount } from "../hooks/useUnitAmount";
@@ -55,14 +56,19 @@ const HeroGlow = styled.div`
   pointer-events: none;
 `;
 
+// Bottom padding has to clear both the taller hero content this redesign
+// added (badge + big heading + trust row) AND the search card's own
+// negative-margin overlap (SearchCardWrap) plus the running-truck strip
+// riding its top border — too little here and the truck strip visually
+// collides with the trust row above it instead of sitting in clear space.
 const HeroInner = styled.div`
   position: relative;
   max-width: 1280px;
   margin: 0 auto;
-  padding: ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(4)} ${({ theme }) => theme.space(16)};
+  padding: ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(4)} ${({ theme }) => theme.space(26)};
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    padding: ${({ theme }) => theme.space(8)} ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(18)};
+    padding: ${({ theme }) => theme.space(8)} ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(28)};
   }
 `;
 
@@ -90,89 +96,58 @@ const HeroLeft = styled.div`
   animation: ${fadeInUp} 0.5s ease both;
 `;
 
-const LiveDot = styled.span`
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.color.success};
-  flex-shrink: 0;
-  animation: ${pulseSoft} 1.8s ease-in-out infinite;
-`;
-
 const Eyebrow = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  margin-bottom: ${({ theme }) => theme.space(3)};
+  gap: 7px;
+  padding: 7px 14px;
+  margin-bottom: ${({ theme }) => theme.space(4)};
   border-radius: ${({ theme }) => theme.radius.pill};
-  background: ${({ theme }) => theme.color.successSoft};
-  border: 1px solid rgba(22, 163, 74, 0.22);
-  color: ${({ theme }) => theme.color.success};
-  font-size: 11px;
+  background: ${({ theme }) => theme.color.surface};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  box-shadow: ${({ theme }) => theme.shadow.card};
+  color: ${({ theme }) => theme.color.navy};
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  animation: ${fadeInUp} 0.5s ease both;
 `;
-
-const TypingCaret = styled.span`
-  display: inline-block;
-  width: 2px;
-  height: 10px;
-  margin-left: 1px;
-  background: currentColor;
-  vertical-align: -1px;
-  animation: ${blink} 0.85s step-end infinite;
-`;
-
-const TAGLINE = "Now live across India";
-
-// Types TAGLINE out one character at a time so the Eyebrow badge reads like
-// a terminal prompt instead of appearing all at once.
-const useTypingEffect = (text, speed = 45) => {
-  const [typed, setTyped] = useState("");
-
-  useEffect(() => {
-    let i = 0;
-    const id = setInterval(() => {
-      i += 1;
-      setTyped(text.slice(0, i));
-      if (i >= text.length) clearInterval(id);
-    }, speed);
-    return () => clearInterval(id);
-  }, [text, speed]);
-
-  return typed;
-};
 
 const HeroTitle = styled.h1`
   max-width: 560px;
-  font-size: 2rem;
+  font-size: 2.1rem;
   font-weight: 800;
   letter-spacing: -0.025em;
-  margin: 0 0 12px;
-  line-height: 1.16;
-  color: ${({ theme }) => theme.color.text};
+  margin: 0 0 14px;
+  line-height: 1.12;
+  color: ${({ theme }) => theme.color.navy};
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    font-size: 2.35rem;
+    font-size: 2.75rem;
   }
 
   @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    font-size: 2.6rem;
+    font-size: 4.1rem;
   }
 `;
 
 const AccentText = styled.span`
-  color: ${({ theme }) => theme.color.accent};
+  color: ${({ theme }) => theme.color.orange};
+`;
+
+const HeroDivider = styled.div`
+  width: 46px;
+  height: 4px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  margin-bottom: ${({ theme }) => theme.space(4)};
+  background: ${({ theme }) => theme.color.orange};
 `;
 
 const HeroSubtitle = styled.p`
-  margin: 0 0 ${({ theme }) => theme.space(5)};
+  margin: 0 0 ${({ theme }) => theme.space(6)};
   color: ${({ theme }) => theme.color.textMuted};
   font-size: 15.5px;
   line-height: 1.6;
-  max-width: 520px;
+  max-width: 480px;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     font-size: 17px;
@@ -197,20 +172,18 @@ const TrustItem = styled.div`
 `;
 
 const TrustIconWrap = styled.div`
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: ${({ theme }) => theme.radius.sm};
-  border: 1px solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.color.lightBlue};
   color: ${({ theme }) => theme.color.accent};
-  transition: border-color ${({ theme }) => theme.motion.fast} ease, transform ${({ theme }) => theme.motion.fast} ease;
+  transition: transform ${({ theme }) => theme.motion.fast} ease;
 
   ${TrustItem}:hover & {
-    border-color: ${({ theme }) => theme.color.accent};
     transform: translateY(-1px);
   }
 `;
@@ -250,19 +223,19 @@ const HeroRight = styled.div`
 // cab and trailer fully in frame.
 const TruckImageFrame = styled.div`
   position: relative;
-  height: 200px;
+  height: 220px;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    height: 320px;
+    height: 340px;
   }
 
   @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    height: 400px;
+    height: 440px;
     margin-bottom: -40px;
   }
 
   @media (min-width: 1280px) {
-    height: 440px;
+    height: 480px;
     margin-bottom: -44px;
   }
 `;
@@ -301,16 +274,17 @@ const TruckImageFadeBottom = styled.div`
   pointer-events: none;
 `;
 
+// Both markers sit along the image's right edge (destination up top, origin
+// down near the search card) with a curved dashed line joining them,
+// matching the reference's vertical route rather than the old horizontal
+// left-to-right layout.
 const RouteViz = styled.div`
   display: none;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     display: block;
     position: absolute;
-    top: 8%;
-    left: 4%;
-    right: 6%;
-    height: 40%;
+    inset: 0;
     pointer-events: none;
   }
 `;
@@ -323,31 +297,102 @@ const RoutePath = styled.svg`
   overflow: visible;
 `;
 
+// Plain icon + label directly on the image (no pill/card chrome) — the
+// reference reads these as annotations on the photo itself, not floating
+// UI elements.
 const RoutePin = styled.div`
   position: absolute;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px 5px 7px;
-  border-radius: ${({ theme }) => theme.radius.pill};
-  background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
-  box-shadow: ${({ theme }) => theme.shadow.card};
-  color: ${({ theme }) => theme.color.text};
-  font-size: 12px;
+  color: ${({ theme }) => theme.color.navy};
+  font-size: 13px;
   font-weight: 700;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9), 0 1px 8px rgba(255, 255, 255, 0.7);
   white-space: nowrap;
 `;
 
-const RouteFrom = styled(RoutePin)`
-  top: 60%;
-  left: -2%;
+const RouteTo = styled(RoutePin)`
+  top: 6%;
+  right: 3%;
 `;
 
-const RouteTo = styled(RoutePin)`
-  top: 0;
-  right: -2%;
+const RouteFrom = styled(RoutePin)`
+  bottom: 4%;
+  right: 1%;
 `;
+
+// Floating trust card, top-right over the truck image — tablet+ only (no
+// room at phone width without crowding the truck itself, per "do not make
+// it too tall / no floating elements outside the viewport").
+const StatsCard = styled.div`
+  display: none;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    display: flex;
+    position: absolute;
+    top: 4%;
+    left: 4%;
+    z-index: 2;
+    align-items: center;
+    background: ${({ theme }) => theme.color.surface};
+    border: 1px solid ${({ theme }) => theme.color.border};
+    border-radius: 16px;
+    box-shadow: ${({ theme }) => theme.shadow.raised};
+    padding: 12px 6px;
+    animation: ${fadeInUp} 0.6s ease 0.1s both;
+  }
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+`;
+
+const StatIconWrap = styled.div`
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: ${({ $bg }) => $bg};
+  color: ${({ $color }) => $color};
+`;
+
+const StatNumber = styled.div`
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: ${({ $color }) => $color};
+`;
+
+const StatLabel = styled.div`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.color.textMuted};
+  white-space: nowrap;
+`;
+
+const StatDivider = styled.div`
+  width: 1px;
+  height: 30px;
+  flex-shrink: 0;
+  background: ${({ theme }) => theme.color.border};
+`;
+
+// Fixed, hardcoded marketing figures per the client's own copy brief —
+// not read from the API. Nothing in this app currently tracks
+// platform-wide "active trucks"/"verified users"/"routes covered" totals,
+// and these are meant as headline trust numbers, not a live metric.
+const HERO_STATS = [
+  { icon: Truck, value: "10,000+", label: "Active Trucks", color: "#1d4ed8", bg: "#e6edfd" },
+  { icon: Users, value: "25,000+", label: "Verified Users", color: "#f26b21", bg: "#fdeae0" },
+  { icon: Route, value: "500+", label: "Routes Covered", color: "#3aa76d", bg: "#e2f3e9" },
+];
 
 const SearchCardWrap = styled.div`
   position: relative;
@@ -371,6 +416,7 @@ const SearchCardWrap = styled.div`
 // field treatment — taller, lighter, bigger focus glow — without touching
 // how an input looks anywhere else.
 const SearchCard = styled(Card)`
+  position: relative;
   border-radius: ${({ theme }) => theme.radius.lg};
   box-shadow: ${({ theme }) => theme.shadow.raised};
   animation: ${fadeInUp} 0.5s ease 0.15s both;
@@ -390,6 +436,88 @@ const SearchCard = styled(Card)`
   input:focus,
   select:focus {
     box-shadow: 0 0 0 4px ${({ theme }) => theme.color.accentSoft} !important;
+  }
+`;
+
+const SearchCardHeader = styled.div`
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.space(2)};
+  margin-bottom: ${({ theme }) => theme.space(5)};
+`;
+
+const SearchCardTitle = styled.h2`
+  margin: 0 0 3px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.color.navy};
+`;
+
+const SearchCardSubtitle = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.color.textMuted};
+`;
+
+const ShareCapacityLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.accent};
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const driveAcross = keyframes`
+  from { left: -54px; }
+  to { left: calc(100% + 54px); }
+`;
+
+// Sits directly above SearchCard's top border — bottom:100% against the
+// card (now position:relative) puts this strip's own bottom edge exactly on
+// the card's border line, extending upward from there, so the truck rides
+// above the line rather than being clipped inside it. left:0/right:0 match
+// the card's own width so overflow:hidden here only ever clips the truck
+// horizontally as it enters/exits at the edges (for a seamless loop) — it
+// never constrains SearchCard itself, so the LocationAutocomplete dropdowns
+// further down the card still overflow past it exactly as before.
+const TopBorderTrack = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 26px;
+  overflow: hidden;
+  pointer-events: none;
+`;
+
+// left (not transform) so the travel distance is always the track's full
+// width regardless of viewport — calc(100% + Xpx) carries the truck fully
+// past both edges before it loops, so the jump-cut reset happens while it's
+// already offscreen and invisible. The source art's cab faces right, so
+// left-to-right motion reads as driving forward, not backing up. Bottom-
+// anchored (not vertically centered) so the wheels sit right on the card's
+// border line, like the truck is driving along the top edge.
+const RunningTruck = styled.img`
+  position: absolute;
+  bottom: 1px;
+  left: -54px;
+  width: 46px;
+  height: auto;
+  animation: ${driveAcross} 26s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    left: 10px;
   }
 `;
 
@@ -459,29 +587,20 @@ const SwapButton = styled.button`
   }
 `;
 
-const TrustStripWrap = styled.div`
-  max-width: 1220px;
-  margin: 0 auto;
-  padding: ${({ theme }) => theme.space(5)} ${({ theme }) => theme.space(4)} 0;
-
-  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    padding: ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(6)} 0;
-  }
-`;
-
-const TrustStripBar = styled.div`
+// Embedded in the bottom of SearchCard itself (client reference shows the
+// trust strip as part of the same card, not a separate section below it) —
+// a top divider is enough separation from the form; no card-in-card
+// border/shadow/background of its own.
+const CardTrustStrip = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   row-gap: ${({ theme }) => theme.space(3)};
   column-gap: ${({ theme }) => theme.space(6)};
-  padding: ${({ theme }) => theme.space(4)} ${({ theme }) => theme.space(5)};
-  background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.radius.md};
-  box-shadow: ${({ theme }) => theme.shadow.card};
-  animation: ${fadeInUp} 0.5s ease 0.25s both;
+  margin-top: ${({ theme }) => theme.space(5)};
+  padding-top: ${({ theme }) => theme.space(5)};
+  border-top: 1px solid ${({ theme }) => theme.color.border};
 `;
 
 const TrustStripItem = styled.div`
@@ -642,198 +761,147 @@ const ValueBody = styled(Muted)`
   line-height: 1.5;
 `;
 
-// Background is theme.color.accentSoft laid flat over white — the same
-// token the accent-tinted icon fills already use elsewhere, just at full
-// section scale, rather than a new hardcoded "light blue" color.
-const Band = styled.section`
-  position: relative;
-  overflow: hidden;
+// The client reference's light-blue "How it works" panel — a single
+// rounded card (not full-bleed) with the heading on the left and four
+// steps flowing horizontally to its right, replacing the old accent-tinted
+// full-width band + shipper/transporter audience-tab pair — that level of
+// per-audience detail lives on /help instead.
+const HowSection = styled.section`
   margin-top: ${({ theme }) => theme.space(16)};
-  background: ${({ theme }) => theme.color.accentSoft};
-  padding: ${({ theme }) => theme.space(16)} ${({ theme }) => theme.space(4)} ${({ theme }) => theme.space(20)};
+  padding: 0 ${({ theme }) => theme.space(4)};
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    padding: ${({ theme }) => theme.space(20)} ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(24)};
+    padding: 0 ${({ theme }) => theme.space(6)};
   }
 `;
 
-// A soft curved "road" + waypoint pin along the very bottom of the process
-// section — decorative only, echoes the hero's route-line motif so the two
-// sections read as one visual system instead of two unrelated ideas.
-const BandRoadDecoration = styled.svg`
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -6px;
-  width: 100%;
-  height: 90px;
-  pointer-events: none;
-  opacity: 0.5;
-`;
-
-// Same 'd' the visible <path> below draws — sharing one string keeps the
-// truck glued to the curve at every viewport width, since offset-path and
-// the <path> it mirrors both resolve in this SVG's own viewBox coordinate
-// system (preserveAspectRatio="none" on the parent makes that stretch
-// uniform for both, so they never drift apart).
-const ROAD_PATH_D = "M -10 70 C 250 20, 550 100, 850 45 S 1150 10, 1210 40";
-
-const driveRoad = keyframes`
-  from { offset-distance: 0%; }
-  to { offset-distance: 100%; }
-`;
-
-// The callback from "our old site had a driving-truck animation" — revived
-// here rather than in the hero (kept untouched), riding the road decoration
-// this section already draws. A plain CSS animation (not SMIL) so it's
-// automatically covered by GlobalStyle's prefers-reduced-motion rule, same
-// as every other animation in this file.
-const RoadTruck = styled.g`
-  offset-path: path("${ROAD_PATH_D}");
-  offset-rotate: auto;
-  animation: ${driveRoad} 22s linear infinite;
-`;
-
-// road-truck.png is 400x266 (≈1.5:1) — height picked to match the previous
-// lucide Truck icon's on-road footprint, width follows the source's own
-// aspect ratio so the illustration isn't stretched.
-const ROAD_TRUCK_HEIGHT = 30;
-const ROAD_TRUCK_WIDTH = Math.round(ROAD_TRUCK_HEIGHT * (400 / 266));
-
-const BandInner = styled.div`
-  position: relative;
-  z-index: 1;
-  max-width: 1080px;
+const HowCard = styled.div`
+  max-width: 1320px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.space(7)};
+  background: ${({ theme }) => theme.color.lightBlue};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: 24px;
+  padding: ${({ theme }) => theme.space(7)} ${({ theme }) => theme.space(5)};
+  animation: ${fadeInUp} 0.5s ease both;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    flex-direction: row;
+    align-items: center;
+    gap: ${({ theme }) => theme.space(8)};
+    padding: ${({ theme }) => theme.space(9)} ${({ theme }) => theme.space(9)};
+  }
 `;
 
-// A clean 2x2 grid at tablet+ regardless of viewport width — each audience
-// tab always has exactly 4 steps, so there's no variable column count to
-// chase (unlike the old single 3-step flow this replaced).
-const ProcessGrid = styled.div`
-  position: relative;
+const HowHeading = styled.h2`
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.color.navy};
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    font-size: 2.1rem;
+    max-width: 200px;
+  }
+`;
+
+const HowBrandOrange = styled.span`
+  color: ${({ theme }) => theme.color.orange};
+`;
+
+// Flex (not grid) so a plain, hidden-below-desktop StepArrow sibling can sit
+// between each pair of steps without fragile gap-spanning pseudo-element
+// math — each connector is a real element instead of a computed offset.
+const HowSteps = styled.div`
   display: grid;
   grid-template-columns: 1fr;
-  gap: ${({ theme }) => theme.space(11)};
+  gap: ${({ theme }) => theme.space(7)};
+  flex: 1;
+  min-width: 0;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     grid-template-columns: repeat(2, 1fr);
-    gap: ${({ theme }) => theme.space(11)} ${({ theme }) => theme.space(6)};
+    gap: ${({ theme }) => theme.space(8)} ${({ theme }) => theme.space(5)};
+  }
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    display: flex;
+    align-items: flex-start;
   }
 `;
 
-const AudienceTabs = styled.div`
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin: 0 auto ${({ theme }) => theme.space(9)};
-  background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.radius.pill};
-  box-shadow: ${({ theme }) => theme.shadow.card};
-`;
-
-const AudienceTabsWrap = styled.div`
+const HowStep = styled.div`
   display: flex;
-  justify-content: center;
-`;
-
-const AudienceTab = styled.button`
-  padding: 9px 20px;
-  border-radius: ${({ theme }) => theme.radius.pill};
-  font-size: 14px;
-  font-weight: 700;
-  transition: background ${({ theme }) => theme.motion.fast} ease, color ${({ theme }) => theme.motion.fast} ease;
-  color: ${({ theme, $active }) => ($active ? theme.color.onAccent : theme.color.textMuted)};
-  background: ${({ theme, $active }) => ($active ? theme.color.accent : "transparent")};
-
-  &:hover {
-    color: ${({ theme, $active }) => ($active ? theme.color.onAccent : theme.color.text)};
-  }
-`;
-
-const ProcessStepWrap = styled.div`
-  position: relative;
-  padding-top: 24px;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
   animation: ${fadeInUp} 0.5s ease both;
-  animation-delay: ${({ $i = 0 }) => 0.15 + $i * 0.12}s;
+  animation-delay: ${({ $i = 0 }) => 0.1 + $i * 0.08}s;
+`;
 
-  // Vertical connector between stacked steps — only where the grid is
-  // guaranteed single-column (below tablet); the 2x2 grid at tablet+ has no
-  // single connecting line that would make sense across both rows.
-  @media (max-width: 767px) {
-    &:not(:last-child)::before {
-      content: "";
-      position: absolute;
-      top: 47px;
-      left: 24px;
-      width: 0;
-      height: calc(100% + ${({ theme }) => theme.space(11)} - 24px);
-      border-left: 2px dashed ${({ theme }) => theme.color.accent};
-      opacity: 0.3;
-      z-index: 0;
-    }
+const StepArrow = styled.div`
+  display: none;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    padding-top: 26px;
+    color: ${({ theme }) => theme.color.accent};
+    opacity: 0.45;
   }
 `;
 
-const ProcessNumber = styled.div`
+const StepIconWrap = styled.div`
   position: relative;
-  z-index: 2;
-  width: 46px;
-  height: 46px;
-  margin-bottom: -23px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
   border-radius: 50%;
-  background: ${({ theme }) => theme.color.accent};
-  color: ${({ theme }) => theme.color.onAccent};
-  border: 4px solid ${({ theme }) => theme.color.accentSoft};
-  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  animation: ${fadeInUp} 0.4s ease both;
-`;
-
-const ProcessCard = styled.div`
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: ${({ theme }) => theme.space(4)};
-  padding: ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(5)};
   background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: 20px;
-  box-shadow: ${({ theme }) => theme.shadow.card};
-  transition: transform ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing},
-    box-shadow ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing};
-
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: ${({ theme }) => theme.shadow.raised};
-  }
-`;
-
-const ProcessCardIcon = styled.div`
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
-  background: ${({ theme }) => theme.color.accentSoft};
   color: ${({ theme }) => theme.color.accent};
 `;
 
-const ProcessCardTitle = styled.div`
+const StepNumberBadge = styled.span`
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.color.accent};
+  color: ${({ theme }) => theme.color.onAccent};
+  border: 2px solid ${({ theme }) => theme.color.lightBlue};
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const StepTitle = styled.div`
+  font-size: 15.5px;
   font-weight: 700;
-  font-size: 16.5px;
-  margin-bottom: 4px;
-  color: ${({ theme }) => theme.color.text};
+  color: ${({ theme }) => theme.color.navy};
+`;
+
+const StepBody = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.color.textMuted};
 `;
 
 const RouteGrid = styled.div`
@@ -851,6 +919,12 @@ const RouteChip = styled.button`
   align-items: center;
   justify-content: space-between;
   gap: ${({ theme }) => theme.space(2)};
+  // Grid items default to min-width:auto, which refuses to shrink below an
+  // unbroken string's full width (e.g. a long generated city name with no
+  // spaces) — that's what was pushing this column wider than the viewport.
+  // min-width:0 here + overflow-wrap on the text below lets it actually
+  // wrap instead of forcing the grid track to overflow.
+  min-width: 0;
   text-align: left;
   padding: ${({ theme }) => theme.space(3)} ${({ theme }) => theme.space(4)};
   border-radius: ${({ theme }) => theme.radius.md};
@@ -877,10 +951,18 @@ const RouteChip = styled.button`
   }
 `;
 
+// Flex children default to min-width:auto too — same fix as RouteChip
+// itself, one level down, since this is what actually holds the city-name
+// text that needs to be allowed to shrink/wrap.
+const RouteChipText = styled.div`
+  min-width: 0;
+`;
+
 const RouteChipCities = styled.div`
   font-weight: 700;
   font-size: 14.5px;
   margin-bottom: 3px;
+  overflow-wrap: break-word;
 `;
 
 const RouteChipCount = styled.div`
@@ -980,15 +1062,15 @@ const CtaSubtitle = styled.p`
   font-size: 14.5px;
 `;
 
-// The single-line strip directly under the search card — distinct from
-// both HERO_TRUST_ITEMS (icon + title + body, inside the hero text column)
-// and VALUE_PROPS (the full below-hero section) — this one's just an icon
-// and a label, read at a glance while the eye is still on the search card.
+// The single-line strip inside the search card's bottom edge — distinct
+// from both HERO_TRUST_ITEMS (icon + title + body, inside the hero text
+// column) and VALUE_PROPS (the full below-hero section) — this one's just
+// an icon and a label, read at a glance while the eye is still on the card.
 const TRUST_STRIP_ITEMS = [
   { icon: ShieldCheck, label: "Verified Trucks & Users" },
   { icon: Clock3, label: "On-time Deliveries" },
-  { icon: XCircle, label: "Free Cancellation" },
-  { icon: LifeBuoy, label: "24/7 Support" },
+  { icon: ShieldCheck, label: "Safe & Secure Transactions" },
+  { icon: Headphones, label: "24/7 Support" },
 ];
 
 // The hero's compact 3-item trust row — a tighter, glance-only subset of
@@ -998,18 +1080,18 @@ const TRUST_STRIP_ITEMS = [
 const HERO_TRUST_ITEMS = [
   {
     icon: ShieldCheck,
-    title: "Verified & Trusted",
-    body: "Every booking is verified and secure.",
+    title: "Verified Users & Trucks",
+    body: "Connect with verified transporters and shippers.",
   },
   {
     icon: MapPin,
-    title: "Booking status, live",
-    body: "Follow pickup to drop-off, every step.",
+    title: "Booking Status",
+    body: "Track your booking from pickup to drop-off.",
   },
   {
     icon: IndianRupee,
-    title: "Free & Transparent",
-    body: "Zero hidden charges — what you agree is what you pay.",
+    title: "Free to Connect",
+    body: "No platform commission. Connect directly and pay as you agree.",
   },
 ];
 
@@ -1031,53 +1113,26 @@ const VALUE_PROPS = [
   },
 ];
 
-// Condensed from TruckGee's "How TruckGee Works" reference doc, which lists
-// each audience's flow as one semicolon-separated run — grouped here into
-// four step cards apiece without introducing any action that source doesn't
-// already describe.
-const SHIPPER_STEPS = [
+const HOW_IT_WORKS_STEPS = [
   {
     icon: Search,
-    title: "Enter pickup, destination & shipment details",
-    body: "Add your shipment weight and other required details, then choose the date.",
+    title: "Search",
+    body: "Shipper searches for available truck capacity on the desired route.",
   },
   {
-    icon: ListChecks,
-    title: "View available trucks",
-    body: "See available trucks and capacity already travelling your route.",
+    icon: Send,
+    title: "Request",
+    body: "Send a booking request to the transporter.",
   },
   {
-    icon: FileCheck,
-    title: "Review & send a request",
-    body: "Review transporter information and terms, then send a Book Now/request.",
-  },
-  {
-    icon: MapPin,
-    title: "Coordinate pickup & delivery",
-    body: "Wait for transporter acceptance, then coordinate pickup and delivery.",
-  },
-];
-
-const TRANSPORTER_STEPS = [
-  {
-    icon: SignpostBig,
-    title: "Create a route listing",
-    body: "Add your departure date, vehicle details and available capacity.",
-  },
-  {
-    icon: Inbox,
-    title: "Receive shipment requests",
-    body: "Get compatible shipment requests matched to your route.",
-  },
-  {
-    icon: FileCheck,
-    title: "Review & respond",
-    body: "Review the cargo and terms, then accept or reject the request.",
+    icon: CheckCircle2,
+    title: "Accept",
+    body: "Transporter reviews and accepts the request.",
   },
   {
     icon: Truck,
-    title: "Coordinate delivery",
-    body: "Coordinate pickup, loading, transit and delivery.",
+    title: "Ship",
+    body: "Pickup, in-transit and drop-off. Track booking till completion.",
   },
 ];
 
@@ -1098,10 +1153,18 @@ const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id 
 
 export const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { platformName } = useBranding();
   usePageMeta({
     description: `${platformName} — ship for less, earn from empty space. Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use.`,
   });
+  // "How TruckGee Works" splits the brand name into a navy part + an
+  // orange part (client brief's exact treatment) — split after "Truck"
+  // when the name actually starts with it (true for every brand name this
+  // product has used so far), otherwise fall back to showing the whole
+  // name in navy rather than guessing a wrong split point.
+  const brandTruckPart = /^truck/i.test(platformName) ? platformName.slice(0, 5) : "";
+  const brandRestPart = /^truck/i.test(platformName) ? platformName.slice(5) : platformName;
   // The input shows a full address (Uber/Rapido-style autocomplete, see
   // LocationAutocomplete), but trip search still matches by exact city —
   // fromCityResolved/toCityResolved track the city extracted from whichever
@@ -1118,14 +1181,15 @@ export const Home = () => {
   // Below tablet width, the From/To fields are too narrow for the full
   // "Pickup address or area" placeholder — it truncated mid-word ("Picku…").
   // Short placeholders instead of letting the browser clip the long ones.
+  // Also gates the From field's autoFocus below — on a short mobile
+  // viewport the search card sits below the fold under the stacked hero,
+  // so autofocusing it forced an unrequested scroll-into-view (and likely
+  // the on-screen keyboard) the instant the page loaded.
   const isMobile = useMediaQuery(`(max-width: 767px)`);
   const fromPlaceholder = isMobile ? "Pick" : "Pickup address or area";
   const toPlaceholder = isMobile ? "Drop" : "Drop address or area";
-  const [audience, setAudience] = useState("shipper");
-  const audienceSteps = audience === "shipper" ? SHIPPER_STEPS : TRANSPORTER_STEPS;
   const [routes, setRoutes] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
-  const typedTagline = useTypingEffect(TAGLINE);
 
   useEffect(() => {
     let cancelled = false;
@@ -1143,6 +1207,18 @@ export const Home = () => {
       cancelled = true;
     };
   }, []);
+
+  // Navbar's "How it Works" link (and any other same-page anchor) changes
+  // the URL to /#how-it-works, but React Router's client-side navigation
+  // doesn't trigger the browser's native scroll-to-anchor the way a full
+  // page load would — this fills that in, keyed on location.hash so it
+  // fires both on a fresh navigation here from another page and on a
+  // same-page click while already on "/".
+  useEffect(() => {
+    if (!location.hash) return;
+    const el = document.querySelector(location.hash);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash]);
 
   // Search still matches trips by date only (±1 day window) — the time
   // component is captured so a shipper can note when they need pickup, but
@@ -1212,21 +1288,22 @@ export const Home = () => {
           <HeroGrid>
             <HeroLeft>
               <Eyebrow>
-                <LiveDot aria-hidden="true" />
-                {typedTagline}
-                <TypingCaret />
                 <span role="img" aria-label="India flag">
                   🇮🇳
                 </span>
+                India's Smart Truck Capacity Marketplace
               </Eyebrow>
               <HeroTitle>
-                Ship for less.
+                Turn Empty
                 <br />
-                Earn from <AccentText>empty space.</AccentText>
+                <AccentText>Truck Space</AccentText>
+                <br />
+                Into Opportunity.
               </HeroTitle>
+              <HeroDivider aria-hidden="true" />
               <HeroSubtitle>
-                Discover spare capacity on routes already running, get matched by route, and book only
-                the part-load space your shipment actually needs.
+                Find spare capacity on trucks already on the road or share your available space on an
+                existing route.
               </HeroSubtitle>
 
               <TrustRow>
@@ -1250,32 +1327,47 @@ export const Home = () => {
                 <TruckImageFadeLeft aria-hidden="true" />
                 <TruckImageFadeBottom aria-hidden="true" />
                 <RouteViz aria-hidden="true">
-                  {/* viewBox proportioned to roughly match RouteViz's own
-                      rendered aspect ratio (wide, ~2.7:1) — a square 100x100
-                      viewBox stretched with preserveAspectRatio="none" onto
-                      a wide box distorts stroke-width/dasharray/circles
-                      unevenly (dashes read as blobs, circles as ovals). */}
-                  <RoutePath viewBox="0 0 280 100" preserveAspectRatio="none">
+                  {/* viewBox proportioned to roughly match the frame's own
+                      rendered aspect ratio — a square 100x100 viewBox
+                      stretched with preserveAspectRatio="none" onto a wide
+                      box distorts stroke-width/dasharray unevenly (dashes
+                      read as blobs). */}
+                  <RoutePath viewBox="0 0 280 200" preserveAspectRatio="none">
                     <path
-                      d="M 14 80 Q 145 30 266 14"
+                      d="M 258 32 C 230 70, 250 110, 235 178"
                       fill="none"
-                      stroke="#2563eb"
+                      stroke="#1d4ed8"
                       strokeWidth="1.6"
                       strokeDasharray="1 8"
                       strokeLinecap="round"
-                      opacity="0.7"
+                      opacity="0.75"
                     />
-                    <circle cx="140" cy="38" r="2.6" fill="#1d4ed8" stroke="#ffffff" strokeWidth="1" />
                   </RoutePath>
-                  <RouteFrom>
-                    <MapPin size={12} strokeWidth={2.4} color="#1d4ed8" />
-                    Mumbai
-                  </RouteFrom>
                   <RouteTo>
-                    <MapPin size={12} strokeWidth={2.4} color="#1d4ed8" />
+                    <MapPin size={14} strokeWidth={2.6} color="#1d4ed8" fill="#1d4ed8" fillOpacity={0.15} />
                     Delhi
                   </RouteTo>
+                  <RouteFrom>
+                    <MapPin size={14} strokeWidth={2.6} color="#f26b21" fill="#f26b21" fillOpacity={0.18} />
+                    Gurugram
+                  </RouteFrom>
                 </RouteViz>
+                <StatsCard>
+                  {HERO_STATS.map(({ icon: Icon, value, label, color, bg }, i) => (
+                    <Fragment key={label}>
+                      {i > 0 && <StatDivider aria-hidden="true" />}
+                      <StatItem>
+                        <StatIconWrap $bg={bg} $color={color}>
+                          <Icon size={16} strokeWidth={2.4} />
+                        </StatIconWrap>
+                        <div>
+                          <StatNumber $color={color}>{value}</StatNumber>
+                          <StatLabel>{label}</StatLabel>
+                        </div>
+                      </StatItem>
+                    </Fragment>
+                  ))}
+                </StatsCard>
               </TruckImageFrame>
             </HeroRight>
           </HeroGrid>
@@ -1284,6 +1376,19 @@ export const Home = () => {
 
       <SearchCardWrap>
         <SearchCard as="form" onSubmit={handleSearch}>
+          <TopBorderTrack aria-hidden="true">
+            <RunningTruck src={truckRunnerSrc} alt="" />
+          </TopBorderTrack>
+          <SearchCardHeader>
+            <div>
+              <SearchCardTitle>Find Truck Capacity</SearchCardTitle>
+              <SearchCardSubtitle>Search available trucks on your route</SearchCardSubtitle>
+            </div>
+            <ShareCapacityLink to="/trips/new">
+              or Share Your Truck Capacity
+              <ArrowUpRight size={15} strokeWidth={2.6} />
+            </ShareCapacityLink>
+          </SearchCardHeader>
           <Stack $gap={4}>
             <SwapRow>
               <Field label="From" error={errors.fromCity}>
@@ -1293,7 +1398,7 @@ export const Home = () => {
                   onChange={handleFromChange}
                   onResolve={setFromCityResolved}
                   showPreview={false}
-                  autoFocus
+                  autoFocus={!isMobile}
                 />
               </Field>
               <SwapButton type="button" onClick={handleSwap} aria-label="Swap locations" title="Swap locations">
@@ -1336,22 +1441,20 @@ export const Home = () => {
               </div>
             </SearchFieldsRow>
           </Stack>
+
+          <CardTrustStrip>
+            {TRUST_STRIP_ITEMS.map(({ icon: Icon, label }, i) => (
+              <Fragment key={label}>
+                {i > 0 && <TrustStripDivider aria-hidden="true" />}
+                <TrustStripItem>
+                  <Icon size={15} strokeWidth={2.2} />
+                  {label}
+                </TrustStripItem>
+              </Fragment>
+            ))}
+          </CardTrustStrip>
         </SearchCard>
       </SearchCardWrap>
-
-      <TrustStripWrap>
-        <TrustStripBar>
-          {TRUST_STRIP_ITEMS.map(({ icon: Icon, label }, i) => (
-            <Fragment key={label}>
-              {i > 0 && <TrustStripDivider aria-hidden="true" />}
-              <TrustStripItem>
-                <Icon size={15} strokeWidth={2.2} />
-                {label}
-              </TrustStripItem>
-            </Fragment>
-          ))}
-        </TrustStripBar>
-      </TrustStripWrap>
 
       <PageContainer>
         <Section as="div" style={{ paddingTop: 0 }}>
@@ -1378,73 +1481,35 @@ export const Home = () => {
         </Section>
       </PageContainer>
 
-      <Band>
-        <BandInner>
-          <SectionHead style={{ maxWidth: 620 }}>
-            <SectionEyebrow>The process</SectionEyebrow>
-            <SectionHeading>How it works</SectionHeading>
-            <SectionLede>Two ways to use {platformName} — see the steps for your side.</SectionLede>
-          </SectionHead>
-          <AudienceTabsWrap>
-            <AudienceTabs role="tablist" aria-label="How it works, by audience">
-              <AudienceTab
-                type="button"
-                role="tab"
-                aria-selected={audience === "shipper"}
-                $active={audience === "shipper"}
-                onClick={() => setAudience("shipper")}
-              >
-                For shippers
-              </AudienceTab>
-              <AudienceTab
-                type="button"
-                role="tab"
-                aria-selected={audience === "transporter"}
-                $active={audience === "transporter"}
-                onClick={() => setAudience("transporter")}
-              >
-                For transporters
-              </AudienceTab>
-            </AudienceTabs>
-          </AudienceTabsWrap>
-          <ProcessGrid>
-            {audienceSteps.map(({ icon: Icon, title, body }, i) => (
-              <ProcessStepWrap key={title} $i={i}>
-                <ProcessNumber>{String(i + 1).padStart(2, "0")}</ProcessNumber>
-                <ProcessCard>
-                  <ProcessCardIcon>
-                    <Icon size={20} strokeWidth={2.2} aria-hidden="true" />
-                  </ProcessCardIcon>
-                  <div>
-                    <ProcessCardTitle>{title}</ProcessCardTitle>
-                    <Muted>{body}</Muted>
-                  </div>
-                </ProcessCard>
-              </ProcessStepWrap>
+      <HowSection id="how-it-works">
+        <HowCard>
+          <HowHeading>
+            How
+            <br />
+            <HowBrandOrange>{brandTruckPart}</HowBrandOrange>
+            {brandRestPart} Works
+          </HowHeading>
+          <HowSteps>
+            {HOW_IT_WORKS_STEPS.map(({ icon: Icon, title, body }, i) => (
+              <Fragment key={title}>
+                {i > 0 && (
+                  <StepArrow aria-hidden="true">
+                    <ArrowRight size={16} strokeWidth={2.2} />
+                  </StepArrow>
+                )}
+                <HowStep $i={i}>
+                  <StepIconWrap>
+                    <StepNumberBadge>{i + 1}</StepNumberBadge>
+                    <Icon size={22} strokeWidth={2.2} aria-hidden="true" />
+                  </StepIconWrap>
+                  <StepTitle>{title}</StepTitle>
+                  <StepBody>{body}</StepBody>
+                </HowStep>
+              </Fragment>
             ))}
-          </ProcessGrid>
-        </BandInner>
-        <BandRoadDecoration aria-hidden="true" viewBox="0 0 1200 90" preserveAspectRatio="none">
-          <path
-            d={ROAD_PATH_D}
-            fill="none"
-            stroke="#1d4ed8"
-            strokeWidth="2"
-            strokeDasharray="1 10"
-            strokeLinecap="round"
-          />
-          <circle cx="1000" cy="30" r="4" fill="#1d4ed8" opacity="0.5" />
-          <RoadTruck>
-            <image
-              href={roadTruckSrc}
-              x={-ROAD_TRUCK_WIDTH / 2}
-              y={-ROAD_TRUCK_HEIGHT / 2}
-              width={ROAD_TRUCK_WIDTH}
-              height={ROAD_TRUCK_HEIGHT}
-            />
-          </RoadTruck>
-        </BandRoadDecoration>
-      </Band>
+          </HowSteps>
+        </HowCard>
+      </HowSection>
 
       <PageContainer>
         <Section>
@@ -1474,14 +1539,14 @@ export const Home = () => {
                     $i={i}
                     onClick={() => handleRouteClick(route)}
                   >
-                    <div>
+                    <RouteChipText>
                       <RouteChipCities>
                         {route.fromCity} → {route.toCity}
                       </RouteChipCities>
                       <RouteChipCount>
                         {route.count} {route.count === 1 ? "trip" : "trips"} available
                       </RouteChipCount>
-                    </div>
+                    </RouteChipText>
                     <RouteChipArrow size={16} strokeWidth={2.2} />
                   </RouteChip>
                 ))}

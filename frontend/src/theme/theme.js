@@ -39,6 +39,22 @@ export const theme = {
     dangerSoft: "rgba(220, 47, 60, 0.1)",
     info: "#2563eb",
     infoSoft: "rgba(37, 99, 235, 0.1)",
+
+    // Landing-page brand palette (client design brief) — additive, kept
+    // separate from accent/text/etc. above rather than repointing those,
+    // since accent is load-bearing everywhere (buttons, links, focus
+    // rings) and repointing it would reskin the whole app, not just the
+    // landing page. navy/orange are used for the hero heading split and
+    // section accents; lightBlue for section backgrounds; statsGreen only
+    // for the hero stats card's third figure (kept distinct from the
+    // semantic `success` token above, which drives status badges
+    // everywhere and shouldn't be tied to one card's one-off color choice).
+    navy: "#0b2a5b",
+    orange: "#f26b21",
+    orangeSoft: "rgba(242, 107, 33, 0.12)",
+    lightBlue: "#eef6ff",
+    statsGreen: "#3aa76d",
+    statsGreenSoft: "rgba(58, 167, 109, 0.12)",
   },
 
   status: {

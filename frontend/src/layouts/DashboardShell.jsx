@@ -8,6 +8,7 @@ import { useOnClickOutside } from "../hooks/useOnClickOutside";
 import { Avatar } from "../components/ui/Avatar";
 import { BrandLogo } from "../components/ui/BrandLogo";
 import ErrorBoundary from "../components/ErrorBoundary";
+import MobileTabBar from "./MobileTabBar";
 import { theme } from "../theme/theme";
 
 const SIDEBAR_WIDTH = 236;
@@ -794,10 +795,17 @@ const DashUserMenuLogout = styled.button`
 `;
 
 // No padding here — every dashboard page already renders its own
-// PageContainer, same reasoning as AdminContent above.
+// PageContainer, same reasoning as AdminContent above. The bottom padding
+// is the one exception: below tablet width this shell renders MobileTabBar
+// (fixed, ~70px tall) as a sibling of DashMain, and without this reserved
+// space its last bit of content would sit underneath the bar.
 const DashContent = styled.main`
   flex: 1;
   min-width: 0;
+
+  @media (max-width: calc(${({ theme }) => theme.breakpoint.tablet} - 1px)) {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
 `;
 
 // The shared shell behind every role's dashboard (admin today, shipper/
@@ -1073,6 +1081,15 @@ export const DashboardShell = ({ nav, storageKey, brandTo = "/", tag, variant })
           </ErrorBoundary>
         </DashContent>
       </DashMain>
+
+      {/* Below tablet width this renders the same bottom tab bar as the
+          public Layout shell — without it, a mobile shipper/transporter had
+          no way back to the marketplace short of the hamburger drawer,
+          unlike every public page's consistent bottom nav. Admin keeps its
+          drawer-only pattern (its nav has too many sections for 4 tabs to
+          represent, and MobileTabBar's items don't map to an admin's tasks
+          anyway). */}
+      <MobileTabBar />
     </DashRoot>
   );
 };

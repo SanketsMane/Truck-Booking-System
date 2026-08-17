@@ -10,31 +10,44 @@ const Bar = styled.nav`
   right: 0;
   z-index: 20;
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid ${({ theme }) => theme.color.border};
   box-shadow: 0 -6px 20px rgba(20, 21, 15, 0.06);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     display: none;
   }
 `;
 
+// Fixed horizontal padding (14px/side) times 4 items left too little room
+// for "Share Space"/"Find Space" on the narrowest real devices (~320px) —
+// flex:1 + a small clamped padding lets each item claim an even quarter of
+// the bar instead of a hardcoded width, and the label wraps to a second
+// line (line-height tightened below) rather than clipping if it must.
 const Item = styled(NavLink)`
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 10.5px;
+  line-height: 1.15;
   font-weight: 600;
   color: ${({ theme }) => theme.color.textFaint};
-  padding: 4px 14px;
+  padding: 4px 2px;
   border-radius: ${({ theme }) => theme.radius.md};
+  text-align: center;
   transition: color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
+
+  @media (min-width: 400px) {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
 
   &:active {
     transform: scale(0.94);

@@ -109,7 +109,7 @@ export const About = () => {
           </Lede>
         </Stack>
 
-        <Stack $gap={4}>
+        <Stack $gap={4} id="how-it-works">
           <SectionTitle>How it works</SectionTitle>
           <Grid $cols={1} $colsTablet={2} $gap={4}>
             <RoleCard>
@@ -143,7 +143,7 @@ export const About = () => {
           </Grid>
         </Stack>
 
-        <VisionCard>
+        <VisionCard id="vision">
           <SectionTitle style={{ marginBottom: 8 }}>Our vision</SectionTitle>
           <VisionStatement>
             A road freight network where empty truck capacity doesn't go unused.
