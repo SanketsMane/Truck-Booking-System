@@ -42,6 +42,46 @@ const NameLink = styled(Link)`
   }
 `;
 
+// Compact, icon-only secondary actions (Make admin / Delete) so a row's
+// action cell never needs to wrap onto a second line the way three
+// full-width labeled buttons did — "View" stays a labeled button since
+// it's the one every row always has and the one worth scanning for; the
+// rest collapse to an icon + tooltip, same hierarchy most admin consoles
+// use (one primary label, icon-only for the rest).
+const IconButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid ${({ theme }) => theme.admin.color.border};
+  background: ${({ theme }) => theme.admin.color.surface};
+  color: ${({ theme, $danger }) => ($danger ? theme.color.danger : theme.admin.color.textMuted)};
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme, $danger }) => ($danger ? theme.color.dangerSoft : theme.admin.color.bg)};
+    border-color: ${({ theme, $danger }) => ($danger ? theme.color.danger : theme.admin.color.borderStrong)};
+    color: ${({ theme, $danger }) => ($danger ? theme.color.danger : theme.admin.color.text)};
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
+const ActionsCell = styled(Row).attrs({ $gap: 1 })`
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+`;
+
+const RolesCell = styled(Row).attrs({ $gap: 1 })`
+  flex-wrap: wrap;
+`;
+
 // Same pill-toggle pattern as admin/Settings.jsx's own Switch (and
 // Profile.jsx's copy of it) — kept local here too rather than extracted,
 // following that established precedent — just on admin.color tokens
@@ -466,13 +506,17 @@ export const Users = () => {
                         </Td>
                         <Td>{u.email}</Td>
                         <Td>
-                          <Row $gap={1} $wrap>
-                            {(u.roles || []).map((r) => (
-                              <StatusBadge key={r} status="verified">
-                                {r}
-                              </StatusBadge>
-                            ))}
-                          </Row>
+                          {u.roles?.length ? (
+                            <RolesCell>
+                              {u.roles.map((r) => (
+                                <StatusBadge key={r} status="verified">
+                                  {r}
+                                </StatusBadge>
+                              ))}
+                            </RolesCell>
+                          ) : (
+                            "—"
+                          )}
                         </Td>
                         <Td>{u.city || "—"}</Td>
                         <Td>
@@ -491,35 +535,21 @@ export const Users = () => {
                         </Td>
                         <Td>{formatDate(u.createdAt)}</Td>
                         <Td>
-                          <Row $gap={2} $wrap>
+                          <ActionsCell>
                             <Button as={Link} to={`/admin/users/${u._id}`} $variant="secondary" $size="sm">
                               View
                             </Button>
                             {!u.isAdmin && viewer?.adminScope === "full" && (
-                              <Button
-                                type="button"
-                                $variant="ghost"
-                                $size="sm"
-                                onClick={() => setPromoteTarget(u)}
-                                title="Grant admin access"
-                              >
-                                <ShieldPlus size={14} strokeWidth={2.4} />
-                                Make admin
-                              </Button>
+                              <IconButton type="button" onClick={() => setPromoteTarget(u)} title="Grant admin access" aria-label="Grant admin access">
+                                <ShieldPlus size={15} strokeWidth={2.2} />
+                              </IconButton>
                             )}
                             {viewer?.adminScope === "full" && String(u._id) !== String(viewer.id) && (
-                              <Button
-                                type="button"
-                                $variant="ghost"
-                                $size="sm"
-                                onClick={() => setDeleteTarget(u)}
-                                title="Delete user"
-                              >
-                                <Trash2 size={14} strokeWidth={2.4} />
-                                Delete
-                              </Button>
+                              <IconButton type="button" $danger onClick={() => setDeleteTarget(u)} title="Delete user" aria-label="Delete user">
+                                <Trash2 size={15} strokeWidth={2.2} />
+                              </IconButton>
                             )}
-                          </Row>
+                          </ActionsCell>
                         </Td>
                       </Tr>
                     ))
