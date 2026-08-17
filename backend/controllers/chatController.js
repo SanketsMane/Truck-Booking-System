@@ -1,5 +1,6 @@
 const ChatThread = require("../models/chatThreadModel");
 const Message = require("../models/messageModel");
+const Booking = require("../models/bookingModel");
 const { notify } = require("../utils/notify");
 const { emitToRoom } = require("../realtime/io");
 const { logAdminAction } = require("../utils/audit");
@@ -10,6 +11,15 @@ const sendServerError = require("../utils/sendServerError");
 // mirrors what's already shown on trip search results and booking detail
 // (name/city/rating), deliberately excluding mobile/email/documents.
 const COUNTERPARTY_FIELDS = "name city ratingAvg ratingCount roles";
+
+// Terminal states where the deal fell through rather than went through —
+// no more legitimate back-and-forth is coming, so new messages are closed
+// off. "completed" is deliberately excluded: a finished delivery is still a
+// real reason to keep messaging (follow-up questions, documenting an issue
+// before raising a dispute), so only these three close the channel. Reading
+// history and marking-as-read stay open for every status, always — this
+// only gates sending new messages.
+const MESSAGING_CLOSED_STATUSES = ["cancelled", "rejected", "expired"];
 
 const findThreadForParticipant = async (threadId, userId) => {
   const thread = await ChatThread.findById(threadId);
@@ -81,6 +91,13 @@ const sendMessage = async (req, res) => {
     const thread = await findThreadForParticipant(req.params.threadId, req.auth.id);
     if (!thread) {
       return res.status(404).json({ success: false, msg: "Chat thread not found" });
+    }
+
+    // Gate SENDING (not reading) on the underlying deal still being live —
+    // see MESSAGING_CLOSED_STATUSES above for which statuses close it.
+    const booking = await Booking.findById(thread.booking).select("status");
+    if (booking && MESSAGING_CLOSED_STATUSES.includes(booking.status)) {
+      return res.status(403).json({ success: false, msg: "This booking is no longer active — messaging is closed." });
     }
 
     const message = await Message.create({

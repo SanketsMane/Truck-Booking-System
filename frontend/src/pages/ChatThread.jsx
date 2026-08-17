@@ -129,7 +129,12 @@ export const ChatThread = () => {
       </HeaderCard>
 
       <ChatCard>
-        <ChatPanel threadId={threadId} flexFill emptyHint="This conversation isn't available." />
+        <ChatPanel
+          threadId={threadId}
+          flexFill
+          emptyHint="This conversation isn't available."
+          bookingStatus={thread?.booking?.status}
+        />
       </ChatCard>
 
       <UserProfileModal open={profileOpen} person={thread?.counterparty} onClose={() => setProfileOpen(false)} />

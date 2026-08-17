@@ -32,6 +32,14 @@ const emailConfigSchemas = {
     fromAddress: Joi.string().trim().email({ tlds: false }).required(),
     fromName: Joi.string().trim().allow(""),
   }),
+  // Resend's HTTP API (utils/emailProvider.js's sendViaResend) — an API key
+  // plus the same from-address/from-name shape SMTP already uses, so the
+  // rest of the send path (subject/html) needs no provider-specific work.
+  resend: Joi.object({
+    apiKey: Joi.string().trim().required(),
+    fromAddress: Joi.string().trim().email({ tlds: false }).required(),
+    fromName: Joi.string().trim().allow(""),
+  }),
 };
 
 // Shared shape for KYC's custom_http seam — a webhook URL plus optional
@@ -58,7 +66,7 @@ const updateSmsValidation = Joi.object({
 }, "sms config shape");
 
 const updateEmailValidation = Joi.object({
-  provider: Joi.string().valid("console", "smtp").required(),
+  provider: Joi.string().valid("console", "smtp", "resend").required(),
   config: Joi.object().required(),
 }).custom((value, helpers) => {
   const schema = emailConfigSchemas[value.provider];

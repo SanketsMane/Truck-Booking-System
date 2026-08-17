@@ -34,6 +34,48 @@ describe("PUT /admin/integrations/* (requireAdminScope('full'))", () => {
   });
 });
 
+describe("PUT /admin/integrations/email — resend provider", () => {
+  it("saves a valid resend config and reports it as configured", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(4), name: "Admin" });
+    await makeAdmin(user, "full");
+
+    const res = await agent.put("/admin/integrations/email").send({
+      provider: "resend",
+      config: { apiKey: "re_test_key", fromAddress: "no-reply@truckgee.test", fromName: "TruckGee" },
+    });
+    expect(res.status).toBe(200);
+
+    const status = await agent.get("/admin/integrations");
+    expect(status.body.integrations.email.provider).toBe("resend");
+    expect(status.body.integrations.email.configured).toBe(true);
+    // Masked, not the raw key — same maskConfig() every provider goes through.
+    expect(status.body.integrations.email.config.apiKey).not.toBe("re_test_key");
+    expect(status.body.integrations.email.config.apiKey).toMatch(/•/);
+  });
+
+  it("rejects a resend config missing the required API key", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(5), name: "Admin" });
+    await makeAdmin(user, "full");
+
+    const res = await agent.put("/admin/integrations/email").send({
+      provider: "resend",
+      config: { fromAddress: "no-reply@truckgee.test" },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a resend config with an invalid from-address", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(6), name: "Admin" });
+    await makeAdmin(user, "full");
+
+    const res = await agent.put("/admin/integrations/email").send({
+      provider: "resend",
+      config: { apiKey: "re_test_key", fromAddress: "not-an-email" },
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /admin/integrations/*/test", () => {
   it("returns 400 'before testing' for sms/email since no real provider is configured in this env", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(3), name: "Admin" });

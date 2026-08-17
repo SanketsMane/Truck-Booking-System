@@ -192,7 +192,11 @@ export const TripDetail = () => {
   }, [id]);
 
   const isOwnTrip = user && trip && String(trip.transporter?._id) === String(user.id);
-  const canBook = trip && trip.status === "published" && trip.availableCapacity > 0;
+  // visibleAvailableCapacity (not the raw availableCapacity) is what
+  // createBooking actually validates against — it's already net of other
+  // shippers' still-pending requests, so this is the number that decides
+  // whether a booking attempt can succeed right now.
+  const canBook = trip && trip.status === "published" && trip.visibleAvailableCapacity > 0;
 
   const estimatedPrice = useMemo(() => {
     const tons = Number(capacityAmount.tons);
@@ -213,8 +217,8 @@ export const TripDetail = () => {
     const tons = Number(capacityAmount.tons);
     const nextErrors = {};
     if (!tons || tons <= 0) nextErrors.capacityRequested = "Enter how much capacity you need";
-    else if (tons > trip.availableCapacity) {
-      nextErrors.capacityRequested = `Only ${formatTons(trip.availableCapacity)} available`;
+    else if (tons > trip.visibleAvailableCapacity) {
+      nextErrors.capacityRequested = `Only ${formatTons(trip.visibleAvailableCapacity)} available`;
     }
     if (!goodsDescription.trim()) nextErrors.goodsDescription = "Describe what you're shipping";
     if (!pickupPoint.address.trim()) nextErrors.pickupPoint = "Pickup point is required";
@@ -264,7 +268,7 @@ export const TripDetail = () => {
   }
 
   const capacityPct = trip.totalCapacity
-    ? Math.min(100, Math.round((trip.availableCapacity / trip.totalCapacity) * 100))
+    ? Math.min(100, Math.round((trip.visibleAvailableCapacity / trip.totalCapacity) * 100))
     : 0;
 
   return (
@@ -310,7 +314,7 @@ export const TripDetail = () => {
               <CardRow>
                 <Muted>Available capacity</Muted>
                 <strong>
-                  {formatTons(trip.availableCapacity)} / {formatTons(trip.totalCapacity)}
+                  {formatTons(trip.visibleAvailableCapacity)} / {formatTons(trip.totalCapacity)}
                 </strong>
               </CardRow>
               <CapacityBarTrack>
@@ -399,7 +403,7 @@ export const TripDetail = () => {
                   <Field
                     label="Capacity needed"
                     error={formErrors.capacityRequested}
-                    help={`Up to ${formatTons(trip.availableCapacity)} available`}
+                    help={`Up to ${formatTons(trip.visibleAvailableCapacity)} available`}
                   >
                     <UnitAmountInput
                       value={capacityAmount.displayValue}
@@ -407,7 +411,7 @@ export const TripDetail = () => {
                       onValueChange={capacityAmount.onValueChange}
                       onUnitChange={capacityAmount.onUnitChange}
                       minTons={0.1}
-                      maxTons={trip.availableCapacity}
+                      maxTons={trip.visibleAvailableCapacity}
                       autoFocus
                     />
                   </Field>

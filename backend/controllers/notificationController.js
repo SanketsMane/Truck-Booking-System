@@ -1,6 +1,7 @@
 const Notification = require("../models/notificationModel");
 const sendServerError = require("../utils/sendServerError");
 const { CATEGORY_LABELS } = require("../config/notificationCategories");
+const { emitToUser } = require("../realtime/io");
 
 // So the profile preferences UI always matches exactly what notify() checks
 // against, rather than a hand-copied list that can drift out of sync.
@@ -31,6 +32,10 @@ const markRead = async (req, res) => {
     if (!notification) {
       return res.status(404).json({ success: false, msg: "Notification not found" });
     }
+    // Lets any OTHER open tab of this same user drop its unread count for
+    // this notification too — this tab's own UI already updated from the
+    // API response above, it doesn't need this echo.
+    emitToUser(req.auth.id, "notification:read", { notificationId: notification._id });
     res.status(200).json({ success: true, notification });
   } catch (error) {
     sendServerError(res, error, "notificationController");
@@ -40,6 +45,8 @@ const markRead = async (req, res) => {
 const markAllRead = async (req, res) => {
   try {
     await Notification.updateMany({ user: req.auth.id, readAt: null }, { readAt: new Date() });
+    // Same cross-tab sync as markRead above, for the "mark all" action.
+    emitToUser(req.auth.id, "notification:allRead", {});
     res.status(200).json({ success: true, msg: "All notifications marked as read" });
   } catch (error) {
     sendServerError(res, error, "notificationController");

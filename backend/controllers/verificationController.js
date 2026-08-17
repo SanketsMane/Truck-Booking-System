@@ -131,20 +131,44 @@ const reviewVerification = async (req, res) => {
     if (!verification) {
       return res.status(404).json({ success: false, msg: "Verification not found" });
     }
+    if (verification.status !== "pending") {
+      return res.status(400).json({ success: false, msg: "This has already been reviewed" });
+    }
 
-    const before = verification.status;
+    const rejectReason = req.body.status === "rejected" ? req.body.reason : undefined;
+    const reviewedAt = new Date();
+
+    // Atomic — status is part of the filter, not just the read above, so
+    // two admins (or one admin double-clicking / two open tabs) reviewing
+    // the same pending item concurrently can't both flip it, firing
+    // duplicate audit entries/notifications and possibly landing on
+    // whichever decision's .save() happened to run last.
+    const previous = await Verification.findOneAndUpdate(
+      { _id: verification._id, status: "pending" },
+      {
+        $set: {
+          status: req.body.status,
+          rejectReason,
+          reviewedBy: req.auth.id,
+          reviewedAt,
+        },
+      },
+      { new: false }
+    );
+    if (!previous) {
+      return res.status(400).json({ success: false, msg: "This has already been reviewed" });
+    }
     verification.status = req.body.status;
-    verification.rejectReason = req.body.status === "rejected" ? req.body.reason : undefined;
+    verification.rejectReason = rejectReason;
     verification.reviewedBy = req.auth.id;
-    verification.reviewedAt = new Date();
-    await verification.save();
+    verification.reviewedAt = reviewedAt;
 
     await logAdminAction({
       actor: req.auth.id,
       action: "verification.review",
       targetType: "Verification",
       targetId: verification._id,
-      before: { status: before },
+      before: { status: previous.status },
       after: { status: verification.status },
       reason: verification.rejectReason,
       scope: req.auth.adminScope,

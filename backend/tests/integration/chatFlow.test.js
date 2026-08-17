@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const app = require("../../app");
 const ChatThread = require("../../models/chatThreadModel");
+const Booking = require("../../models/bookingModel");
 const { signupUser, disableVerificationGate, postTestTrip } = require("../helpers");
 
 const emailFor = (seed) => `chatuser${seed}@example.test`;
@@ -303,5 +304,104 @@ describe("chat flow", () => {
 
     // Most-recently-active conversation sorts first.
     expect(shipperInboxAfterMsg.body.threads[0].booking._id).toBe(pendingBookingId2);
+  });
+
+  // FR-07 gap fix — a thread's participant membership never changes once a
+  // booking is decided, but the deal itself can be definitively over. These
+  // three terminal statuses mean the deal fell through (never happened /
+  // no more legitimate back-and-forth coming), so new messages are closed
+  // off — while the existing history stays fully readable/markable, since
+  // that's unrelated to whether new messages should be allowed.
+  it("blocks sending once the booking is cancelled, but reading history and marking read stay open", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(40);
+    const { bookingId } = await createAndAcceptBooking(transporterAgent, shipperAgent);
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    const beforeCancel = await shipperAgent.post(`/chat/${threadId}/messages`).send({ text: "See you at pickup" });
+    expect(beforeCancel.status).toBe(201);
+
+    const cancelRes = await shipperAgent.put(`/bookings/${bookingId}/cancel`).send({ reason: "change of plans" });
+    expect(cancelRes.body.success).toBe(true);
+    expect(cancelRes.body.booking.status).toBe("cancelled");
+
+    const blockedSend = await shipperAgent.post(`/chat/${threadId}/messages`).send({ text: "Can we still talk?" });
+    expect(blockedSend.status).toBe(403);
+    expect(blockedSend.body.success).toBe(false);
+    expect(blockedSend.body.msg).toMatch(/no longer active/i);
+
+    const blockedFromOtherSide = await transporterAgent.post(`/chat/${threadId}/messages`).send({ text: "me too" });
+    expect(blockedFromOtherSide.status).toBe(403);
+
+    // Existing history stays fully readable and mark-as-read still works.
+    const listRes = await transporterAgent.get(`/chat/${threadId}/messages`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.messages).toHaveLength(1);
+
+    const readRes = await transporterAgent.put(`/chat/${threadId}/read`);
+    expect(readRes.status).toBe(200);
+    expect(readRes.body.success).toBe(true);
+  });
+
+  it("blocks sending once the booking is rejected", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(41);
+    const trip = await postTestTrip(transporterAgent);
+    const bookingRes = await shipperAgent
+      .post("/bookings")
+      .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
+    const bookingId = bookingRes.body.booking._id;
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    const rejectRes = await transporterAgent.put(`/bookings/${bookingId}/reject`).send({ reason: "no capacity" });
+    expect(rejectRes.body.booking.status).toBe("rejected");
+
+    const blockedSend = await shipperAgent.post(`/chat/${threadId}/messages`).send({ text: "please reconsider" });
+    expect(blockedSend.status).toBe(403);
+    expect(blockedSend.body.msg).toMatch(/no longer active/i);
+
+    // Reading still works even though nothing was ever sent.
+    const listRes = await shipperAgent.get(`/chat/${threadId}/messages`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.messages).toEqual([]);
+  });
+
+  it("blocks sending once the booking has lazily expired", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(42);
+    const trip = await postTestTrip(transporterAgent);
+    const bookingRes = await shipperAgent
+      .post("/bookings")
+      .send({ tripId: trip._id, capacityRequested: 5, goodsDescription: "Cement" });
+    const bookingId = bookingRes.body.booking._id;
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    // Same lazy-expiry trigger as bookingEdgeCases.test.js: backdate
+    // respondBy, then hit a read path that runs expireIfStale.
+    await Booking.updateOne({ _id: bookingId }, { $set: { respondBy: new Date(Date.now() - 1000) } });
+    const getRes = await shipperAgent.get(`/bookings/${bookingId}`);
+    expect(getRes.body.booking.status).toBe("expired");
+
+    const blockedSend = await shipperAgent.post(`/chat/${threadId}/messages`).send({ text: "still interested?" });
+    expect(blockedSend.status).toBe(403);
+    expect(blockedSend.body.msg).toMatch(/no longer active/i);
+  });
+
+  it("does NOT block sending once the booking is completed — that's still a legitimate reason to message", async () => {
+    const { transporterAgent, shipperAgent } = await newActors(43);
+    const { bookingId } = await createAndAcceptBooking(transporterAgent, shipperAgent);
+    const threadRes = await shipperAgent.get(`/chat/booking/${bookingId}`);
+    const threadId = threadRes.body.thread._id;
+
+    const pickupRes = await transporterAgent.put(`/bookings/${bookingId}/confirm-pickup`);
+    expect(pickupRes.body.booking.status).toBe("ongoing");
+    const dropRes = await transporterAgent.put(`/bookings/${bookingId}/confirm-drop`);
+    expect(dropRes.body.booking.status).toBe("completed");
+
+    const messageAfterCompletion = await shipperAgent
+      .post(`/chat/${threadId}/messages`)
+      .send({ text: "Thanks — one of the pallets arrived damaged, can we talk?" });
+    expect(messageAfterCompletion.status).toBe(201);
+    expect(messageAfterCompletion.body.success).toBe(true);
   });
 });

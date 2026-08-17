@@ -24,13 +24,33 @@ const uniqueRegNumber = () => {
 // (spoofable) declared mimetype.
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+// Deterministic per input (not a global counter) so calling signupUser more
+// than once for the SAME email — re-authenticating an already-registered
+// test user — always derives the same mobile number and never trips
+// verifyOtp's "mobile changed, check it's not already taken" path. Matches
+// MOBILE_PATTERN (backend/config/marketplaceConfig.js): 10 digits, first
+// digit 6-9.
+const uniqueMobile = (seed) => {
+  let hash = 0;
+  const str = String(seed);
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return `9${String(hash % 1000000000).padStart(9, "0")}`;
+};
+
 // Signs up (or logs into) a user via the real OTP flow — MASTER_OTP bypass,
 // same as manual dev testing — and returns a supertest agent with the
 // session cookie already attached, so callers just do agent.get(...) etc.
-const signupUser = async (app, { email, name, roles = [] }) => {
+// mobile defaults to a deterministic-per-email value since verifyOtp now
+// requires one to complete a brand-new signup — pass an explicit `mobile`
+// only when a test cares about a specific number.
+const signupUser = async (app, { email, name, mobile, roles = [] }) => {
   const agent = request.agent(app);
   await agent.post("/auth/request-otp").send({ email });
-  const res = await agent.post("/auth/verify-otp").send({ email, otp: MASTER_OTP, name, roles });
+  const res = await agent
+    .post("/auth/verify-otp")
+    .send({ email, otp: MASTER_OTP, name, mobile: mobile || uniqueMobile(email), roles });
   if (!res.body.success) {
     throw new Error(`signupUser(${email}) failed: ${res.body.msg}`);
   }
@@ -125,5 +145,6 @@ module.exports = {
   disableVerificationGate,
   postTestTrip,
   uniqueRegNumber,
+  uniqueMobile,
   MASTER_OTP,
 };

@@ -2,6 +2,8 @@ const Booking = require("../models/bookingModel");
 const Trip = require("../models/tripModel");
 const ChatThread = require("../models/chatThreadModel");
 const Verification = require("../models/verificationModel");
+const Rating = require("../models/ratingModel");
+const Dispute = require("../models/disputeModel");
 const PlatformSetting = require("../models/platformSettingModel");
 const User = require("../models/userModel");
 const { notify } = require("../utils/notify");
@@ -10,7 +12,6 @@ const smsProvider = require("../utils/smsProvider");
 const emailProvider = require("../utils/emailProvider");
 const { bookingConfirmedEmail } = require("../emailTemplates/templates");
 const sendServerError = require("../utils/sendServerError");
-const { markBookingCancelled } = require("../utils/bookingCancellation");
 const { getBrandName } = require("../utils/brandingCache");
 const {
   BOOKING_RESPONSE_WINDOW_HOURS,
@@ -139,13 +140,27 @@ const acceptBooking = async (req, res) => {
     if (!updatedTrip) {
       return res.status(409).json({ success: false, msg: "Not enough capacity left on this trip to accept" });
     }
+
+    // Atomic — status is part of the filter, not just the read above, so two
+    // concurrent accepts of the same booking (double-click, retried request)
+    // can't both flip it to confirmed after both decrementing capacity above
+    // for what's really one booking.
+    const confirmedBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "pending" },
+      { $set: { status: "confirmed" } },
+      { new: true }
+    );
+    if (!confirmedBooking) {
+      // Lost the race — give back the capacity this request just reserved.
+      await Trip.findOneAndUpdate({ _id: trip._id }, { $inc: { availableCapacity: booking.capacityRequested } });
+      return res.status(400).json({ success: false, msg: "Booking is no longer pending" });
+    }
+    booking.status = "confirmed";
+
     if (updatedTrip.availableCapacity === 0) {
       updatedTrip.status = "full";
       await updatedTrip.save();
     }
-
-    booking.status = "confirmed";
-    await booking.save();
 
     await notify(booking.shipper, "booking_confirmed", { bookingId: booking._id, tripId: trip._id });
 
@@ -250,16 +265,26 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    await markBookingCancelled(booking, {
-      cancelledBy: req.auth.id,
-      reason: req.body.reason,
-    });
+    // Atomic conditional transition — status is part of the filter, not just
+    // the read above, so two near-simultaneous cancellations of the same
+    // booking (a double-click, or a shipper cancelling the instant an admin
+    // force-cancels the same booking) can't both pass and each independently
+    // release capacity below, crediting the trip twice for one booking.
+    const stillConfirmed = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "confirmed" },
+      { $set: { status: "cancelled", cancelledBy: req.auth.id, cancelReason: req.body.reason } },
+      { new: false }
+    );
+    if (!stillConfirmed) {
+      return res.status(400).json({ success: false, msg: "This booking was already cancelled" });
+    }
+    booking.status = "cancelled";
+    booking.cancelledBy = req.auth.id;
+    booking.cancelReason = req.body.reason;
 
     // Atomic $inc rather than a read-then-write on the already-loaded
     // `trip` — two bookings on the same trip being cancelled at nearly the
-    // same time must not clobber each other's capacity release. The status
-    // flip below is idempotent (both racers would write the same target
-    // value), so it doesn't need the same treatment.
+    // same time must not clobber each other's capacity release.
     const releaseInc = { availableCapacity: booking.capacityRequested };
     const updatedTrip = await Trip.findOneAndUpdate(
       { _id: trip._id },
@@ -296,9 +321,20 @@ const confirmPickup = async (req, res) => {
       return res.status(400).json({ success: false, msg: `Booking must be confirmed to start (currently ${booking.status})` });
     }
 
+    // Atomic — status is part of the filter, not just the read above, so a
+    // double-click (or two open tabs) confirming pickup on the same booking
+    // can't both pass and each fire a duplicate notification.
+    const pickupConfirmedAt = new Date();
+    const previous = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "confirmed" },
+      { $set: { status: "ongoing", pickupConfirmedAt } },
+      { new: false }
+    );
+    if (!previous) {
+      return res.status(400).json({ success: false, msg: "Booking is no longer confirmed" });
+    }
     booking.status = "ongoing";
-    booking.pickupConfirmedAt = new Date();
-    await booking.save();
+    booking.pickupConfirmedAt = pickupConfirmedAt;
 
     const otherParty = String(booking.shipper) === req.auth.id ? trip.transporter : booking.shipper;
     await notify(otherParty, "booking_pickup_confirmed", { bookingId: booking._id });
@@ -325,9 +361,21 @@ const confirmDrop = async (req, res) => {
       return res.status(400).json({ success: false, msg: `Booking must be ongoing to complete (currently ${booking.status})` });
     }
 
+    // Atomic — same guard as confirmPickup, so a double-click can't both
+    // pass and each fire duplicate notifications (and, more subtly, both
+    // race into the trip-completion check below for what's really one
+    // drop confirmation).
+    const dropConfirmedAt = new Date();
+    const previous = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "ongoing" },
+      { $set: { status: "completed", dropConfirmedAt } },
+      { new: false }
+    );
+    if (!previous) {
+      return res.status(400).json({ success: false, msg: "Booking is no longer ongoing" });
+    }
     booking.status = "completed";
-    booking.dropConfirmedAt = new Date();
-    await booking.save();
+    booking.dropConfirmedAt = dropConfirmedAt;
 
     if (trip) {
       const remainingActive = await Booking.countDocuments({ trip: trip._id, status: { $in: ["confirmed", "ongoing"] } });
@@ -406,14 +454,23 @@ const getBooking = async (req, res) => {
 
     // Just the booleans, not either party's KYC documents/history — same
     // boundary as tripController.getTrip's transporterVerified field.
-    const [shipperKyc, transporterKyc] = await Promise.all([
+    // alreadyRatedByMe/alreadyDisputedByMe mirror the exact {booking, rater}
+    // / {booking, raisedBy} shape of Rating/Dispute's unique indexes — the
+    // same pair ratingController.submitRating and disputeController.raiseDispute
+    // rely on (via a duplicate-key 409) to reject a second submission — so
+    // the frontend can hide the form before the user ever hits that 409.
+    const [shipperKyc, transporterKyc, myRating, myDispute] = await Promise.all([
       Verification.findOne({ user: booking.shipper._id, type: "shipper" }).select("status"),
       Verification.findOne({ user: booking.trip.transporter._id, type: "transporter" }).select("status"),
+      Rating.findOne({ booking: booking._id, rater: req.auth.id }).select("_id"),
+      Dispute.findOne({ booking: booking._id, raisedBy: req.auth.id }).select("_id"),
     ]);
     const bookingWithVerification = {
       ...booking.toObject(),
       shipperVerified: shipperKyc?.status === "verified",
       transporterVerified: transporterKyc?.status === "verified",
+      alreadyRatedByMe: !!myRating,
+      alreadyDisputedByMe: !!myDispute,
     };
 
     res.status(200).json({ success: true, booking: bookingWithVerification });

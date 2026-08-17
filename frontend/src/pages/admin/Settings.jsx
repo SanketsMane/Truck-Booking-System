@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, Check } from "lucide-react";
 import {
   getAdminSettings,
   updateAdminSettings,
@@ -16,7 +16,8 @@ import {
 import { uploadFile } from "../../api/files";
 import { useBranding, brandingAssetUrl } from "../../context/BrandingContext";
 import { PageContainer, SectionTitle, Stack, Row, Muted } from "../../components/ui/Layout";
-import { Card, CardRow } from "../../components/ui/Card";
+import { CardRow } from "../../components/ui/Card";
+import { AdminCard } from "../../components/ui/AdminTable";
 import { Button } from "../../components/ui/Button";
 import { Field, Input, Select, Textarea } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
@@ -56,10 +57,48 @@ const FieldsGrid = styled.div`
   }
 `;
 
-const MaskedHint = styled.p`
+// A clean "here's what's already saved" summary — every value is already
+// masked server-side (integrationController.js's maskConfig, last 4 chars
+// only), so this is purely a nicer re-render of the exact same safe data,
+// not a new source of exposure. Chips instead of one run-on sentence.
+const SavedConfigWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: -4px 0 16px;
-  font-size: 12.5px;
+  padding: 10px 12px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  background: ${({ theme }) => theme.color.surfaceRaised};
+  border: 1px solid ${({ theme }) => theme.color.border};
+`;
+
+const SavedConfigChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`;
+
+const SavedConfigChip = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  background: ${({ theme }) => theme.color.surface};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  font-size: 12px;
   font-family: ${({ theme }) => theme.font.mono};
+  color: ${({ theme }) => theme.color.textMuted};
+
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.color.text};
+  }
+`;
+
+const SavedConfigNote = styled.p`
+  margin: 0;
+  font-size: 12px;
   color: ${({ theme }) => theme.color.textFaint};
 `;
 
@@ -89,25 +128,38 @@ const Divider = styled.div`
 const SettingsLayout = styled.div`
   display: grid;
   grid-template-columns: 1fr;
-  gap: ${({ theme }) => theme.space(8)};
+  gap: ${({ theme }) => theme.space(6)};
   align-items: start;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
-    grid-template-columns: 200px minmax(0, 720px);
+    grid-template-columns: 208px minmax(0, 720px);
+    gap: ${({ theme }) => theme.space(8)};
   }
 `;
 
+// Below desktop this is a horizontally-scrollable tab strip (spec calls for
+// "horizontal tabs" on mobile/tablet); at desktop it becomes the classic
+// vertical settings sidebar, grouped and sticky. One nav, two layouts via
+// media queries — same responsive idiom the rest of the app uses rather
+// than a second component.
 const SettingsNav = styled.nav`
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
   margin: 0 -${({ theme }) => theme.space(4)};
   padding: 0 ${({ theme }) => theme.space(4)} ${({ theme }) => theme.space(3)};
   border-bottom: 1px solid ${({ theme }) => theme.color.border};
 
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
   @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
     flex-direction: column;
+    gap: 0;
+    overflow: visible;
     margin: 0;
     padding: 0;
     border-bottom: none;
@@ -116,34 +168,101 @@ const SettingsNav = styled.nav`
   }
 `;
 
-const SettingsNavLink = styled.a`
-  padding: 8px 12px;
-  border-radius: ${({ theme }) => theme.radius.sm};
-  font-size: 13.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.color.textMuted};
-  transition: background 0.15s ease, color 0.15s ease;
+const SettingsNavSection = styled.div`
+  flex-shrink: 0;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    margin-top: ${({ theme }) => theme.space(5)};
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+`;
+
+// Hidden below desktop — with one item per group today, the label would
+// just be noise in a cramped horizontal strip; the item's own label already
+// says enough there. At desktop it's the classic uppercase group heading.
+const NavGroupLabel = styled.div`
+  display: none;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.color.textFaint};
   white-space: nowrap;
 
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    display: block;
+  }
+`;
+
+const SettingsNavGroup = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    flex-direction: column;
+    gap: 1px;
+  }
+`;
+
+// Mobile: a pill tab, soft-tinted when active. Desktop: a full-width row
+// with a left accent bar — deliberately not the main app sidebar's
+// solid-fill active style (DashboardShell's AdminNavItem), so this
+// secondary nav reads as a sub-navigation, not a second primary sidebar.
+const SettingsNavLink = styled.button`
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  font-size: 13.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ theme, $active }) => ($active ? theme.admin.color.primary : theme.color.textMuted)};
+  background: ${({ theme, $active }) => ($active ? theme.admin.color.primarySoft : "transparent")};
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
   &:hover {
-    background: ${({ theme }) => theme.color.surfaceRaised};
-    color: ${({ theme }) => theme.color.text};
+    background: ${({ theme, $active }) => ($active ? theme.admin.color.primarySoft : theme.color.surfaceRaised)};
+    color: ${({ theme, $active }) => ($active ? theme.admin.color.primary : theme.color.text)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.admin.color.primary};
+    outline-offset: 2px;
+  }
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
+    width: 100%;
+    text-align: left;
+    border-radius: ${({ theme }) => theme.radius.sm};
+    padding: 8px 12px 8px 11px;
+    border-left: 3px solid ${({ theme, $active }) => ($active ? theme.admin.color.primary : "transparent")};
   }
 `;
 
 const SettingsContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.space(9)};
+  gap: ${({ theme }) => theme.space(6)};
   min-width: 0;
 `;
 
-const SettingsSection = styled.section`
-  scroll-margin-top: ${({ theme }) => theme.space(5)};
-  display: flex;
-  flex-direction: column;
-  gap: ${({ theme }) => theme.space(4)};
-`;
+// A section-level header ("Branding" / "Customize how TruckGee appears…") —
+// distinct from any card's own internal title, so a tab with several cards
+// (Integrations) doesn't repeat the tab name inside every card, and a tab
+// with one card (Branding, General) still gets a page-level intro instead
+// of just dropping straight into a form.
+const SettingsSectionHeader = ({ title, description }) => (
+  <Stack $gap={1}>
+    <SectionTitle>{title}</SectionTitle>
+    <Muted>{description}</Muted>
+  </Stack>
+);
 
 const UploadRow = styled(Row)`
   align-items: flex-start;
@@ -318,6 +437,7 @@ const BrandingCard = () => {
   const [saving, setSaving] = useState(false);
   const [logoPreview, setLogoPreview] = useState("");
   const [faviconPreview, setFaviconPreview] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
     if (!branding.loading && !form) {
@@ -382,6 +502,8 @@ const BrandingCard = () => {
       });
       await branding.refreshBranding();
       toast.success("Branding updated");
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 1500);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -391,11 +513,11 @@ const BrandingCard = () => {
 
   if (!form) {
     return (
-      <Card>
+      <AdminCard>
         <Row style={{ justifyContent: "center", padding: "30px 0" }}>
           <Spinner $size={24} />
         </Row>
-      </Card>
+      </AdminCard>
     );
   }
 
@@ -403,16 +525,11 @@ const BrandingCard = () => {
   const faviconSrc = faviconPreview || brandingAssetUrl(form.faviconUrl);
 
   return (
-    <Card>
+    <AdminCard>
       <form onSubmit={handleSave}>
         <Stack $gap={4}>
-          <Stack $gap={1}>
-            <SectionTitle>Brand &amp; contact</SectionTitle>
-            <Muted>Shown across the site, in emails, and in the browser tab.</Muted>
-          </Stack>
-
           <Stack $gap={3}>
-            <SubsectionTitle>Identity</SubsectionTitle>
+            <SubsectionTitle>Brand identity</SubsectionTitle>
 
             <Field label="Platform name">
               <Input
@@ -461,20 +578,25 @@ const BrandingCard = () => {
                 )}
               />
             </UploadRow>
+          </Stack>
 
+          <Divider />
+
+          <Stack $gap={3}>
+            <SubsectionTitle>Live preview</SubsectionTitle>
             <PreviewStrip>
               <PreviewMark $hasImage={Boolean(logoSrc)}>
                 {logoSrc ? <img src={logoSrc} alt="" /> : <ImagePlus size={14} strokeWidth={1.8} />}
               </PreviewMark>
               <PreviewName>{form.platformName || "Platform name"}</PreviewName>
-              <Muted style={{ marginLeft: "auto" }}>Live preview</Muted>
+              <Muted style={{ marginLeft: "auto" }}>How it appears in the navbar and footer</Muted>
             </PreviewStrip>
           </Stack>
 
           <Divider />
 
           <Stack $gap={3}>
-            <SubsectionTitle>Contact</SubsectionTitle>
+            <SubsectionTitle>Contact information</SubsectionTitle>
             <FieldsGrid>
               <Field label="Contact email">
                 <Input
@@ -519,12 +641,21 @@ const BrandingCard = () => {
 
           <Row>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? (
+                "Saving…"
+              ) : justSaved ? (
+                <>
+                  <Check size={15} strokeWidth={2.6} />
+                  Saved
+                </>
+              ) : (
+                "Save changes"
+              )}
             </Button>
           </Row>
         </Stack>
       </form>
-    </Card>
+    </AdminCard>
   );
 };
 
@@ -561,7 +692,7 @@ const VerificationGateCard = () => {
   };
 
   return (
-    <Card>
+    <AdminCard>
       {loading ? (
         <Row style={{ justifyContent: "center", padding: "30px 0" }}>
           <Spinner $size={24} />
@@ -569,10 +700,16 @@ const VerificationGateCard = () => {
       ) : (
         <CardRow>
           <Stack $gap={1}>
-            <SectionTitle>Verification gate</SectionTitle>
+            <Row $gap={2}>
+              <SectionTitle>Verification gate</SectionTitle>
+              {/* Status is also conveyed by the switch's position/color, but
+                  spelling it out in text means it isn't communicated by
+                  color alone. */}
+              <StatusBadge status={enabled ? "verified" : "expired"}>{enabled ? "Enabled" : "Disabled"}</StatusBadge>
+            </Row>
             <Muted>
-              When on, unverified shippers and transporters are blocked from accepting bookings or
-              publishing trips until their KYC is approved by your team.
+              Require KYC approval before unverified shippers and transporters can accept bookings or
+              publish trips.
             </Muted>
           </Stack>
           <Switch
@@ -585,7 +722,7 @@ const VerificationGateCard = () => {
           />
         </CardRow>
       )}
-    </Card>
+    </AdminCard>
   );
 };
 
@@ -622,6 +759,7 @@ const SMS_FIELDS = {
 const EMAIL_PROVIDERS = [
   { value: "console", label: "None — log to server console (dev only)" },
   { value: "smtp", label: "SMTP (Gmail, SES, SendGrid, Mailgun, or any SMTP relay)" },
+  { value: "resend", label: "Resend" },
 ];
 
 const EMAIL_FIELDS = {
@@ -631,6 +769,16 @@ const EMAIL_FIELDS = {
     { key: "user", label: "Username" },
     { key: "pass", label: "Password", secret: true },
     { key: "fromAddress", label: "From address", placeholder: "no-reply@yourcompany.com" },
+    { key: "fromName", label: "From name (optional)", placeholder: "Your Company" },
+  ],
+  resend: [
+    { key: "apiKey", label: "API key", secret: true, placeholder: "re_xxxxxxxxxxxxxxxxxxxx" },
+    {
+      key: "fromAddress",
+      label: "From address",
+      placeholder: "no-reply@yourdomain.com",
+      help: "The domain must be verified in your Resend dashboard first, or sends will fail.",
+    },
     { key: "fromName", label: "From name (optional)", placeholder: "Your Company" },
   ],
 };
@@ -744,7 +892,7 @@ const ProviderCard = ({
   const fields = fieldDefs[provider] || [];
 
   return (
-    <Card>
+    <AdminCard>
       <Stack $gap={4}>
         <CardRow>
           <Stack $gap={1}>
@@ -776,13 +924,21 @@ const ProviderCard = ({
               </Field>
 
               {status?.configured && status.provider === provider && (
-                <MaskedHint>
-                  Currently saved: {Object.entries(status.config || {})
-                    .filter(([, v]) => v)
-                    .map(([k, v]) => `${k}=${v}`)
-                    .join(", ") || "—"}
-                  . Saving below replaces the full configuration.
-                </MaskedHint>
+                <SavedConfigWrap>
+                  <SavedConfigChips>
+                    {Object.entries(status.config || {})
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => (
+                        <SavedConfigChip key={k}>
+                          {k}: <strong>{typeof v === "object" ? JSON.stringify(v) : v}</strong>
+                        </SavedConfigChip>
+                      ))}
+                  </SavedConfigChips>
+                  <SavedConfigNote>
+                    Saved values aren't shown for security — re-enter every field below to update this
+                    provider.
+                  </SavedConfigNote>
+                </SavedConfigWrap>
               )}
 
               {fields.length > 0 && (
@@ -834,11 +990,28 @@ const ProviderCard = ({
           </>
         )}
       </Stack>
-    </Card>
+    </AdminCard>
   );
 };
 
+// One place listing every settings tab + which group it's under — drives
+// both the nav (grouped, with active-state highlighting) and which tab key
+// is valid to land on via a URL hash.
+const NAV_GROUPS = [
+  { label: "General", items: [{ key: "general", label: "General" }] },
+  { label: "Appearance", items: [{ key: "branding", label: "Branding" }] },
+  { label: "Integrations", items: [{ key: "integrations", label: "Integrations" }] },
+];
+const TAB_KEYS = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.key));
+const DEFAULT_TAB = TAB_KEYS[0];
+
+const initialTabFromHash = () => {
+  const hash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
+  return TAB_KEYS.includes(hash) ? hash : DEFAULT_TAB;
+};
+
 export const Settings = () => {
+  const [activeTab, setActiveTab] = useState(initialTabFromHash);
   const [integrations, setIntegrations] = useState(null);
   const [loadingIntegrations, setLoadingIntegrations] = useState(true);
 
@@ -859,79 +1032,126 @@ export const Settings = () => {
     })();
   }, []);
 
+  // Keeps the tab deep-linkable (e.g. /admin/settings#integrations) without
+  // adding router state — replaceState (not pushState) so clicking between
+  // tabs doesn't fill up browser history with a back-button trap.
+  const handleTabChange = (key) => {
+    setActiveTab(key);
+    window.history.replaceState(null, "", `#${key}`);
+  };
+
   return (
     <PageContainer style={{ maxWidth: 1200 }}>
       <SettingsLayout style={{ marginTop: 4 }}>
-        <SettingsNav>
-          <SettingsNavLink href="#branding">Branding</SettingsNavLink>
-          <SettingsNavLink href="#general">General</SettingsNavLink>
-          <SettingsNavLink href="#integrations">Integrations</SettingsNavLink>
+        <SettingsNav aria-label="Settings sections">
+          {NAV_GROUPS.map((group) => (
+            <SettingsNavSection key={group.label}>
+              <NavGroupLabel>{group.label}</NavGroupLabel>
+              <SettingsNavGroup>
+                {group.items.map((item) => (
+                  <SettingsNavLink
+                    key={item.key}
+                    type="button"
+                    $active={activeTab === item.key}
+                    aria-current={activeTab === item.key ? "page" : undefined}
+                    onClick={() => handleTabChange(item.key)}
+                  >
+                    {item.label}
+                  </SettingsNavLink>
+                ))}
+              </SettingsNavGroup>
+            </SettingsNavSection>
+          ))}
         </SettingsNav>
 
         <SettingsContent>
-          <SettingsSection id="branding">
-            <BrandingCard />
-          </SettingsSection>
-
-          <SettingsSection id="general">
-            <VerificationGateCard />
-          </SettingsSection>
-
-          <SettingsSection id="integrations">
-            <SubsectionTitle>Integrations</SubsectionTitle>
+          {activeTab === "general" && (
             <Stack $gap={4}>
-              <ProviderCard
-                title="SMS provider"
-                description="Used to deliver login OTPs and critical booking notifications by text message."
-                providers={SMS_PROVIDERS}
-                fieldDefs={SMS_FIELDS}
-                status={integrations?.sms}
-                loading={loadingIntegrations}
-                onSave={async (provider, config) => {
-                  const res = await updateSmsIntegration(provider, config);
-                  await loadIntegrations();
-                  return res;
-                }}
-                testLabel="SMS"
-                testPlaceholder="10-digit mobile number"
-                onTest={(mobile) => testSmsIntegration(mobile)}
+              <SettingsSectionHeader
+                title="General"
+                description="Platform-wide behavior and access controls."
               />
-
-              <ProviderCard
-                title="Email provider"
-                description="Used for transactional email — booking receipts and account notifications."
-                providers={EMAIL_PROVIDERS}
-                fieldDefs={EMAIL_FIELDS}
-                status={integrations?.email}
-                loading={loadingIntegrations}
-                onSave={async (provider, config) => {
-                  const res = await updateEmailIntegration(provider, config);
-                  await loadIntegrations();
-                  return res;
-                }}
-                testLabel="email"
-                testPlaceholder="you@example.com"
-                onTest={(to) => testEmailIntegration(to)}
-              />
-
-              <ProviderCard
-                title="KYC verification"
-                description="Every submission is reviewed by your team, by default. Connect a webhook to auto-approve or auto-reject instead."
-                providers={KYC_PROVIDERS}
-                fieldDefs={KYC_FIELDS}
-                status={integrations?.kyc}
-                loading={loadingIntegrations}
-                onSave={async (provider, config) => {
-                  const res = await updateKycIntegration(provider, config);
-                  await loadIntegrations();
-                  return res;
-                }}
-                configuredLabel="Automated"
-                unconfiguredLabel="Manual"
-                unconfiguredBadgeStatus="manual"
-              />
+              <VerificationGateCard />
             </Stack>
-          </SettingsSection>
+          )}
+
+          {activeTab === "branding" && (
+            <Stack $gap={4}>
+              <SettingsSectionHeader
+                title="Branding"
+                description="Customize how TruckGee appears across the platform, in emails, and in the browser tab."
+              />
+              <BrandingCard />
+            </Stack>
+          )}
+
+          {activeTab === "integrations" && (
+            <Stack $gap={4}>
+              <SettingsSectionHeader
+                title="Integrations"
+                description="Configure external services used by TruckGee."
+              />
+
+              <Stack $gap={3}>
+                <SubsectionTitle>Communication</SubsectionTitle>
+                <Stack $gap={4}>
+                  <ProviderCard
+                    title="SMS provider"
+                    description="Used to deliver login OTPs and critical booking notifications by text message."
+                    providers={SMS_PROVIDERS}
+                    fieldDefs={SMS_FIELDS}
+                    status={integrations?.sms}
+                    loading={loadingIntegrations}
+                    onSave={async (provider, config) => {
+                      const res = await updateSmsIntegration(provider, config);
+                      await loadIntegrations();
+                      return res;
+                    }}
+                    testLabel="SMS"
+                    testPlaceholder="10-digit mobile number"
+                    onTest={(mobile) => testSmsIntegration(mobile)}
+                  />
+
+                  <ProviderCard
+                    title="Email provider"
+                    description="Used for transactional email — booking receipts and account notifications."
+                    providers={EMAIL_PROVIDERS}
+                    fieldDefs={EMAIL_FIELDS}
+                    status={integrations?.email}
+                    loading={loadingIntegrations}
+                    onSave={async (provider, config) => {
+                      const res = await updateEmailIntegration(provider, config);
+                      await loadIntegrations();
+                      return res;
+                    }}
+                    testLabel="email"
+                    testPlaceholder="you@example.com"
+                    onTest={(to) => testEmailIntegration(to)}
+                  />
+                </Stack>
+              </Stack>
+
+              <Stack $gap={3}>
+                <SubsectionTitle>Verification</SubsectionTitle>
+                <ProviderCard
+                  title="KYC verification"
+                  description="Every submission is reviewed by your team, by default. Connect a webhook to auto-approve or auto-reject instead."
+                  providers={KYC_PROVIDERS}
+                  fieldDefs={KYC_FIELDS}
+                  status={integrations?.kyc}
+                  loading={loadingIntegrations}
+                  onSave={async (provider, config) => {
+                    const res = await updateKycIntegration(provider, config);
+                    await loadIntegrations();
+                    return res;
+                  }}
+                  configuredLabel="Automated"
+                  unconfiguredLabel="Manual"
+                  unconfiguredBadgeStatus="manual"
+                />
+              </Stack>
+            </Stack>
+          )}
         </SettingsContent>
       </SettingsLayout>
     </PageContainer>

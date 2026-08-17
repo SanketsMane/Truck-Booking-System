@@ -87,8 +87,12 @@ export const Signup = () => {
       toast.error("Enter your name");
       return;
     }
-    if (mobile && !MOBILE_PATTERN.test(mobile)) {
-      toast.error("Enter a valid 10-digit Indian mobile number, or leave it blank");
+    if (!mobile) {
+      toast.error("Enter your mobile number");
+      return;
+    }
+    if (!MOBILE_PATTERN.test(mobile)) {
+      toast.error("Enter a valid 10-digit Indian mobile number");
       return;
     }
     if (!EMAIL_PATTERN.test(email)) {
@@ -108,7 +112,7 @@ export const Signup = () => {
     try {
       const { user } = await authApi.signup({
         name: name.trim(),
-        mobile: mobile || undefined,
+        mobile,
         email: email.trim(),
         password,
         confirmPassword,
@@ -134,13 +138,14 @@ export const Signup = () => {
           <Field label="Your name">
             <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
-          <Field label="Mobile (optional)">
+          <Field label="Mobile number">
             <Input
               type="tel"
               inputMode="numeric"
               placeholder="98765 43210"
               value={mobile}
               onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              required
             />
           </Field>
         </FieldRow>

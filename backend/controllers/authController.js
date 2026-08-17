@@ -87,6 +87,65 @@ const publicProfile = (user) => ({
   ratingCount: user.ratingCount,
 });
 
+// Matches the same "not locked-out, cooldown elapsed" state that used to be
+// checked against a single earlier read of `user.otp` — but as a Mongo
+// filter, evaluated fresh at the instant of an atomic write (see requestOtp
+// below) rather than against a snapshot that a concurrent request could
+// have already invalidated. lockedUntil/lastSentAt being absent or null (a
+// brand-new user, or one whose lock/cooldown was cleared by a successful
+// verify) counts as passing, same as the old `otpState.lockedUntil && ...`
+// / `otpState.lastSentAt && ...` truthiness checks did.
+const otpGateFilter = (email, now) => ({
+  email,
+  $and: [
+    { $or: [{ "otp.lockedUntil": { $exists: false } }, { "otp.lockedUntil": null }, { "otp.lockedUntil": { $lte: now } }] },
+    {
+      $or: [
+        { "otp.lastSentAt": { $exists: false } },
+        { "otp.lastSentAt": null },
+        { "otp.lastSentAt": { $lte: new Date(now.getTime() - OTP_RESEND_COOLDOWN_SECONDS * 1000) } },
+      ],
+    },
+  ],
+});
+
+// Reached only when a concurrent requestOtp call for the same email beat
+// this one to the atomic write in otpGateFilter's caller — re-reads
+// whatever that other call actually committed and reports the same 429 this
+// request would have gotten had it read that state to begin with, instead
+// of a stale "success" for an OTP that the DB no longer holds.
+const respondWithLiveOtpGateState = async (res, email, now) => {
+  const current = await User.findOne({ email });
+  const otpState = (current && current.otp) || {};
+
+  if (otpState.lockedUntil && otpState.lockedUntil > now) {
+    return res.status(429).json({
+      success: false,
+      msg: `Too many attempts. Try again after ${otpState.lockedUntil.toISOString()}`,
+    });
+  }
+
+  if (otpState.lastSentAt && now - otpState.lastSentAt < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
+    const waitSeconds = Math.ceil(
+      (OTP_RESEND_COOLDOWN_SECONDS * 1000 - (now - otpState.lastSentAt)) / 1000
+    );
+    return res.status(429).json({
+      success: false,
+      msg: `Please wait ${waitSeconds}s before requesting another OTP`,
+    });
+  }
+
+  // The gate that blocked our write a moment ago has since cleared again
+  // (e.g. a third request's lock/cooldown expired in the intervening
+  // milliseconds) — vanishingly unlikely in practice. Ask the caller to
+  // retry rather than fabricate a response for state that's already stale
+  // a second time.
+  return res.status(429).json({
+    success: false,
+    msg: "Please try again in a moment.",
+  });
+};
+
 // Request OTP (signup or login — same entry point per FR-01.1)
 const requestOtp = async (req, res) => {
   try {
@@ -106,9 +165,46 @@ const requestOtp = async (req, res) => {
 
     const now = new Date();
 
+    // Read purely to tell a brand-new signup apart from an existing account
+    // and (for an existing one) to compute the next requestCount/
+    // requestWindowStart — this snapshot can go stale under concurrency,
+    // but the write below re-checks the lockout/cooldown state atomically
+    // rather than trusting it (see otpGateFilter).
     let user = await User.findOne({ email });
+
     if (!user) {
-      user = new User({ email });
+      // First-ever request for this brand-new email — nothing to race
+      // against except a concurrent signup for the exact same address,
+      // which the email unique index (userModel.js) already guards. If we
+      // lose that race, fall through to the normal existing-user path below
+      // using whatever the winner created.
+      const otp = generateOtp();
+      const codeHash = await bcrypt.hash(otp, saltRounds);
+      try {
+        await User.create({
+          email,
+          otp: {
+            codeHash,
+            expiresAt: new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000),
+            verifyAttempts: 0,
+            requestCount: 1,
+            requestWindowStart: now,
+            lastSentAt: now,
+          },
+        });
+
+        await otpProvider.sendOtp(email, otp);
+
+        return res.status(200).json({
+          success: true,
+          msg: "OTP sent",
+          expiresInSeconds: OTP_EXPIRY_MINUTES * 60,
+        });
+      } catch (createErr) {
+        if (createErr.code !== 11000) throw createErr;
+        user = await User.findOne({ email });
+        if (!user) throw createErr;
+      }
     }
 
     const otpState = user.otp || {};
@@ -137,12 +233,27 @@ const requestOtp = async (req, res) => {
     }
     requestCount += 1;
 
+    // Everything from here on used to be a plain user.save() against the
+    // `user` fetched above — but that document may already be stale (a
+    // second concurrent request for the same email could have read the
+    // identical snapshot and be about to write too). Both writes below are
+    // atomic findOneAndUpdate calls whose FILTER re-checks the lockout/
+    // cooldown conditions against the database at the instant of the write,
+    // not against the earlier read. MongoDB serializes writes to a single
+    // document, so even truly-simultaneous callers are still totally
+    // ordered: whichever commits first makes every later racer's filter
+    // fail, and a failed filter means that racer sends nothing and reports
+    // the real (now-current) 429 instead of a false "success". Only the
+    // requestCount/requestWindowStart bookkeeping itself keeps a small
+    // residual race (worst case: OTP_MAX_REQUESTS_PER_WINDOW enforcement is
+    // occasionally off by one under true concurrency) — far lower stakes
+    // than the codeHash lost-update bug this closes.
     if (requestCount > OTP_MAX_REQUESTS_PER_WINDOW) {
-      user.otp = {
-        ...otpState,
-        lockedUntil: new Date(now.getTime() + OTP_LOCKOUT_MINUTES * 60 * 1000),
-      };
-      await user.save();
+      const lockedUntil = new Date(now.getTime() + OTP_LOCKOUT_MINUTES * 60 * 1000);
+      const locked = await User.findOneAndUpdate(otpGateFilter(email, now), { $set: { "otp.lockedUntil": lockedUntil } });
+      if (!locked) {
+        return respondWithLiveOtpGateState(res, email, now);
+      }
       return res.status(429).json({
         success: false,
         msg: "Too many OTP requests. Try again later.",
@@ -152,16 +263,21 @@ const requestOtp = async (req, res) => {
     const otp = generateOtp();
     const codeHash = await bcrypt.hash(otp, saltRounds);
 
-    user.otp = {
-      codeHash,
-      expiresAt: new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000),
-      verifyAttempts: 0,
-      requestCount,
-      requestWindowStart,
-      lastSentAt: now,
-      lockedUntil: undefined,
-    };
-    await user.save();
+    const updated = await User.findOneAndUpdate(otpGateFilter(email, now), {
+      $set: {
+        "otp.codeHash": codeHash,
+        "otp.expiresAt": new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000),
+        "otp.verifyAttempts": 0,
+        "otp.requestCount": requestCount,
+        "otp.requestWindowStart": requestWindowStart,
+        "otp.lastSentAt": now,
+      },
+      $unset: { "otp.lockedUntil": "" },
+    });
+
+    if (!updated) {
+      return respondWithLiveOtpGateState(res, email, now);
+    }
 
     await otpProvider.sendOtp(email, otp);
 
@@ -223,8 +339,22 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, msg: "Invalid OTP" });
     }
 
+    // loginPassword already blocks a suspended/banned account at login —
+    // this path (login OR signup-completion) skipped that check entirely,
+    // so a banned user could still get a valid session by logging in via
+    // OTP instead of a password.
+    if (user.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        msg: user.status === "banned" ? "This account has been banned" : "This account has been suspended",
+      });
+    }
+
     if (!user.emailVerified && !name && !user.name) {
       return res.status(400).json({ success: false, msg: "Name is required to complete signup" });
+    }
+    if (!user.emailVerified && !mobile && !user.mobile) {
+      return res.status(400).json({ success: false, msg: "Mobile number is required to complete signup" });
     }
 
     if (name) user.name = name;

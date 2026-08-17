@@ -251,13 +251,21 @@ const PhotoUploadField = ({ photos, setPhotos }) => {
     if (!files.length) return;
     setUploading(true);
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadFile(file, { isPublic: true })));
-      setPhotos((prev) => [
-        ...prev,
-        ...uploaded.map(({ file }, i) => ({ fileId: file.id, fileName: files[i].name })),
-      ]);
-    } catch (err) {
-      toast.error(err.message);
+      // allSettled, not all — each file is an independent upload call, so
+      // one failure (size limit, network blip) shouldn't discard photos
+      // that already succeeded server-side and force a full re-select.
+      const results = await Promise.allSettled(files.map((file) => uploadFile(file, { isPublic: true })));
+      const succeeded = [];
+      const failed = [];
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") {
+          succeeded.push({ fileId: result.value.file.id, fileName: files[i].name });
+        } else {
+          failed.push(files[i].name);
+        }
+      });
+      if (succeeded.length) setPhotos((prev) => [...prev, ...succeeded]);
+      if (failed.length) toast.error(`${failed.join(", ")} failed to upload — try again`);
     } finally {
       setUploading(false);
     }
@@ -296,16 +304,112 @@ const PhotoUploadField = ({ photos, setPhotos }) => {
   );
 };
 
+const DraftNotice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space(3)};
+  padding: 10px ${({ theme }) => theme.space(4)};
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surfaceRaised};
+  font-size: 13px;
+  color: ${({ theme }) => theme.color.textMuted};
+`;
+
+const DraftDismiss = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.textMuted};
+
+  &:hover {
+    color: ${({ theme }) => theme.color.danger};
+  }
+`;
+
+// Session-only (not localStorage) — a draft that outlives the tab is more
+// surprising than helpful. Same pattern as PostTrip.jsx's draft: guards
+// against a validation error (or an "upload the RC" fix that needs another
+// page) sending the transporter away and back without losing everything
+// already filled in, including already-uploaded document/photo references.
+const DRAFT_KEY = "register-truck-draft-v1";
+
+const loadDraft = () => {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearDraft = () => {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // sessionStorage unavailable (private browsing, quota) — draft
+    // persistence is a nice-to-have, not required for the form to work.
+  }
+};
+
 const RegisterTruckForm = ({ onRegistered }) => {
-  const [regNumber, setRegNumber] = useState("");
-  const [truckType, setTruckType] = useState("");
-  const [bodyType, setBodyType] = useState("");
-  const totalCapacityAmount = useUnitAmount();
-  const [docs, setDocs] = useState(emptyDocs);
-  const [photos, setPhotos] = useState([]);
+  // Unlike PostTrip's page-level draft (no setter — it clears via a full
+  // page reload, since PostTrip *is* the whole page), this form is toggled
+  // in and out inside MyTrucks. A reload would also collapse the parent's
+  // `showForm` flag and hide the very form being reset, so this keeps a
+  // setter and resets fields in place instead (see handleStartOver).
+  const [draft, setDraft] = useState(loadDraft);
+  const [regNumber, setRegNumber] = useState(draft?.regNumber ?? "");
+  const [truckType, setTruckType] = useState(draft?.truckType ?? "");
+  const [bodyType, setBodyType] = useState(draft?.bodyType ?? "");
+  const totalCapacityAmount = useUnitAmount(draft?.totalCapacityTons ?? "");
+  // docs/photos only ever hold {fileId, fileName} references, never raw
+  // File objects — DocumentUploadField/PhotoUploadField upload each file
+  // immediately on selection and store just the resulting reference (see
+  // their handleChange above), so these are plain JSON-safe values and
+  // restoring them fully recovers already-uploaded documents/photos too.
+  const [docs, setDocs] = useState(draft?.docs ?? emptyDocs);
+  const [photos, setPhotos] = useState(draft?.photos ?? []);
   const [errors, setErrors] = useState({});
   const [docsUploading, setDocsUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Saves on every change — protects against the same round trip
+  // PostTrip's draft guards against: a validation error whose fix requires
+  // visiting another page (or a refresh/crash) shouldn't cost the
+  // transporter their already-filled fields or already-uploaded files.
+  useEffect(() => {
+    const data = {
+      regNumber,
+      truckType,
+      bodyType,
+      totalCapacityTons: totalCapacityAmount.tons,
+      docs,
+      photos,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    } catch {
+      // sessionStorage unavailable (private browsing, quota) — draft
+      // persistence is a nice-to-have, not required for the form to work.
+    }
+  }, [regNumber, truckType, bodyType, totalCapacityAmount.tons, docs, photos]);
+
+  const handleStartOver = () => {
+    clearDraft();
+    setDraft(null);
+    setRegNumber("");
+    setTruckType("");
+    setBodyType("");
+    totalCapacityAmount.setTons("");
+    setDocs(emptyDocs);
+    setPhotos([]);
+    setErrors({});
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -329,6 +433,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
         photos: photos.map((p) => ({ fileId: p.fileId })),
       });
       toast.success("Truck registered — pending verification");
+      clearDraft();
       onRegistered(truck);
     } catch (err) {
       toast.error(err.message);
@@ -340,6 +445,15 @@ const RegisterTruckForm = ({ onRegistered }) => {
   return (
     <Card>
       <SectionTitle style={{ marginBottom: 16 }}>Register a truck</SectionTitle>
+      {draft && (
+        <DraftNotice style={{ marginBottom: 16 }}>
+          <span>Restored your in-progress truck registration.</span>
+          <DraftDismiss type="button" onClick={handleStartOver}>
+            <X size={13} strokeWidth={2.6} />
+            Start over
+          </DraftDismiss>
+        </DraftNotice>
+      )}
       <form onSubmit={handleSubmit}>
         <Field label="Registration number" error={errors.regNumber} help="No spaces or hyphens needed — e.g. MH12AB1234">
           <Input

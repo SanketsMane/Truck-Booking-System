@@ -31,7 +31,7 @@ import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
 import { Accordion, AccordionItem } from "../components/ui/Accordion";
 import { fadeInUp } from "../theme/animations";
-import { toDateTimeInputValue } from "../utils/format";
+import { toDateInputValue } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -1478,7 +1478,7 @@ export const Home = () => {
   const [toPoint, setToPoint] = useState({ address: "", lat: null, lng: null });
   const [fromCityResolved, setFromCityResolved] = useState("");
   const [toCityResolved, setToCityResolved] = useState("");
-  const [departureAt, setDepartureAt] = useState(toDateTimeInputValue());
+  const [departureAt, setDepartureAt] = useState(toDateInputValue());
   const capacityAmount = useUnitAmount();
   const [errors, setErrors] = useState({});
   // Below tablet width, the From/To fields are too narrow for the full
@@ -1523,15 +1523,14 @@ export const Home = () => {
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [location.hash]);
 
-  // Search still matches trips by date only (±1 day window) — the time
-  // component is captured so a shipper can note when they need pickup, but
-  // isn't sent as a filter. capacityTons carries through as `minCapacity`,
-  // which SearchResults already reads to pre-fill its own capacity filter.
-  const goToSearch = (from, to, whenDateTime, capacityTons) => {
+  // Search matches trips by date only (±1 day window). capacityTons carries
+  // through as `minCapacity`, which SearchResults already reads to pre-fill
+  // its own capacity filter.
+  const goToSearch = (from, to, whenDate, capacityTons) => {
     const params = new URLSearchParams({
       fromCity: from.trim(),
       toCity: to.trim(),
-      date: whenDateTime.slice(0, 10),
+      date: whenDate.slice(0, 10),
     });
     if (capacityTons) params.set("minCapacity", capacityTons);
     navigate(`/search?${params}`);
@@ -1544,7 +1543,7 @@ export const Home = () => {
     const nextErrors = {};
     if (!fromCity) nextErrors.fromCity = "Enter a pickup location";
     if (!toCity) nextErrors.toCity = "Enter a drop location";
-    if (!departureAt) nextErrors.departureAt = "Pick a date and time";
+    if (!departureAt) nextErrors.departureAt = "Pick a date";
     if (fromCity && toCity && fromCity.toLowerCase() === toCity.toLowerCase()) {
       nextErrors.toCity = "From and to city can't be the same";
     }
@@ -1580,7 +1579,7 @@ export const Home = () => {
     setToPoint({ address: route.toCity, lat: null, lng: null });
     setFromCityResolved(route.fromCity);
     setToCityResolved(route.toCity);
-    goToSearch(route.fromCity, route.toCity, toDateTimeInputValue(), capacityAmount.tons);
+    goToSearch(route.fromCity, route.toCity, toDateInputValue(), capacityAmount.tons);
   };
 
   return (
@@ -1703,9 +1702,9 @@ export const Home = () => {
             </SwapRow>
 
             <SearchFieldsRow>
-              <Field label="Date & time" error={errors.departureAt}>
+              <Field label="Date" error={errors.departureAt}>
                 <Input
-                  type="datetime-local"
+                  type="date"
                   lang="en-GB"
                   value={departureAt}
                   onChange={(e) => setDepartureAt(e.target.value)}
@@ -1782,7 +1781,7 @@ export const Home = () => {
             <SupportDivider aria-hidden="true" />
             <SupportContact>
               <SupportLabel>Reach us anytime</SupportLabel>
-              <SupportPhone href="tel:+919876543210">+91 98765 43210</SupportPhone>
+              <SupportPhone href="tel:+918130170669">+91 81301 70669</SupportPhone>
             </SupportContact>
           </SupportStrip>
         </Section>

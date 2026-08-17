@@ -16,6 +16,16 @@ const CenteredSpinner = ({ $size = 22 }) => (
   </Row>
 );
 
+// Mirrors MESSAGING_CLOSED_STATUSES in backend/controllers/chatController.js
+// — deals that fell through rather than went through. "completed" is
+// deliberately excluded: a finished delivery is still a legitimate reason
+// to keep messaging.
+const MESSAGING_CLOSED_NOTE = {
+  cancelled: "This booking was cancelled — messaging is closed.",
+  rejected: "This booking request was rejected — messaging is closed.",
+  expired: "This booking request expired — messaging is closed.",
+};
+
 const Panel = styled.div`
   display: flex;
   flex-direction: column;
@@ -138,7 +148,13 @@ const RemovePendingButton = styled.button`
 // "Messages" card) and full-page (the dedicated /chat/:threadId view), via
 // $flexFill to switch between a fixed-height scroll box and one that fills
 // its flex parent.
-export const ChatPanel = ({ bookingId, threadId, flexFill = false, emptyHint = "Chat isn't available for this booking." }) => {
+export const ChatPanel = ({
+  bookingId,
+  threadId,
+  flexFill = false,
+  emptyHint = "Chat isn't available for this booking.",
+  bookingStatus,
+}) => {
   const { thread, messages, loading, sending, otherReadAt, send, messagesEndRef, user } = useChatThread({
     bookingId,
     threadId,
@@ -147,6 +163,7 @@ export const ChatPanel = ({ bookingId, threadId, flexFill = false, emptyHint = "
   const [pendingImage, setPendingImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
+  const messagingClosedNote = MESSAGING_CLOSED_NOTE[bookingStatus];
 
   const removePendingImage = () => {
     if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
@@ -180,6 +197,7 @@ export const ChatPanel = ({ bookingId, threadId, flexFill = false, emptyHint = "
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (messagingClosedNote) return;
     const text = messageText.trim();
     if (!text && !pendingImage) return;
     try {
@@ -237,24 +255,29 @@ export const ChatPanel = ({ bookingId, threadId, flexFill = false, emptyHint = "
         </PendingImageRow>
       )}
 
+      {messagingClosedNote && <Muted style={{ marginTop: 10 }}>{messagingClosedNote}</Muted>}
+
       <ChatForm onSubmit={handleSubmit}>
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
         <AttachButton
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={uploadingImage || sending}
+          disabled={uploadingImage || sending || Boolean(messagingClosedNote)}
           aria-label="Attach an image"
           title="Attach an image"
         >
           {uploadingImage ? <Spinner $size={16} /> : <ImagePlus size={18} strokeWidth={2.2} />}
         </AttachButton>
         <Input
-          placeholder="Type a message…"
+          placeholder={messagingClosedNote ? "Messaging is closed for this booking" : "Type a message…"}
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
-          disabled={sending}
+          disabled={sending || Boolean(messagingClosedNote)}
         />
-        <Button type="submit" disabled={sending || uploadingImage || (!messageText.trim() && !pendingImage)}>
+        <Button
+          type="submit"
+          disabled={sending || uploadingImage || Boolean(messagingClosedNote) || (!messageText.trim() && !pendingImage)}
+        >
           Send
         </Button>
       </ChatForm>

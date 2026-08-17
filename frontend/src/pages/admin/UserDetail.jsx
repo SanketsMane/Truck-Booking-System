@@ -532,6 +532,8 @@ export const UserDetail = () => {
 
   const { user, verifications, trucks, bookingsAsShipper, tripsAsTransporter } = data;
   const isFullAdmin = viewer?.adminScope === "full";
+  const isSelf = String(user._id) === String(viewer.id);
+  const canManageStatus = isFullAdmin && !isSelf;
 
   const ProfileInfoCard = (
     <AdminCard>
@@ -590,7 +592,7 @@ export const UserDetail = () => {
         </SectionIconWrap>
         <SectionTitle>Admin access</SectionTitle>
       </SectionHead>
-      {user._id === viewer.id ? (
+      {isSelf ? (
         <AdminAccessCurrent>You can't change your own admin access — ask another full admin.</AdminAccessCurrent>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -661,23 +663,29 @@ export const UserDetail = () => {
           </HeaderLeft>
 
           <HeaderActions>
-            {user.status !== "active" && (
-              <Button $size="sm" onClick={() => setAction("reactivate")}>
-                <ShieldCheck size={14} strokeWidth={2.4} />
-                Reactivate
-              </Button>
-            )}
-            {user.status !== "suspended" && (
-              <Button $variant="secondary" $size="sm" onClick={() => setAction("suspend")}>
-                <ShieldAlert size={14} strokeWidth={2.4} />
-                Suspend
-              </Button>
-            )}
-            {user.status !== "banned" && (
-              <Button $variant="danger" $size="sm" onClick={() => setAction("ban")}>
-                <ShieldX size={14} strokeWidth={2.4} />
-                Ban
-              </Button>
+            {canManageStatus ? (
+              <>
+                {user.status !== "active" && (
+                  <Button $size="sm" onClick={() => setAction("reactivate")}>
+                    <ShieldCheck size={14} strokeWidth={2.4} />
+                    Reactivate
+                  </Button>
+                )}
+                {user.status !== "suspended" && (
+                  <Button $variant="secondary" $size="sm" onClick={() => setAction("suspend")}>
+                    <ShieldAlert size={14} strokeWidth={2.4} />
+                    Suspend
+                  </Button>
+                )}
+                {user.status !== "banned" && (
+                  <Button $variant="danger" $size="sm" onClick={() => setAction("ban")}>
+                    <ShieldX size={14} strokeWidth={2.4} />
+                    Ban
+                  </Button>
+                )}
+              </>
+            ) : (
+              isSelf && <AdminAccessCurrent>You can't change your own account status — ask another full admin.</AdminAccessCurrent>
             )}
           </HeaderActions>
         </HeaderCard>

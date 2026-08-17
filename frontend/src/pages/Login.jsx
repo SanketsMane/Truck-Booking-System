@@ -80,6 +80,7 @@ const SwitchRow = styled.p`
 `;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MOBILE_PATTERN = /^[6-9]\d{9}$/;
 
 export const Login = () => {
   const [method, setMethod] = useState("otp"); // "otp" | "password"
@@ -87,6 +88,7 @@ export const Login = () => {
   const [otpEmail, setOtpEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
+  const [mobile, setMobile] = useState("");
   const [city, setCity] = useState("");
   const [roles, setRoles] = useState([]);
   const [isNewUser, setIsNewUser] = useState(false);
@@ -124,9 +126,19 @@ export const Login = () => {
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (isNewUser && !name.trim()) {
-      toast.error("Enter your name to finish signing up");
-      return;
+    if (isNewUser) {
+      if (!name.trim()) {
+        toast.error("Enter your name to finish signing up");
+        return;
+      }
+      if (!mobile) {
+        toast.error("Enter your mobile number to finish signing up");
+        return;
+      }
+      if (!MOBILE_PATTERN.test(mobile)) {
+        toast.error("Enter a valid 10-digit Indian mobile number");
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -134,6 +146,7 @@ export const Login = () => {
         email: otpEmail.trim(),
         otp,
         name: name.trim() || undefined,
+        mobile: mobile || undefined,
         city: city.trim() || undefined,
         roles: roles.length ? roles : undefined,
       });
@@ -141,9 +154,9 @@ export const Login = () => {
       toast.success(`Welcome to ${platformName}`);
       navigate(user.isAdmin ? "/admin" : redirectTo, { replace: true });
     } catch (error) {
-      if (/name is required/i.test(error.message)) {
+      if (/name is required|mobile number is required/i.test(error.message)) {
         setIsNewUser(true);
-        toast.error("Looks like you're new here — tell us your name to continue");
+        toast.error("Looks like you're new here — tell us your name and mobile number to continue");
       } else {
         toast.error(error.message);
       }
@@ -216,6 +229,16 @@ export const Login = () => {
               <>
                 <Field label="Your name">
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field label="Mobile number">
+                  <Input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="98765 43210"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    required
+                  />
                 </Field>
                 <Field label="City (optional)">
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />

@@ -205,20 +205,44 @@ const reviewTruck = async (req, res) => {
     if (!truck) {
       return res.status(404).json({ success: false, msg: "Truck not found" });
     }
+    if (truck.status !== "pending") {
+      return res.status(400).json({ success: false, msg: "This has already been reviewed" });
+    }
 
-    const before = truck.status;
+    const rejectReason = req.body.status === "rejected" ? req.body.reason : undefined;
+    const reviewedAt = new Date();
+
+    // Atomic — status is part of the filter, not just the read above, so
+    // two admins (or one admin double-clicking / two open tabs) reviewing
+    // the same pending truck concurrently can't both flip it, firing
+    // duplicate audit entries/notifications and possibly landing on
+    // whichever decision's .save() happened to run last.
+    const previous = await Truck.findOneAndUpdate(
+      { _id: truck._id, status: "pending" },
+      {
+        $set: {
+          status: req.body.status,
+          rejectReason,
+          reviewedBy: req.auth.id,
+          reviewedAt,
+        },
+      },
+      { new: false }
+    );
+    if (!previous) {
+      return res.status(400).json({ success: false, msg: "This has already been reviewed" });
+    }
     truck.status = req.body.status;
-    truck.rejectReason = req.body.status === "rejected" ? req.body.reason : undefined;
+    truck.rejectReason = rejectReason;
     truck.reviewedBy = req.auth.id;
-    truck.reviewedAt = new Date();
-    await truck.save();
+    truck.reviewedAt = reviewedAt;
 
     await logAdminAction({
       actor: req.auth.id,
       action: "truck.review",
       targetType: "Truck",
       targetId: truck._id,
-      before: { status: before },
+      before: { status: previous.status },
       after: { status: truck.status },
       reason: truck.rejectReason,
       scope: req.auth.adminScope,

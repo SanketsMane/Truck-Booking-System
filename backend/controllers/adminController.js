@@ -10,6 +10,7 @@ const UploadedFile = require("../models/uploadedFileModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const { markBookingCancelled } = require("../utils/bookingCancellation");
+const { disconnectUser } = require("../realtime/io");
 const emailProvider = require("../utils/emailProvider");
 const { welcomeEmail, accountStatusEmail } = require("../emailTemplates/templates");
 const { toCsv } = require("../utils/csv");
@@ -33,6 +34,22 @@ const {
 // "no shared coupling between these two controllers" call as
 // adminValidation.js's own local email/password schemas.
 const CREATE_USER_SALT_ROUNDS = 10;
+
+// Guards setUserStatus/setAdminRole/deleteUser against ever leaving the
+// platform with zero active full-scope admins — the one role that can undo
+// any of these actions (reactivate a wrongly-banned account, restore
+// someone's admin access, etc.). Only relevant when the target themselves
+// currently is one; acting on anyone else is unaffected.
+const wouldStrandFullAdmins = async (user) => {
+  if (!(user.isAdmin && user.adminScope === "full" && user.status === "active")) return false;
+  const remaining = await User.countDocuments({
+    _id: { $ne: user._id },
+    isAdmin: true,
+    adminScope: "full",
+    status: "active",
+  });
+  return remaining === 0;
+};
 
 // SRS-10.1 — headline metrics, a bookings trend chart, top routes, recent activity.
 const getDashboard = async (req, res) => {
@@ -197,9 +214,23 @@ const setUserStatus = async (req, res) => {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
+    // Without this, a full admin could suspend/ban their own account from
+    // its own detail page and be locked out on their very next request —
+    // same protection setAdminRole/deleteUser already have.
+    if (String(req.params.id) === String(req.auth.id)) {
+      return res.status(400).json({ success: false, msg: "You cannot change your own account status" });
+    }
+
     const user = await User.findById(req.params.id).select("-otp");
     if (!user) {
       return res.status(404).json({ success: false, msg: "User not found" });
+    }
+
+    if (req.body.status !== "active" && (await wouldStrandFullAdmins(user))) {
+      return res.status(400).json({
+        success: false,
+        msg: "This is the only active full-access admin — promote another admin to full access before suspending or banning them.",
+      });
     }
 
     const before = user.status;
@@ -211,6 +242,13 @@ const setUserStatus = async (req, res) => {
     // cheap enough to always do.
     user.sessionVersion += 1;
     await user.save();
+
+    // sessionVersion only blocks their *next* REST call — an already-open
+    // socket connection was authenticated once at handshake and otherwise
+    // keeps receiving chat/notifications indefinitely.
+    if (user.status !== "active") {
+      disconnectUser(user._id);
+    }
 
     await logAdminAction({
       actor: req.auth.id,
@@ -255,6 +293,14 @@ const setAdminRole = async (req, res) => {
     const user = await User.findById(req.params.id).select("-otp");
     if (!user) {
       return res.status(404).json({ success: false, msg: "User not found" });
+    }
+
+    const isDemotion = !req.body.isAdmin || req.body.adminScope !== "full";
+    if (isDemotion && (await wouldStrandFullAdmins(user))) {
+      return res.status(400).json({
+        success: false,
+        msg: "This is the only active full-access admin — promote another admin to full access first.",
+      });
     }
 
     const before = { isAdmin: user.isAdmin, adminScope: user.adminScope };
@@ -302,6 +348,13 @@ const deleteUser = async (req, res) => {
     const user = await User.findById(req.params.id).select("-otp");
     if (!user) {
       return res.status(404).json({ success: false, msg: "User not found" });
+    }
+
+    if (await wouldStrandFullAdmins(user)) {
+      return res.status(400).json({
+        success: false,
+        msg: "This is the only active full-access admin and can't be deleted — promote another admin to full access first.",
+      });
     }
 
     const [bookingCount, tripCount, truckCount] = await Promise.all([
@@ -520,10 +573,26 @@ const forceCancelBooking = async (req, res) => {
     }
 
     const trip = await Trip.findById(booking.trip);
-    const before = booking.status;
-    const wasCapacityHeld = ["confirmed", "ongoing"].includes(booking.status);
 
-    await markBookingCancelled(booking, { cancelledBy: req.auth.id, reason: req.body.reason });
+    // Atomic conditional transition — status is part of the filter, not just
+    // read above, so this force-cancel racing the shipper/transporter's own
+    // cancel of the same booking (or a double-click) can't both pass and
+    // each independently release capacity below, crediting the trip twice
+    // for one booking's worth.
+    const previous = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: { $nin: ["cancelled", "rejected", "expired", "completed"] } },
+      { $set: { status: "cancelled", cancelledBy: req.auth.id, cancelReason: req.body.reason } },
+      { new: false }
+    );
+    if (!previous) {
+      return res.status(400).json({ success: false, msg: `Booking is already ${booking.status}` });
+    }
+    booking.status = "cancelled";
+    booking.cancelledBy = req.auth.id;
+    booking.cancelReason = req.body.reason;
+
+    const before = previous.status;
+    const wasCapacityHeld = ["confirmed", "ongoing"].includes(before);
 
     if (trip && wasCapacityHeld) {
       // Atomic $inc — see bookingController.cancelBooking for why a

@@ -17,4 +17,14 @@ const emitToRoom = (room, event, payload) => {
   ioInstance.to(room).emit(event, payload);
 };
 
-module.exports = { setIO, emitToUser, emitToRoom };
+// Forcibly closes any live socket(s) this user currently has open — the
+// handshake-time auth check (status/sessionVersion) doesn't re-run on an
+// already-established connection, so without this a banned/suspended user's
+// open tab keeps receiving chat/notification events until they make a plain
+// REST call (which does re-check) or close the tab themselves.
+const disconnectUser = (userId) => {
+  if (!ioInstance) return;
+  ioInstance.in(`user:${userId}`).disconnectSockets(true);
+};
+
+module.exports = { setIO, emitToUser, emitToRoom, disconnectUser };

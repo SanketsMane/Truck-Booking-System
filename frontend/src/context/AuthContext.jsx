@@ -17,6 +17,12 @@ export const AuthProvider = ({ children }) => {
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const navigate = useNavigate();
   const bouncedRef = useRef(false);
+  // Notification ids already applied to unreadCount, so a "notification:read"
+  // socket echo doesn't double-decrement in the tab that itself performed
+  // the mark-read call (emitToUser broadcasts to every socket this user has
+  // open, including the originating tab's — see clearUnreadCount/
+  // decrementUnreadCount below).
+  const readIdsRef = useRef(new Set());
 
   const refreshUser = useCallback(async () => {
     try {
@@ -85,6 +91,22 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
+  // id is optional so callers with nothing to key off of (none today) still
+  // work; when given, a second call for the same id is a no-op — that's
+  // what keeps the originating tab's own optimistic update from being
+  // double-applied when its own "notification:read" echo arrives.
+  const decrementUnreadCount = useCallback((notificationId) => {
+    if (notificationId != null) {
+      if (readIdsRef.current.has(notificationId)) return;
+      readIdsRef.current.add(notificationId);
+    }
+    setUnreadCount((count) => Math.max(0, count - 1));
+  }, []);
+  const clearUnreadCount = useCallback(() => {
+    readIdsRef.current.clear();
+    setUnreadCount(0);
+  }, []);
+
   useEffect(() => {
     if (!user) {
       disconnectSocket();
@@ -111,16 +133,24 @@ export const AuthProvider = ({ children }) => {
       const { text, to } = describeNotification(n);
       toast.info(text, to ? { onClick: () => navigate(to) } : undefined);
     };
+    // Cross-tab sync: another tab of this same user marking a notification
+    // (or all of them) read should drop this tab's badge too, not just the
+    // tab that performed the action — see notificationController.js's
+    // markRead/markAllRead, which emit these after the DB write.
+    const handleNotificationRead = ({ notificationId } = {}) => decrementUnreadCount(notificationId);
+    const handleAllNotificationsRead = () => clearUnreadCount();
+
     socket.on("notification:new", handleNewNotification);
+    socket.on("notification:read", handleNotificationRead);
+    socket.on("notification:allRead", handleAllNotificationsRead);
 
     return () => {
       cancelled = true;
       socket.off("notification:new", handleNewNotification);
+      socket.off("notification:read", handleNotificationRead);
+      socket.off("notification:allRead", handleAllNotificationsRead);
     };
-  }, [user, navigate, refreshChatUnreadCount]);
-
-  const clearUnreadCount = useCallback(() => setUnreadCount(0), []);
-  const decrementUnreadCount = useCallback(() => setUnreadCount((count) => Math.max(0, count - 1)), []);
+  }, [user, navigate, refreshChatUnreadCount, decrementUnreadCount, clearUnreadCount]);
 
   const logout = useCallback(async () => {
     try {

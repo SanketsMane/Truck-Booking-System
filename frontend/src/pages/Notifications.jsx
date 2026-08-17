@@ -149,11 +149,32 @@ export const Notifications = () => {
     const handleNewNotification = () => {
       if (!cancelled) load();
     };
+    // Cross-tab sync: a mark-read/mark-all-read action taken in another tab
+    // of this same user should update this list too, not just that other
+    // tab. Setting readAt only when it isn't already set makes this safe
+    // against the originating tab also receiving its own echo (it's already
+    // applied the same update optimistically in handleOpen/handleMarkAllRead
+    // below), and unreadCount here is derived by filtering `notifications`
+    // rather than a separate counter, so there's no double-decrement risk.
+    const handleNotificationRead = ({ notificationId } = {}) => {
+      if (!notificationId || cancelled) return;
+      setNotifications((prev) =>
+        prev.map((x) => (x._id === notificationId ? { ...x, readAt: x.readAt || new Date().toISOString() } : x))
+      );
+    };
+    const handleAllNotificationsRead = () => {
+      if (cancelled) return;
+      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+    };
     socket?.on("notification:new", handleNewNotification);
+    socket?.on("notification:read", handleNotificationRead);
+    socket?.on("notification:allRead", handleAllNotificationsRead);
 
     return () => {
       cancelled = true;
       socket?.off("notification:new", handleNewNotification);
+      socket?.off("notification:read", handleNotificationRead);
+      socket?.off("notification:allRead", handleAllNotificationsRead);
     };
   }, []);
 
@@ -165,7 +186,7 @@ export const Notifications = () => {
       setNotifications((prev) =>
         prev.map((x) => (x._id === n._id ? { ...x, readAt: new Date().toISOString() } : x))
       );
-      decrementUnreadCount();
+      decrementUnreadCount(n._id);
       try {
         await notificationsApi.markNotificationRead(n._id);
       } catch {

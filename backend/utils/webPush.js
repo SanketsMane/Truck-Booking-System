@@ -22,8 +22,12 @@ const ensureVapidConfigured = () => {
 // Best-effort, same resilience contract as notify()/logAdminAction() — a
 // push delivery failure must never surface as a failure of the action that
 // triggered it. A 404/410 means the browser's own subscription is dead
-// (uninstalled, storage cleared) — prune it so future sends don't keep
-// retrying a permanently-gone endpoint.
+// (uninstalled, storage cleared); a 400 means the stored subscription object
+// itself is malformed/invalid — in both cases the subscription will never
+// succeed, so prune it so future sends don't keep retrying a permanently-dead
+// endpoint. 401/403/5xx/network errors are left alone (log and retry) since
+// those can reflect a transient or our-side (VAPID/server) problem rather
+// than a dead subscription.
 const sendPushToUser = async (userId, { title, body, url }) => {
   if (!ensureVapidConfigured()) return;
 
@@ -41,7 +45,7 @@ const sendPushToUser = async (userId, { title, body, url }) => {
             payload
           );
         } catch (error) {
-          if (error.statusCode === 404 || error.statusCode === 410) {
+          if (error.statusCode === 404 || error.statusCode === 410 || error.statusCode === 400) {
             await PushSubscription.deleteOne({ _id: sub._id });
           } else {
             console.error(`sendPushToUser() delivery failed for user ${userId}:`, error.message);

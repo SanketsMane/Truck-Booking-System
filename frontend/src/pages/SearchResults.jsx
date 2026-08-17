@@ -431,7 +431,7 @@ export const SearchResults = () => {
                       </div>
                     </Row>
                     <BadgeRow>
-                      <span>Available: {formatTons(trip.availableCapacity)}</span>
+                      <span>Available: {formatTons(trip.visibleAvailableCapacity)}</span>
                       {trip.estimatedArrivalAt && (
                         <span>
                           ETA: {formatShortDate(trip.estimatedArrivalAt)}, {formatTime(trip.estimatedArrivalAt)}

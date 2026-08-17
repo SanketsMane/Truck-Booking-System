@@ -2,7 +2,14 @@ const ChatThread = require("../models/chatThreadModel");
 
 // Message persistence happens over REST (see controllers/chatController.js),
 // which then fans the new message out to this room — keeps validation in
-// one place while still giving connected clients a live push.
+// one place while still giving connected clients a live push. There is no
+// socket-side "send" event here to duplicate-guard: chatController.sendMessage
+// (the only path a new message can be created through) already rejects
+// sending once the booking backing the thread is cancelled/rejected/expired
+// — see MESSAGING_CLOSED_STATUSES there. chat:join intentionally stays a
+// pure participant check (not a booking-status check) since joining the
+// room is what makes reading history live and marking-as-read work too,
+// and those stay open regardless of booking status.
 const registerChatHandlers = (io, socket) => {
   socket.on("chat:join", async (threadId) => {
     const thread = await ChatThread.findById(threadId);

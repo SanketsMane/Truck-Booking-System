@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { X } from "lucide-react";
 import { getTrip, editTrip, cancelTrip } from "../api/trips";
 import { listMyBookings, acceptBooking, rejectBooking } from "../api/bookings";
 import { PageContainer, Stack, Row, PageTitle, SectionTitle, SubHeading, Muted, EmptyState } from "../components/ui/Layout";
@@ -113,7 +114,58 @@ const BookingCard = styled(Card)`
   border-color: ${({ theme, $pending }) => ($pending ? theme.color.accent : theme.color.border)};
 `;
 
+const DraftNotice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space(3)};
+  padding: 10px ${({ theme }) => theme.space(4)};
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surfaceRaised};
+  font-size: 13px;
+  color: ${({ theme }) => theme.color.textMuted};
+`;
+
+const DraftDismiss = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.textMuted};
+
+  &:hover {
+    color: ${({ theme }) => theme.color.danger};
+  }
+`;
+
 const EDITABLE_STATUSES = ["published", "full"];
+
+// Same session-only draft pattern as PostTrip.jsx's wizard, scoped per trip
+// id so a leftover in-progress edit on one trip never leaks into another
+// trip's form (this page instance is reused across trips when navigating
+// directly from managing one to another — see the id-change effect below).
+const draftKey = (tripId) => `manageTrip:${tripId}:draft`;
+
+const loadDraft = (tripId) => {
+  try {
+    const raw = sessionStorage.getItem(draftKey(tripId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearDraft = (tripId) => {
+  try {
+    sessionStorage.removeItem(draftKey(tripId));
+  } catch {
+    // sessionStorage unavailable (private browsing, quota) — draft
+    // persistence is a nice-to-have, not required for the form to work.
+  }
+};
 
 export const ManageTrip = () => {
   const { id } = useParams();
@@ -131,22 +183,51 @@ export const ManageTrip = () => {
   const [editErrors, setEditErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  // True only when the edit fields currently on screen were restored from a
+  // sessionStorage draft rather than the trip's own server values — drives
+  // the dismissible DraftNotice below, same as PostTrip.jsx.
+  const [showDraftNotice, setShowDraftNotice] = useState(false);
 
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [actioningId, setActioningId] = useState(null);
+
+  // Resets the edit fields to the trip's actual current server values —
+  // the "no draft" starting point, and also what discarding a draft falls
+  // back to.
+  const resetEditFieldsFromTrip = (t) => {
+    setDepartureAt(toDateTimeInputValue(t.departureAt));
+    setEstimatedArrivalAt(t.estimatedArrivalAt ? toDateTimeInputValue(t.estimatedArrivalAt) : "");
+    setPickupPoint(normalizePoint(t.pickupPoint));
+    setDropPoint(normalizePoint(t.dropPoint));
+    totalCapacityAmount.setTons(t.totalCapacity);
+    setPricePerTon(String(t.pricePerTon));
+  };
 
   const loadTrip = (cancelled) =>
     getTrip(id)
       .then(({ trip }) => {
         if (cancelled?.current) return;
         setTrip(trip);
-        setDepartureAt(toDateTimeInputValue(trip.departureAt));
-        setEstimatedArrivalAt(trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "");
-        setPickupPoint(normalizePoint(trip.pickupPoint));
-        setDropPoint(normalizePoint(trip.dropPoint));
-        totalCapacityAmount.setTons(trip.totalCapacity);
-        setPricePerTon(String(trip.pricePerTon));
+        const draft = loadDraft(id);
+        if (draft) {
+          // A draft exists for this trip — that's itself the cue to open
+          // straight into edit mode with the draft's values pre-filled,
+          // same as PostTrip.jsx restoring straight into its in-progress
+          // step rather than making the user re-enter edit mode to see it.
+          setDepartureAt(draft.departureAt ?? toDateTimeInputValue(trip.departureAt));
+          setEstimatedArrivalAt(
+            draft.estimatedArrivalAt ?? (trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "")
+          );
+          setPickupPoint(draft.pickupPoint ?? normalizePoint(trip.pickupPoint));
+          setDropPoint(draft.dropPoint ?? normalizePoint(trip.dropPoint));
+          totalCapacityAmount.setTons(draft.totalCapacityTons ?? trip.totalCapacity);
+          setPricePerTon(draft.pricePerTon ?? String(trip.pricePerTon));
+          setEditMode(true);
+          setShowDraftNotice(true);
+        } else {
+          resetEditFieldsFromTrip(trip);
+        }
       })
       .catch((error) => {
         if (cancelled?.current) return;
@@ -180,6 +261,11 @@ export const ManageTrip = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingTrip(true);
     setLoadingBookings(true);
+    // Also drop any edit-mode/draft-notice state left over from whichever
+    // trip this instance was previously showing — loadTrip below decides
+    // the right starting point (draft vs. display mode) for the new id.
+    setEditMode(false);
+    setShowDraftNotice(false);
     loadTrip(cancelled);
     loadBookings(cancelled);
     return () => {
@@ -187,6 +273,38 @@ export const ManageTrip = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Saves on every change, but only while edit mode is actually showing
+  // these fields — the same "save on every change, not just unmount"
+  // reasoning as PostTrip.jsx's draft effect, scoped to edit mode so a
+  // stale draft from a past edit session never gets written back out (or
+  // read as fresh) while the page is just displaying the trip.
+  useEffect(() => {
+    if (!editMode) return;
+    const data = {
+      departureAt,
+      estimatedArrivalAt,
+      pickupPoint,
+      dropPoint,
+      totalCapacityTons: totalCapacityAmount.tons,
+      pricePerTon,
+    };
+    try {
+      sessionStorage.setItem(draftKey(id), JSON.stringify(data));
+    } catch {
+      // sessionStorage unavailable (private browsing, quota) — draft
+      // persistence is a nice-to-have, not required for the form to work.
+    }
+  }, [
+    editMode,
+    id,
+    departureAt,
+    estimatedArrivalAt,
+    pickupPoint,
+    dropPoint,
+    totalCapacityAmount.tons,
+    pricePerTon,
+  ]);
 
   const bookedCapacity = trip ? trip.totalCapacity - trip.availableCapacity : 0;
 
@@ -227,6 +345,8 @@ export const ManageTrip = () => {
     }
 
     if (Object.keys(updates).length === 0) {
+      clearDraft(id);
+      setShowDraftNotice(false);
       setEditMode(false);
       return;
     }
@@ -236,12 +356,27 @@ export const ManageTrip = () => {
       const res = await editTrip(id, updates);
       toast.success(res.msg || "Trip updated");
       setTrip(res.trip);
+      clearDraft(id);
+      setShowDraftNotice(false);
       setEditMode(false);
     } catch (err) {
       toast.error(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Explicit discard — used by both the edit form's own "Cancel" button and
+  // the draft notice's dismiss action, so either way of backing out of an
+  // in-progress edit drops the sessionStorage draft and puts the fields
+  // back to the trip's real current values (rather than leaving stale
+  // edited-but-unsaved values sitting in state for the next time edit mode
+  // opens).
+  const handleDiscardEdit = () => {
+    clearDraft(id);
+    setShowDraftNotice(false);
+    if (trip) resetEditFieldsFromTrip(trip);
+    setEditMode(false);
   };
 
   const handleCancelTrip = async () => {
@@ -312,7 +447,20 @@ export const ManageTrip = () => {
   }
 
   const canEdit = EDITABLE_STATUSES.includes(trip.status);
-  const canCancel = !["completed", "cancelled"].includes(trip.status);
+  const tripStatusCancellable = !["completed", "cancelled"].includes(trip.status);
+  // tripController.cancelTrip rejects cancellation outright if any booking
+  // on the trip is "ongoing" (goods already picked up, in transit) — mirror
+  // that here using the bookings this page already loaded, so the button
+  // reflects the real blocking condition up front instead of only surfacing
+  // it after a doomed confirm dialog + failed request. See also
+  // adminController.deactivateTrip, which enforces (and messages) the same
+  // rule on the admin side.
+  const hasOngoingBooking = bookings.some((b) => b.status === "ongoing");
+  // Also wait out loadingBookings — bookings loads in parallel with the
+  // trip itself, and showing a clickable Cancel button that then vanishes
+  // once bookings resolve (because it turns out one is ongoing) is worse
+  // than a brief delay before the button appears at all.
+  const canCancel = tripStatusCancellable && !loadingBookings && !hasOngoingBooking;
   const capacityPct = trip.totalCapacity ? Math.min(100, Math.round((bookedCapacity / trip.totalCapacity) * 100)) : 0;
   const pendingCount = bookings.filter((b) => b.status === "pending").length;
 
@@ -397,10 +545,26 @@ export const ManageTrip = () => {
                 )}
               </Row>
               {!canEdit && <Muted>This trip can't be edited while it's {trip.status}.</Muted>}
+              {tripStatusCancellable && hasOngoingBooking && (
+                <Muted>
+                  Can't cancel — this trip has goods already picked up and in transit. Force-cancel that specific
+                  booking instead if it must stop.
+                </Muted>
+              )}
             </Stack>
           ) : (
             <Stack $gap={5}>
               <SectionTitle>Edit trip</SectionTitle>
+
+              {showDraftNotice && (
+                <DraftNotice>
+                  <span>Restored your in-progress edits.</span>
+                  <DraftDismiss type="button" onClick={handleDiscardEdit}>
+                    <X size={13} strokeWidth={2.6} />
+                    Discard changes
+                  </DraftDismiss>
+                </DraftNotice>
+              )}
 
               <FieldGroup $first>
                 <SubHeading>Schedule</SubHeading>
@@ -456,7 +620,7 @@ export const ManageTrip = () => {
                 <Button $fullWidth onClick={handleSave} disabled={saving}>
                   {saving ? "Saving…" : "Save changes"}
                 </Button>
-                <Button $variant="ghost" onClick={() => setEditMode(false)} disabled={saving}>
+                <Button $variant="ghost" onClick={handleDiscardEdit} disabled={saving}>
                   Cancel
                 </Button>
               </Row>

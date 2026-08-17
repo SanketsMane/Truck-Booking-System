@@ -1,7 +1,7 @@
 const request = require("supertest");
 const app = require("../../app");
 const User = require("../../models/userModel");
-const { signupUser, MASTER_OTP } = require("../helpers");
+const { signupUser, uniqueMobile, MASTER_OTP } = require("../helpers");
 
 const emailFor = (seed) => `auth${seed}@example.test`;
 
@@ -20,21 +20,30 @@ const waitForLogContaining = async (logSpy, needles, timeoutMs = 2000) => {
 };
 
 // The full auth surface post mobile->email migration: OTP signup/login
-// (email-keyed, mobile now optional), password signup/login (email-only —
-// mobile is no longer an accepted identifier), forgot/reset password, and
+// (email-keyed, mobile mandatory to *complete* a brand-new signup but not
+// re-required on every subsequent login), password signup/login (email-only
+// identifier, mobile mandatory at creation), forgot/reset password, and
 // profile-driven mobile edits. console.log is globally silenced in
 // tests/setup.js, but jest.spyOn still records call args without printing
 // anything — that's how forgot-password's reset link (only ever "sent" via
 // the console-fallback email provider in test mode) gets captured here.
 describe("auth: OTP signup/login", () => {
-  it("signs up a new user via email OTP with no mobile given", async () => {
+  it("blocks completing a brand-new OTP signup without a mobile number", async () => {
+    const agent = request.agent(app);
+    await agent.post("/auth/request-otp").send({ email: emailFor(1) });
+    const res = await agent.post("/auth/verify-otp").send({ email: emailFor(1), otp: MASTER_OTP, name: "No Mobile" });
+    expect(res.status).toBe(400);
+    expect(res.body.msg).toMatch(/mobile number is required/i);
+  });
+
+  it("signs up a new user via email OTP once a mobile number is given", async () => {
     const { user } = await signupUser(app, { email: emailFor(1), name: "OTP User", roles: ["shipper"] });
     expect(user.email).toBe(emailFor(1));
     expect(user.emailVerified).toBe(true);
-    expect(user.mobile).toBeUndefined();
+    expect(user.mobile).toBe(uniqueMobile(emailFor(1)));
   });
 
-  it("logs an existing verified user back in without requiring a name again", async () => {
+  it("logs an existing verified user back in without requiring a name or mobile again", async () => {
     await signupUser(app, { email: emailFor(2), name: "Repeat User" });
     // Bypass the real 30s resend cooldown (authConfig.OTP_RESEND_COOLDOWN_SECONDS)
     // so this second request-otp isn't itself rejected — same kind of
@@ -49,7 +58,7 @@ describe("auth: OTP signup/login", () => {
     expect(res.body.user.name).toBe("Repeat User");
   });
 
-  it("accepts an optional mobile number on OTP signup and rejects a duplicate", async () => {
+  it("accepts a mobile number on OTP signup and rejects a duplicate", async () => {
     const agent1 = request.agent(app);
     await agent1.post("/auth/request-otp").send({ email: emailFor(3) });
     const res1 = await agent1
@@ -77,22 +86,30 @@ describe("auth: OTP signup/login", () => {
 describe("auth: password signup/login", () => {
   const basePassword = { password: "correct-horse-1", confirmPassword: "correct-horse-1" };
 
-  it("creates an account with email+password and no mobile", async () => {
+  it("rejects an email+password signup with no mobile number", async () => {
     const res = await request(app)
       .post("/auth/signup")
       .send({ name: "Pw User", email: emailFor(10), roles: ["shipper"], ...basePassword });
+    expect(res.status).toBe(400);
+    expect(res.body.msg).toMatch(/mobile/i);
+  });
+
+  it("creates an account with email+password and a mobile number", async () => {
+    const res = await request(app)
+      .post("/auth/signup")
+      .send({ name: "Pw User", email: emailFor(10), mobile: uniqueMobile(emailFor(10)), roles: ["shipper"], ...basePassword });
     expect(res.status).toBe(201);
-    expect(res.body.user.mobile).toBeUndefined();
+    expect(res.body.user.mobile).toBe(uniqueMobile(emailFor(10)));
     expect(res.body.user.hasPassword).toBe(true);
   });
 
   it("rejects a second signup with the same email", async () => {
     await request(app)
       .post("/auth/signup")
-      .send({ name: "First", email: emailFor(11), ...basePassword });
+      .send({ name: "First", email: emailFor(11), mobile: uniqueMobile(emailFor(11)), ...basePassword });
     const res = await request(app)
       .post("/auth/signup")
-      .send({ name: "Second", email: emailFor(11), ...basePassword });
+      .send({ name: "Second", email: emailFor(11), mobile: uniqueMobile("other-11"), ...basePassword });
     expect(res.status).toBe(409);
     expect(res.body.msg).toMatch(/email/i);
   });
@@ -108,16 +125,16 @@ describe("auth: password signup/login", () => {
     expect(res.body.msg).toMatch(/mobile/i);
   });
 
-  it("does not let a fresh signup collide with an existing mobile-less account", async () => {
-    // Regression guard for the old `$or:[{mobile},{email}]` bug, where an
-    // absent mobile matched every other mobile-less account.
-    await request(app)
-      .post("/auth/signup")
-      .send({ name: "No Mobile", email: emailFor(14), ...basePassword });
+  it("rejects a signup with an empty mobile number rather than treating it as unset", async () => {
+    // Mobile is mandatory at registration now — an empty string must fail
+    // validation, not silently fall through to the old "unset mobile" path
+    // (which used to let it slide and could false-positive-collide with any
+    // other mobile-less account via an unguarded $or).
     const res = await request(app)
       .post("/auth/signup")
-      .send({ name: "Also No Mobile", email: emailFor(15), ...basePassword });
-    expect(res.status).toBe(201);
+      .send({ name: "Empty Mobile", email: emailFor(14), mobile: "", ...basePassword });
+    expect(res.status).toBe(400);
+    expect(res.body.msg).toMatch(/mobile/i);
   });
 
   it("logs in with email + password", async () => {
@@ -162,7 +179,9 @@ describe("auth: forgot password / reset password", () => {
   it("does the full forgot -> reset -> login-with-new-password round trip, invalidating the old session", async () => {
     const agent = request.agent(app);
     await agent.post("/auth/request-otp").send({ email: emailFor(20) });
-    const signupRes = await agent.post("/auth/verify-otp").send({ email: emailFor(20), otp: MASTER_OTP, name: "Reset Me" });
+    const signupRes = await agent
+      .post("/auth/verify-otp")
+      .send({ email: emailFor(20), otp: MASTER_OTP, name: "Reset Me", mobile: uniqueMobile(emailFor(20)) });
     const oldCookie = signupRes.headers["set-cookie"];
     await agent.put("/auth/set-password").send({ newPassword: basePassword.password, confirmPassword: basePassword.confirmPassword });
 

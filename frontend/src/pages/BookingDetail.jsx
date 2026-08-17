@@ -28,6 +28,11 @@ import { Field, Textarea, Select } from "../components/ui/Form";
 import { Spinner } from "../components/ui/Spinner";
 import { formatDateTime, normalizePoint } from "../utils/format";
 
+// Must match backend/config/marketplaceConfig.js's CANCELLATION_WINDOW_HOURS —
+// there's no public endpoint exposing this value to the frontend today, so it's
+// hardcoded here (same as the policy copy below already hardcoded "6 hours").
+const CANCELLATION_WINDOW_HOURS = 6;
+
 const CenteredSpinner = ({ $size = 28 }) => (
   <Row style={{ justifyContent: "center", padding: "60px 0" }}>
     <Spinner $size={$size} />
@@ -118,6 +123,11 @@ export const BookingDetail = () => {
     try {
       const { booking } = await getBooking(id);
       setBooking(booking);
+      // Pre-check duplicate submission so we don't show a form that's
+      // guaranteed to 409 — falls back to today's behavior (falsy) if the
+      // backend hasn't started sending these fields yet.
+      if (booking.alreadyRatedByMe) setRatingSubmitted(true);
+      if (booking.alreadyDisputedByMe) setDisputeSubmitted(true);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -257,6 +267,14 @@ export const BookingDetail = () => {
   const canConfirmDrop = (isShipper || isTransporter) && booking.status === "ongoing";
   const hasAnyAction = canAcceptReject || canConfirmPickup || canConfirmDrop;
 
+  // Mirrors the backend's cancelBooking cutoff check exactly (bookingController.js)
+  // so we can tell the user upfront rather than let them fill out the cancel
+  // form only to hit the "must be made at least N hours before departure" 400.
+  const cancellationCutoff = new Date(
+    new Date(trip.departureAt).getTime() - CANCELLATION_WINDOW_HOURS * 60 * 60 * 1000
+  );
+  const isPastCancellationWindow = new Date() > cancellationCutoff;
+
   return (
     <PageContainer>
       <PageTitle style={{ marginBottom: 20 }}>Booking details</PageTitle>
@@ -361,10 +379,18 @@ export const BookingDetail = () => {
                 </Button>
                 {!showCancelForm ? (
                   <Stack $gap={1}>
-                    <Button $variant="danger" onClick={() => setShowCancelForm(true)} disabled={actionLoading}>
-                      Cancel booking
-                    </Button>
-                    <Muted>Free cancellation up to 6 hours before departure — no penalty either side.</Muted>
+                    {!isPastCancellationWindow ? (
+                      <>
+                        <Button $variant="danger" onClick={() => setShowCancelForm(true)} disabled={actionLoading}>
+                          Cancel booking
+                        </Button>
+                        <Muted>
+                          Free cancellation up to {CANCELLATION_WINDOW_HOURS} hours before departure — no penalty either side.
+                        </Muted>
+                      </>
+                    ) : (
+                      <Muted>This booking is past the free-cancellation window — cancelling now may not be possible.</Muted>
+                    )}
                   </Stack>
                 ) : (
                   <form onSubmit={handleCancel}>
@@ -498,7 +524,7 @@ export const BookingDetail = () => {
               </OpenChatLink>
             )}
           </CardRow>
-          <ChatPanel bookingId={id} />
+          <ChatPanel bookingId={id} bookingStatus={booking.status} />
         </Card>
       </Stack>
     </PageContainer>

@@ -2,6 +2,10 @@ const Joi = require("joi");
 const { MOBILE_PATTERN } = require("../config/marketplaceConfig");
 const { PASSWORD_MIN_LENGTH } = require("../config/authConfig");
 
+// .required() on the object itself (not just its fields) matters on routes
+// with no required body shape at the framework level — express.json() leaves
+// req.body as undefined, not {}, when a request sends none, and Joi only
+// rejects that if the schema says the value itself is required.
 const setUserStatusValidation = Joi.object({
   status: Joi.string().valid("active", "suspended", "banned").required(),
   reason: Joi.string().trim().when("status", {
@@ -9,19 +13,19 @@ const setUserStatusValidation = Joi.object({
     then: Joi.required(),
     otherwise: Joi.optional(),
   }),
-});
+}).required();
 
 const forceCancelBookingValidation = Joi.object({
   reason: Joi.string().trim().required(),
-});
+}).required();
 
 const deactivateTripValidation = Joi.object({
   reason: Joi.string().trim().required(),
-});
+}).required();
 
 const updateSettingsValidation = Joi.object({
   verificationGateEnabled: Joi.boolean().required(),
-});
+}).required();
 
 // A local email schema rather than importing authValidation.js's — that
 // file is mid-rewrite in a concurrently-running session, and branding's
@@ -53,14 +57,14 @@ const updateBrandingValidation = Joi.object({
   youtubeUrl: Joi.string().trim().uri({ scheme: ["http", "https"] }).allow("", null).messages({
     "string.uri": "Enter a valid URL (starting with http:// or https://)",
   }),
-});
+}).required();
 
 const setAdminRoleValidation = Joi.object({
   isAdmin: Joi.boolean().required(),
   adminScope: Joi.string()
     .valid("full", "verification", "support")
     .when("isAdmin", { is: true, then: Joi.required(), otherwise: Joi.optional().allow(null) }),
-});
+}).required();
 
 // Local email/password schemas rather than importing authValidation.js's —
 // same reasoning as updateBrandingValidation above. `role` is a single
@@ -80,7 +84,7 @@ const createUserValidation = Joi.object({
   adminScope: Joi.string()
     .valid("full", "verification", "support")
     .when("role", { is: "admin", then: Joi.required(), otherwise: Joi.forbidden() }),
-});
+}).required();
 
 module.exports = {
   setUserStatusValidation,
