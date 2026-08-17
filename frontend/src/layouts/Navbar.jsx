@@ -452,7 +452,12 @@ export const Navbar = () => {
 
         <CenterNav aria-label="Main">
           {NAV_LINKS.map((link) => (
-            <CenterNavLink key={link.label} to={link.to} end as={link.anchor ? Link : undefined}>
+            <CenterNavLink
+              key={link.label}
+              to={link.to}
+              end={link.anchor ? undefined : true}
+              as={link.anchor ? Link : undefined}
+            >
               {link.label}
             </CenterNavLink>
           ))}
@@ -555,7 +560,7 @@ export const Navbar = () => {
               <MobileNavLink
                 key={link.label}
                 to={link.to}
-                end
+                end={link.anchor ? undefined : true}
                 as={link.anchor ? Link : undefined}
                 onClick={() => setMobileOpen(false)}
               >

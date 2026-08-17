@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import styled, { keyframes } from "styled-components";
+import styled, { keyframes, useTheme } from "styled-components";
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -11,6 +11,7 @@ import {
   Headphones,
   IndianRupee,
   MapPin,
+  Package,
   Route,
   Search,
   Send,
@@ -20,12 +21,13 @@ import {
   Users,
 } from "lucide-react";
 import heroTruckPhotoSrc from "../assets/hero-truck-photo.jpg";
+import verifiedTruckSrc from "../assets/verified-truck.png";
 import truckRunnerSrc from "../assets/truck-runner.png";
 import { getPopularRoutes } from "../api/trips";
 import { PageContainer, Stack, Row, Muted, Body, SectionTitle } from "../components/ui/Layout";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Field, Input } from "../components/ui/Form";
+import { Field, Input, Label } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
@@ -532,29 +534,57 @@ const SwapRow = styled.div`
   }
 `;
 
+// align-items:start (not end) deliberately — Field's FieldGroup carries its
+// own margin-bottom (for normal vertical form stacking), which inflates
+// this row's own computed height beyond any single cell's visible content.
+// With align-items:end that extra margin silently ate into the alignment
+// itself: the two real Fields sat flush at the row's top as always, but the
+// button column (no such margin) got pulled all the way down to the row's
+// true bottom, landing visibly below the inputs instead of even with them.
+// Top-aligning everything sidesteps that entirely — margin-bottom trailing
+// off the bottom of a cell never affects where its top-edge content sits.
 const SearchFieldsRow = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: ${({ theme }) => theme.space(2)};
-  align-items: end;
+  align-items: start;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     grid-template-columns: 1.3fr 1fr auto;
     gap: ${({ theme }) => theme.space(3)};
   }
+
+  // Field's own margin-bottom is for stacking fields vertically in a plain
+  // form — meaningless (and, per above, actively misleading) as a grid
+  // cell here, where SearchCard's own Stack $gap handles spacing between
+  // this row and whatever comes after it instead.
+  > * {
+    margin-bottom: 0;
+  }
 `;
 
-// Field's own label pushes its input down ~21px — this empty spacer keeps
-// the submit button visually bottom-aligned with the From/To/Date inputs
-// in the same row, without the button needing (and rendering) a label of
-// its own.
-const ButtonRowSpacer = styled.div`
+// A real (invisible) Field label, not a hand-measured pixel spacer — sizes
+// itself identically to the From/Date/Capacity labels beside it by
+// construction, so it can't quietly drift out of sync if Label's own
+// font-size/line-height ever changes. margin-bottom:6px reproduces
+// FieldGroup's own `gap: 6px` between label and control — this sits in a
+// plain block div, not that flex column, so the gap needs restating here.
+const ButtonLabelSpacer = styled(Label)`
   display: none;
+  visibility: hidden;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
     display: block;
-    height: 27px;
+    margin-bottom: 6px;
   }
+`;
+
+// SearchCard already forces input/select to a shared 54px height (its own
+// premium field treatment) — Button's "lg" size is padding-driven and
+// renders shorter, so without this it's visibly out of step with the
+// fields beside it even once top-alignment is fixed.
+const SearchSubmitButton = styled(Button)`
+  height: 54px;
 `;
 
 const SwapButton = styled.button`
@@ -649,116 +679,459 @@ const SectionEyebrow = styled.span`
   margin-bottom: 2px;
 `;
 
-// Both in-scope sections (Why Truckgee, How it works) want a noticeably
-// bigger header than SectionTitle/Muted's app-wide default (used as-is by
-// Popular Routes/FAQ below, which this redesign doesn't touch) — local
-// overrides here instead of resizing those shared components everywhere.
-const SectionHeading = styled(SectionTitle)`
-  font-size: 1.75rem;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+// ===== "Why TruckGee" — client-spec redesign =====
+// Locally scoped to this one section (none of these are exported or reused
+// elsewhere), so they're deliberately their own thing rather than resized
+// variants of the app-wide SectionEyebrow/SectionHeading/SectionLede —
+// those stay untouched for Trending/FAQ below.
+const WhySectionHead = styled(Stack).attrs({ $gap: 3 })`
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto ${({ theme }) => theme.space(13)};
+`;
+
+const WhyEyebrow = styled.span`
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.color.accent};
+`;
+
+const WhyHeading = styled.h2`
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: ${({ theme }) => theme.color.text};
+  font-size: 2.1rem;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    font-size: 2.2rem;
+    font-size: 3.25rem;
   }
 `;
 
-const SectionLede = styled(Muted)`
-  font-size: 15.5px;
-  line-height: 1.55;
+const WhyLede = styled.p`
+  margin: 0 auto;
+  max-width: 720px;
+  color: ${({ theme }) => theme.color.textMuted};
+  font-size: 16.5px;
+  line-height: 1.6;
 
   @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
-    font-size: 17px;
+    font-size: 19px;
   }
 `;
 
-const ValueGrid = styled.div`
+const WhyGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
-  gap: ${({ theme }) => theme.space(5)};
+  gap: ${({ theme }) => theme.space(6)};
+  max-width: 1180px;
+  margin: 0 auto;
 
-  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.desktop}) {
     grid-template-columns: repeat(3, 1fr);
+    gap: ${({ theme }) => theme.space(7)};
   }
 `;
 
-const ValueCard = styled.div`
+// border-bottom doubles as the reference design's subtle blue accent line —
+// no extra pseudo-element needed for it.
+const WhyCard = styled.div`
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 260px;
-  padding: ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(5)};
-  border-radius: 20px;
-  border: 1px solid ${({ theme }) => theme.color.border};
+  min-height: 400px;
   background: ${({ theme }) => theme.color.surface};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  border-bottom: 3px solid ${({ theme }) => theme.color.accent};
+  border-radius: 20px;
   box-shadow: ${({ theme }) => theme.shadow.card};
   transition: transform ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing},
-    box-shadow ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing},
-    border-color ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing};
+    box-shadow ${({ theme }) => theme.motion.slow} ${({ theme }) => theme.motion.easing};
   animation: ${fadeInUp} 0.5s ease both;
   animation-delay: ${({ $i = 0 }) => $i * 0.08}s;
 
-  // Very subtle decorative dot grid, bottom-right — a real element (not
-  // ::after) so it can sit at z-index:0 without fighting a pseudo-element's
-  // own stacking quirks, while the actual content below stays plain static
-  // flow and so always paints above it.
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    min-height: 480px;
+  }
+
   &:hover {
-    transform: translateY(-4px);
-    border-color: ${({ theme }) => theme.color.accent};
+    transform: translateY(-2px);
     box-shadow: ${({ theme }) => theme.shadow.raised};
   }
 `;
 
-const ValueCardDots = styled.div`
-  position: absolute;
-  z-index: 0;
-  right: -8px;
-  bottom: -8px;
-  width: 88px;
-  height: 88px;
-  background-image: radial-gradient(circle, ${({ theme }) => theme.color.accent} 1.4px, transparent 1.4px);
-  background-size: 13px 13px;
-  opacity: 0.14;
-  pointer-events: none;
+const WhyCardTop = styled.div`
+  padding: ${({ theme }) => theme.space(7)} ${({ theme }) => theme.space(6)} 0;
 `;
 
-const ValueIcon = styled.div`
-  position: relative;
-  z-index: 1;
-  width: 50px;
-  height: 50px;
-  flex-shrink: 0;
+const WhyCardIcon = styled.div`
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
   border-radius: 15px;
-  background: ${({ theme }) => theme.color.accentSoft};
+  background: ${({ theme }) => theme.color.lightBlue};
   color: ${({ theme }) => theme.color.accent};
   margin-bottom: ${({ theme }) => theme.space(4)};
-  transition: background ${({ theme }) => theme.motion.slow} ease;
-
-  ${ValueCard}:hover & {
-    background: ${({ theme }) => theme.color.accent};
-    color: ${({ theme }) => theme.color.onAccent};
-  }
 `;
 
-const ValueTitle = styled.div`
-  position: relative;
-  z-index: 1;
+const WhyCardTitle = styled.h3`
+  margin: 0 0 8px;
+  font-size: 21px;
   font-weight: 700;
-  font-size: 17px;
-  margin-bottom: 7px;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.color.text};
 `;
 
-const ValueBody = styled(Muted)`
+const WhyCardBody = styled.p`
+  margin: 0;
+  max-width: 30ch;
+  font-size: 16px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.color.textMuted};
+  white-space: pre-line;
+`;
+
+const WhyCardIllustration = styled.div`
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  margin-top: ${({ theme }) => theme.space(5)};
+`;
+
+// ----- Shared skyline motif (cards 1 and 3) -----
+// One small SVG reused by both illustrations rather than two near-identical
+// ones, so the "family" the brief asks for is structural, not just color.
+const Skyline = ({ tint }) => (
+  <svg
+    viewBox="0 0 300 60"
+    preserveAspectRatio="none"
+    style={{ position: "absolute", left: 0, right: 0, bottom: 0, width: "100%", height: 56, opacity: 0.5 }}
+    aria-hidden="true"
+  >
+    <rect x="6" y="22" width="30" height="38" rx="3" fill={tint} />
+    <rect x="42" y="8" width="26" height="52" rx="3" fill={tint} />
+    <rect x="74" y="30" width="24" height="30" rx="3" fill={tint} />
+    <rect x="228" y="18" width="26" height="42" rx="3" fill={tint} />
+    <rect x="260" y="34" width="22" height="26" rx="3" fill={tint} />
+  </svg>
+);
+
+// ----- Card 1: verified truck photo + shield badge -----
+// A contained, sized-down frame (not a full-bleed inset:0 photo) — the
+// source shot is a wide 3/4-view product render meant to be seen whole, at
+// roughly the same footprint the old SVG truck had, sitting on the card
+// rather than filling it edge-to-edge.
+const TruckPhotoWrap = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: ${({ theme }) => theme.space(4)};
+`;
+
+const TruckPhotoFrame = styled.div`
+  position: relative;
+  width: 200px;
+  height: 128px;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: ${({ theme }) => theme.shadow.card};
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    width: 228px;
+    height: 146px;
+  }
+`;
+
+const TruckPhoto = styled.img`
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 48%;
+`;
+
+const VerifiedShieldBadge = styled.div`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.color.accent};
+  color: #ffffff;
+  box-shadow: ${({ theme }) => theme.shadow.card};
+`;
+
+const VerifiedTruckIllustration = ({ theme }) => (
+  <TruckPhotoWrap aria-hidden="true">
+    <Skyline tint={theme.color.lightBlue} />
+    <TruckPhotoFrame>
+      <TruckPhoto src={verifiedTruckSrc} alt="" />
+      <VerifiedShieldBadge>
+        <ShieldCheck size={18} strokeWidth={2.4} />
+      </VerifiedShieldBadge>
+    </TruckPhotoFrame>
+  </TruckPhotoWrap>
+);
+
+// ----- Card 2: booking status tracker + route map -----
+const TrackerWrap = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: ${({ theme }) => theme.space(4)};
+  padding: 0 ${({ theme }) => theme.space(6)} ${({ theme }) => theme.space(6)};
+`;
+
+const StatusRow = styled.div`
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+`;
+
+const StatusLine = styled.div`
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  background: ${({ theme }) => theme.color.border};
+`;
+
+const StatusStep = styled.div`
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+`;
+
+const StatusDot = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #ffffff;
+  background: ${({ $color }) => $color};
+`;
+
+const StatusLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.color.textMuted};
+  white-space: nowrap;
+`;
+
+const STATUS_STEPS = (theme) => [
+  { label: "Confirmed", icon: CheckCircle2, color: theme.color.success },
+  { label: "On the Way", icon: Truck, color: theme.color.accent },
+  { label: "Picked Up", icon: Package, color: theme.color.orange },
+  { label: "Delivered", icon: CheckCircle2, color: theme.color.success },
+];
+
+const MapArt = styled.svg`
+  display: block;
+  width: 100%;
+  height: 80px;
+`;
+
+const BookingTrackerIllustration = ({ theme }) => (
+  <TrackerWrap aria-hidden="true">
+    <StatusRow>
+      <StatusLine />
+      {STATUS_STEPS(theme).map(({ label, icon: Icon, color }) => (
+        <StatusStep key={label}>
+          <StatusDot $color={color}>
+            <Icon size={14} strokeWidth={2.5} />
+          </StatusDot>
+          <StatusLabel>{label}</StatusLabel>
+        </StatusStep>
+      ))}
+    </StatusRow>
+    <MapArt viewBox="0 0 260 80" preserveAspectRatio="none">
+      <rect x="0" y="0" width="260" height="80" rx="10" fill={theme.color.lightBlue} />
+      <path
+        d="M28 60 C 70 20, 150 78, 220 22"
+        fill="none"
+        stroke={theme.color.accent}
+        strokeWidth="2.5"
+        strokeDasharray="1 8"
+        strokeLinecap="round"
+      />
+      <circle cx="28" cy="60" r="7" fill={theme.color.accent} stroke="#ffffff" strokeWidth="2" />
+      <path
+        d="M220 8 c8 0 14 6 14 14 c0 10 -14 22 -14 22 s-14 -12 -14 -22 c0 -8 6 -14 14 -14 Z"
+        fill={theme.color.orange}
+      />
+      <circle cx="220" cy="22" r="4.5" fill="#ffffff" />
+    </MapArt>
+  </TrackerWrap>
+);
+
+// ----- Card 3: 0% commission -----
+const CommissionArt = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const BigZero = styled.div`
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  font-size: 76px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: ${({ theme }) => theme.color.accent};
+`;
+
+const PercentSign = styled.span`
+  font-size: 34px;
+  font-weight: 800;
+  margin-top: 6px;
+`;
+
+const RupeeBadge = styled.div`
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2.5px solid ${({ theme }) => theme.color.accent};
+  color: ${({ theme }) => theme.color.accent};
+  box-shadow: ${({ theme }) => theme.shadow.card};
+`;
+
+const SparkleGroup = styled.svg`
+  position: absolute;
+  top: 8px;
+  right: 26px;
+  width: 30px;
+  height: 30px;
+`;
+
+const CommissionIllustration = ({ theme }) => (
+  <CommissionArt aria-hidden="true">
+    <Skyline tint={theme.color.lightBlue} />
+    <BigZero>
+      0<PercentSign>%</PercentSign>
+      <RupeeBadge>
+        <IndianRupee size={20} strokeWidth={2.6} />
+      </RupeeBadge>
+      <SparkleGroup viewBox="0 0 30 30">
+        <path d="M4 18 L10 12" stroke={theme.color.statsGreen} strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M14 6 L16 12" stroke={theme.color.statsGreen} strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M22 10 L26 14" stroke={theme.color.statsGreen} strokeWidth="2.5" strokeLinecap="round" />
+      </SparkleGroup>
+    </BigZero>
+  </CommissionArt>
+);
+
+// ----- Dedicated Support strip -----
+const SupportStrip = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: ${({ theme }) => theme.space(4)};
+  max-width: 1180px;
+  margin: ${({ theme }) => theme.space(8)} auto 0;
+  padding: ${({ theme }) => theme.space(5)} ${({ theme }) => theme.space(6)};
+  background: ${({ theme }) => theme.color.lightBlue};
+  border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: 20px;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    flex-direction: row;
+    align-items: center;
+    gap: ${({ theme }) => theme.space(6)};
+  }
+`;
+
+const SupportIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  color: ${({ theme }) => theme.color.accent};
+`;
+
+const SupportText = styled.div`
+  flex: 1;
+`;
+
+const SupportTitle = styled.div`
+  font-size: 18px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.text};
+  margin-bottom: 2px;
+`;
+
+const SupportBody = styled.div`
   font-size: 14.5px;
-  line-height: 1.5;
+  color: ${({ theme }) => theme.color.textMuted};
+`;
+
+const SupportDivider = styled.div`
+  display: none;
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.tablet}) {
+    display: block;
+    align-self: stretch;
+    width: 1px;
+    background: ${({ theme }) => theme.color.border};
+  }
+`;
+
+const SupportContact = styled.div`
+  flex-shrink: 0;
+`;
+
+const SupportLabel = styled.div`
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.color.textMuted};
+  margin-bottom: 2px;
+`;
+
+const SupportPhone = styled.a`
+  display: inline-block;
+  font-size: 19px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.accent};
 `;
 
 // The client reference's light-blue "How it works" panel — a single
@@ -1095,21 +1468,24 @@ const HERO_TRUST_ITEMS = [
   },
 ];
 
-const VALUE_PROPS = [
+const WHY_CARDS = [
   {
     icon: ShieldCheck,
-    title: "Verified transporters",
+    title: "Verified Transporters",
     body: "Every transporter is ID-verified before they can list spare capacity.",
+    Illustration: VerifiedTruckIllustration,
   },
   {
     icon: MapPin,
     title: "Booking status, every step",
     body: "Follow your booking from confirmed to picked up to delivered.",
+    Illustration: BookingTrackerIllustration,
   },
   {
     icon: Gift,
-    title: "100% free — no commission",
-    body: "No platform fee, no listing fee, no hidden cut. Agree a price directly and keep every rupee of it.",
+    title: "100% Free — No Commission",
+    body: "No platform fee, no listing fee, no hidden charges.\nAgree on the price directly and keep every rupee.",
+    Illustration: CommissionIllustration,
   },
 ];
 
@@ -1154,6 +1530,7 @@ const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id 
 export const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
   const { platformName } = useBranding();
   usePageMeta({
     description: `${platformName} — ship for less, earn from empty space. Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use.`,
@@ -1433,11 +1810,11 @@ export const Home = () => {
                 />
               </Field>
               <div>
-                <ButtonRowSpacer aria-hidden="true" />
-                <Button type="submit" $size="lg" $fullWidth>
+                <ButtonLabelSpacer aria-hidden="true">Search</ButtonLabelSpacer>
+                <SearchSubmitButton type="submit" $size="lg" $fullWidth>
                   <Search size={17} strokeWidth={2.4} />
                   Search trucks
-                </Button>
+                </SearchSubmitButton>
               </div>
             </SearchFieldsRow>
           </Stack>
@@ -1458,26 +1835,45 @@ export const Home = () => {
 
       <PageContainer>
         <Section as="div" style={{ paddingTop: 0 }}>
-          <SectionHead style={{ maxWidth: 620 }}>
-            <SectionEyebrow>Why {platformName}</SectionEyebrow>
-            <SectionHeading>Built for trust, mile after mile</SectionHeading>
-            <SectionLede>
+          <WhySectionHead>
+            <WhyEyebrow>Why {platformName}</WhyEyebrow>
+            <WhyHeading>Built for trust, mile after mile</WhyHeading>
+            <WhyLede>
               Every part of the booking is verified, tracked, and free of charge — and backed up if
               something goes wrong.
-            </SectionLede>
-          </SectionHead>
-          <ValueGrid>
-            {VALUE_PROPS.map(({ icon: Icon, title, body }, i) => (
-              <ValueCard key={title} $i={i}>
-                <ValueCardDots aria-hidden="true" />
-                <ValueIcon>
-                  <Icon size={22} strokeWidth={2.2} aria-hidden="true" />
-                </ValueIcon>
-                <ValueTitle>{title}</ValueTitle>
-                <ValueBody>{body}</ValueBody>
-              </ValueCard>
+            </WhyLede>
+          </WhySectionHead>
+          <WhyGrid>
+            {WHY_CARDS.map(({ icon: Icon, title, body, Illustration }, i) => (
+              <WhyCard key={title} $i={i}>
+                <WhyCardTop>
+                  <WhyCardIcon>
+                    <Icon size={24} strokeWidth={2.2} aria-hidden="true" />
+                  </WhyCardIcon>
+                  <WhyCardTitle>{title}</WhyCardTitle>
+                  <WhyCardBody>{body}</WhyCardBody>
+                </WhyCardTop>
+                <WhyCardIllustration>
+                  <Illustration theme={theme} />
+                </WhyCardIllustration>
+              </WhyCard>
             ))}
-          </ValueGrid>
+          </WhyGrid>
+
+          <SupportStrip>
+            <SupportIcon>
+              <Headphones size={22} strokeWidth={2.2} aria-hidden="true" />
+            </SupportIcon>
+            <SupportText>
+              <SupportTitle>Dedicated Support</SupportTitle>
+              <SupportBody>Need help? Our support team is here to assist you.</SupportBody>
+            </SupportText>
+            <SupportDivider aria-hidden="true" />
+            <SupportContact>
+              <SupportLabel>Reach us anytime</SupportLabel>
+              <SupportPhone href="tel:+919876543210">+91 98765 43210</SupportPhone>
+            </SupportContact>
+          </SupportStrip>
         </Section>
       </PageContainer>
 
