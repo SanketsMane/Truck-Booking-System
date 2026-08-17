@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { normalizeRegNumber } = require("../utils/regNumber");
 
 const truckDocumentSchema = new mongoose.Schema(
   {
@@ -51,8 +52,10 @@ const truckSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      uppercase: true,
-      trim: true,
+      // A single normalizing setter (not the built-in uppercase/trim
+      // options) so "DL 01 AB 7122" and "DL01AB7122" collapse to the same
+      // stored value and the unique index actually catches the duplicate.
+      set: normalizeRegNumber,
     },
 
     truckType: {

@@ -4,6 +4,20 @@ const PlatformSetting = require("../models/platformSettingModel");
 
 const MASTER_OTP = process.env.MASTER_OTP || "123456";
 
+// Generates a registration number matching REG_NUMBER_PATTERN
+// (backend/utils/regNumber.js) — real state code + digits, not an
+// oversized Date.now()-based string, since the validator now rejects
+// anything that doesn't look like a real Indian plate. The counter (not
+// pure Date.now()/Math.random()) keeps successive calls within the same
+// test run from colliding.
+let regNumberSeq = 0;
+const uniqueRegNumber = () => {
+  regNumberSeq += 1;
+  const rto = String(1 + (regNumberSeq % 99)).padStart(2, "0");
+  const num = String(regNumberSeq % 10000).padStart(4, "0");
+  return `MH${rto}AA${num}`;
+};
+
 // A minimal-but-real PNG — just the 8-byte PNG magic number detectFileType
 // checks for. Real bytes, not a mocked content-type header, since
 // fileController.uploadFile sniffs the actual buffer, not the client's
@@ -75,7 +89,7 @@ const disableVerificationGate = async () => {
 // the caller has already gotten this transporter/truck KYC-verified.
 const postTestTrip = async (transporterAgent, overrides = {}) => {
   const truckRes = await transporterAgent.post("/trucks").send({
-    regNumber: overrides.regNumber || `MH${Date.now()}${Math.floor(Math.random() * 1000)}`,
+    regNumber: overrides.regNumber || uniqueRegNumber(),
     truckType: "Open Body",
     bodyType: "Flatbed",
     totalCapacity: overrides.totalCapacity || 20,
@@ -110,5 +124,6 @@ module.exports = {
   submitVerification,
   disableVerificationGate,
   postTestTrip,
+  uniqueRegNumber,
   MASTER_OTP,
 };

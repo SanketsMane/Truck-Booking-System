@@ -38,6 +38,7 @@ import {
 } from "../components/ui/Toolbar";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { formatTons } from "../utils/format";
+import { normalizeRegNumber, isValidRegNumber } from "../utils/regNumber";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -301,6 +302,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
     e.preventDefault();
     const nextErrors = {};
     if (!regNumber.trim()) nextErrors.regNumber = "Enter the truck's registration number";
+    else if (!isValidRegNumber(regNumber)) nextErrors.regNumber = "Enter a valid registration number (e.g. DL01AB1234)";
     if (!truckType.trim()) nextErrors.truckType = "Enter or pick a truck type";
     if (!totalCapacityAmount.tons || Number(totalCapacityAmount.tons) <= 0) nextErrors.totalCapacity = "Enter a valid capacity";
     if (!docs.rc?.fileId) nextErrors.rc = "Upload the RC to register this truck";
@@ -310,7 +312,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
     setSubmitting(true);
     try {
       const { truck } = await registerTruck({
-        regNumber: regNumber.trim(),
+        regNumber: normalizeRegNumber(regNumber),
         truckType: truckType.trim(),
         bodyType: bodyType.trim(),
         totalCapacity: Number(totalCapacityAmount.tons),
@@ -330,11 +332,11 @@ const RegisterTruckForm = ({ onRegistered }) => {
     <Card>
       <SectionTitle style={{ marginBottom: 16 }}>Register a truck</SectionTitle>
       <form onSubmit={handleSubmit}>
-        <Field label="Registration number" error={errors.regNumber}>
+        <Field label="Registration number" error={errors.regNumber} help="No spaces or hyphens needed — e.g. MH12AB1234">
           <Input
             placeholder="e.g. MH12AB1234"
             value={regNumber}
-            onChange={(e) => setRegNumber(e.target.value.toUpperCase())}
+            onChange={(e) => setRegNumber(normalizeRegNumber(e.target.value))}
           />
         </Field>
 

@@ -5,6 +5,7 @@ const {
   uploadTestFile,
   submitVerification,
   disableVerificationGate,
+  uniqueRegNumber,
 } = require("../helpers");
 
 const emailFor = (seed) => `user${seed}@trucks-extras.test`;
@@ -20,7 +21,7 @@ const newTransporter = async (seed) => {
 
 const registerTruck = async (agent, overrides = {}) => {
   const res = await agent.post("/trucks").send({
-    regNumber: overrides.regNumber || `MH${Date.now()}${Math.floor(Math.random() * 100000)}`,
+    regNumber: overrides.regNumber || uniqueRegNumber(),
     truckType: overrides.truckType || "Open Body",
     bodyType: overrides.bodyType || "Flatbed",
     totalCapacity: overrides.totalCapacity ?? 20,
@@ -57,6 +58,41 @@ describe("GET /trucks/me", () => {
     const res = await agent.get("/trucks/me");
     expect(res.status).toBe(200);
     expect(res.body.trucks).toEqual([]);
+  });
+});
+
+describe("POST /trucks — regNumber validation", () => {
+  it("rejects a plate that only differs from an existing one by spacing/hyphens", async () => {
+    const { agent } = await newTransporter(30);
+    await registerTruck(agent, { regNumber: "MH01AB1234" });
+
+    const res = await agent.post("/trucks").send({
+      regNumber: "MH 01-AB 1234",
+      truckType: "Open Body",
+      bodyType: "Flatbed",
+      totalCapacity: 20,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.success).toBe(false);
+    expect(res.body.msg).toMatch(/already listed/i);
+  });
+
+  it("stores the plate normalized regardless of how it was typed", async () => {
+    const { agent } = await newTransporter(31);
+    const truck = await registerTruck(agent, { regNumber: "mh 02 ab-1234" });
+    expect(truck.regNumber).toBe("MH02AB1234");
+  });
+
+  it("rejects a malformed registration number", async () => {
+    const { agent } = await newTransporter(32);
+    const res = await agent.post("/trucks").send({
+      regNumber: "NOTAPLATE",
+      truckType: "Open Body",
+      bodyType: "Flatbed",
+      totalCapacity: 20,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
   });
 });
 

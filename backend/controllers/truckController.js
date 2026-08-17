@@ -14,14 +14,14 @@ const {
 
 const registerTruck = async (req, res) => {
   try {
-    const { error } = registerTruckValidation.validate(req.body);
+    const { error, value } = registerTruckValidation.validate(req.body);
     if (error) {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
 
-    const { regNumber, truckType, bodyType, totalCapacity, documents = [], photos = [] } = req.body;
+    const { regNumber, truckType, bodyType, totalCapacity, documents = [], photos = [] } = value;
 
-    const existing = await Truck.findOne({ regNumber: regNumber.toUpperCase() });
+    const existing = await Truck.findOne({ regNumber });
     if (existing) {
       return res.status(409).json({ success: false, msg: "This registration number is already listed" });
     }

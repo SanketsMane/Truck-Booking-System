@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const { normalizeRegNumber, REG_NUMBER_PATTERN } = require("../utils/regNumber");
 
 const documentItem = Joi.object({
   docType: Joi.string().valid("rc", "insurance", "permit").required(),
@@ -9,8 +10,25 @@ const photoItem = Joi.object({
   fileId: Joi.string().hex().length(24).required(),
 });
 
+// Normalizes (strips spaces/hyphens, uppercases) and format-checks in one
+// pass, so the value returned by .validate() — not just req.body — is what
+// the controller's duplicate check and the eventual Truck.create() see.
+const regNumberSchema = Joi.string()
+  .trim()
+  .required()
+  .custom((value, helpers) => {
+    const normalized = normalizeRegNumber(value);
+    if (!REG_NUMBER_PATTERN.test(normalized)) {
+      return helpers.error("regNumber.invalid");
+    }
+    return normalized;
+  })
+  .messages({
+    "regNumber.invalid": "Enter a valid vehicle registration number (e.g. DL01AB1234)",
+  });
+
 const registerTruckValidation = Joi.object({
-  regNumber: Joi.string().trim().min(4).required(),
+  regNumber: regNumberSchema,
   truckType: Joi.string().trim().required(),
   bodyType: Joi.string().trim().allow(""),
   totalCapacity: Joi.number().positive().required(),
