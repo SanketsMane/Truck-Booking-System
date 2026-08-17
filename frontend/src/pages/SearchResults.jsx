@@ -432,6 +432,11 @@ export const SearchResults = () => {
                     </Row>
                     <BadgeRow>
                       <span>Available: {formatTons(trip.availableCapacity)}</span>
+                      {trip.estimatedArrivalAt && (
+                        <span>
+                          ETA: {formatShortDate(trip.estimatedArrivalAt)}, {formatTime(trip.estimatedArrivalAt)}
+                        </span>
+                      )}
                     </BadgeRow>
                   </InfoCol>
 

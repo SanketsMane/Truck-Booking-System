@@ -10,7 +10,6 @@ import { Card, CardRow } from "../components/ui/Card";
 import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
-import { CityAutocomplete } from "../components/ui/CityAutocomplete";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
@@ -99,9 +98,18 @@ export const PostTrip = () => {
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
 
-  // Step 1 — route
-  const [fromCity, setFromCity] = useState("");
-  const [toCity, setToCity] = useState("");
+  // Step 1 — route. Same LocationAutocomplete + onResolve pattern as
+  // Home.jsx's search form (address-level UI backed by LocationIQ, but the
+  // value that actually matters for matching is the resolved city string) —
+  // previously this used the plain city-name-only CityAutocomplete, which
+  // could resolve a city to a different spelling than what a shipper's
+  // LocationIQ-backed search resolves it to (e.g. "Bengaluru" vs
+  // "Bangalore"), silently hiding trips from search. Using the same
+  // component + extraction logic on both sides keeps them consistent.
+  const [fromPoint, setFromPoint] = useState({ address: "", lat: null, lng: null });
+  const [toPoint, setToPoint] = useState({ address: "", lat: null, lng: null });
+  const [fromCityResolved, setFromCityResolved] = useState("");
+  const [toCityResolved, setToCityResolved] = useState("");
   const [departureAt, setDepartureAt] = useState("");
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState("");
   const [routeErrors, setRouteErrors] = useState({});
@@ -131,6 +139,24 @@ export const PostTrip = () => {
 
   const selectedTruck = trucks.find((t) => t._id === selectedTruckId);
   const verifiedTrucks = trucks.filter((t) => t.status === "verified");
+
+  // Falls back to the raw typed address if no suggestion was picked (LIQ
+  // down, or the user just typed a plain city name) — same fallback
+  // Home.jsx's search form uses.
+  const fromCity = (fromCityResolved || fromPoint.address).trim();
+  const toCity = (toCityResolved || toPoint.address).trim();
+
+  // Typing after picking a suggestion invalidates that pick's resolved
+  // city — see Home.jsx's identical handlers for the full reasoning.
+  const handleFromChange = (point) => {
+    setFromPoint(point);
+    setFromCityResolved("");
+  };
+
+  const handleToChange = (point) => {
+    setToPoint(point);
+    setToCityResolved("");
+  };
 
   const goToStep = (n) => {
     if (n <= maxStep) setStep(n);
@@ -243,10 +269,23 @@ export const PostTrip = () => {
             <Stack $gap={4}>
               <SectionTitle>Route &amp; timing</SectionTitle>
               <Field label="From city" error={routeErrors.fromCity}>
-                <CityAutocomplete value={fromCity} onChange={setFromCity} autoFocus />
+                <LocationAutocomplete
+                  placeholder="Pickup city or area"
+                  value={fromPoint}
+                  onChange={handleFromChange}
+                  onResolve={setFromCityResolved}
+                  showPreview={false}
+                  autoFocus
+                />
               </Field>
               <Field label="To city" error={routeErrors.toCity}>
-                <CityAutocomplete value={toCity} onChange={setToCity} />
+                <LocationAutocomplete
+                  placeholder="Drop city or area"
+                  value={toPoint}
+                  onChange={handleToChange}
+                  onResolve={setToCityResolved}
+                  showPreview={false}
+                />
               </Field>
               <Field label="Departure date & time" error={routeErrors.departureAt}>
                 <Input

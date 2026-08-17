@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
-import { Truck, ShieldCheck } from "lucide-react";
+import { Truck, ShieldCheck, Clock3 } from "lucide-react";
 import { getTrip } from "../api/trips";
 import { createBooking } from "../api/bookings";
 import { BASE_URL } from "../api/client";
@@ -122,6 +122,24 @@ const TimelineContent = styled.div`
   padding-bottom: ${({ theme }) => theme.space(4)};
   flex: 1;
   min-width: 0;
+`;
+
+// Departure/ETA called out in the route timeline itself — previously only
+// a plain Muted line in the page header, easy to miss next to the truck
+// type/reg-number line right below it. A shipper deciding between trips
+// needs arrival time to actually be visible, not just present in the data.
+const TimelineTime = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.color.accentStrong};
+
+  svg {
+    flex-shrink: 0;
+  }
 `;
 
 const StatusNotice = {
@@ -266,7 +284,6 @@ export const TripDetail = () => {
                 <StatusBadge status={trip.status} />
               </Row>
               <Muted>Departs {formatDateTime(trip.departureAt)}</Muted>
-              {trip.estimatedArrivalAt && <Muted>Est. arrival {formatDateTime(trip.estimatedArrivalAt)}</Muted>}
               <Muted>
                 {trip.truck?.truckType}
                 {trip.truck?.bodyType ? ` · ${trip.truck.bodyType}` : ""}
@@ -309,6 +326,10 @@ export const TripDetail = () => {
                 <TimelineContent>
                   <Muted>Pickup point</Muted>
                   <div>{normalizePoint(trip.pickupPoint).address}</div>
+                  <TimelineTime>
+                    <Clock3 size={13} strokeWidth={2.4} />
+                    Departs {formatDateTime(trip.departureAt)}
+                  </TimelineTime>
                 </TimelineContent>
               </TimelineRow>
               <TimelineRow>
@@ -318,6 +339,12 @@ export const TripDetail = () => {
                 <TimelineContent style={{ paddingBottom: 0 }}>
                   <Muted>Drop point</Muted>
                   <div>{normalizePoint(trip.dropPoint).address}</div>
+                  {trip.estimatedArrivalAt && (
+                    <TimelineTime>
+                      <Clock3 size={13} strokeWidth={2.4} />
+                      Est. arrival {formatDateTime(trip.estimatedArrivalAt)}
+                    </TimelineTime>
+                  )}
                 </TimelineContent>
               </TimelineRow>
             </RouteTimeline>
