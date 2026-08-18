@@ -28,6 +28,7 @@ describe("platform branding", () => {
       faviconUrl: "",
       contactEmail: "",
       contactMobile: "",
+      kycSupportWhatsapp: "",
       facebookUrl: "",
       instagramUrl: "",
       linkedinUrl: "",
@@ -60,6 +61,11 @@ describe("platform branding", () => {
       .send({ platformName: "Acme Freight", contactMobile: "12345" });
     expect(badMobile.status).toBe(400);
 
+    const badWhatsapp = await agent
+      .put("/admin/settings/branding")
+      .send({ platformName: "Acme Freight", kycSupportWhatsapp: "not-a-number" });
+    expect(badWhatsapp.status).toBe(400);
+
     const badSocialUrl = await agent
       .put("/admin/settings/branding")
       .send({ platformName: "Acme Freight", facebookUrl: "not-a-url" });
@@ -88,6 +94,20 @@ describe("platform branding", () => {
     expect(publicRead.body.branding.youtubeUrl).toBe("");
   });
 
+  it("PUT /admin/settings/branding — saves kycSupportWhatsapp, and GET /meta/branding reflects it publicly", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(8), name: "Admin" });
+    await makeAdmin(user, "full");
+
+    const res = await agent
+      .put("/admin/settings/branding")
+      .send({ platformName: "Acme Freight", kycSupportWhatsapp: "9876543210" });
+    expect(res.status).toBe(200);
+    expect(res.body.settings.kycSupportWhatsapp).toBe("9876543210");
+
+    const publicRead = await request(app).get("/meta/branding");
+    expect(publicRead.body.branding.kycSupportWhatsapp).toBe("9876543210");
+  });
+
   it("full-scope admin updates branding, and GET /meta/branding reflects it immediately (proves the cache refresh)", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(4), name: "Admin" });
     await makeAdmin(user, "full");
@@ -107,6 +127,7 @@ describe("platform branding", () => {
       faviconUrl: "",
       contactEmail: "hello@acmefreight.test",
       contactMobile: "9876543210",
+      kycSupportWhatsapp: "",
       facebookUrl: "",
       instagramUrl: "",
       linkedinUrl: "",

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { Clock3, MessageCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useBranding } from "../context/BrandingContext";
 import * as authApi from "../api/auth";
@@ -123,6 +124,120 @@ const Switch = styled.button`
   }
 `;
 
+// Must match backend/config/marketplaceConfig.js-style constants elsewhere
+// in this app (e.g. BookingDetail.jsx's CANCELLATION_WINDOW_HOURS) — no
+// endpoint exposes this value, and nothing server-side is actually gated on
+// it (this is a pure UI affordance, not an enforced SLA), so it's just a
+// local constant rather than a round trip to fetch one number.
+const KYC_ESCALATION_MINUTES = 15;
+
+const EscalationRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.color.textMuted};
+
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.color.textFaint};
+  }
+`;
+
+const CountdownValue = styled.span`
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: ${({ theme }) => theme.color.text};
+`;
+
+const WhatsAppLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 9px 14px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  background: #25d366;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13.5px;
+
+  &:hover {
+    background: #1ebe5b;
+  }
+`;
+
+const formatCountdown = (ms) => {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+// Live "time remaining" until `target` (a Date), ticking once a second.
+// Callers always pass a real Date — EscalationTimer only ever mounts once
+// `submittedAt` is known — so there's no nullable-target case to handle.
+const useCountdown = (target) => {
+  const [msLeft, setMsLeft] = useState(() => target.getTime() - Date.now());
+
+  useEffect(() => {
+    const tick = () => setMsLeft(target.getTime() - Date.now());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  return msLeft;
+};
+
+// Shown only while a submission is genuinely pending review — once
+// KYC_ESCALATION_MINUTES has elapsed since submission, the countdown gives
+// way to a WhatsApp link (only if an admin has actually configured one;
+// see admin/Settings.jsx's "KYC support WhatsApp number" field) so a
+// shipper/transporter stuck waiting has a real way to reach a human instead
+// of just staring at "under review" indefinitely.
+const EscalationTimer = ({ role, submittedAt }) => {
+  const { user } = useAuth();
+  const branding = useBranding();
+  // Memoized so useCountdown's effect (keyed on this reference) doesn't
+  // tear down and restart its interval on every render — submittedAt
+  // itself never changes for a given pending record, so this should only
+  // ever recompute once.
+  const escalationAt = useMemo(
+    () => new Date(new Date(submittedAt).getTime() + KYC_ESCALATION_MINUTES * 60 * 1000),
+    [submittedAt]
+  );
+  const msLeft = useCountdown(escalationAt);
+
+  if (msLeft > 0) {
+    return (
+      <EscalationRow>
+        <Clock3 size={15} strokeWidth={2.2} />
+        Under review — WhatsApp support unlocks in <CountdownValue>{formatCountdown(msLeft)}</CountdownValue>
+      </EscalationRow>
+    );
+  }
+
+  if (!branding.kycSupportWhatsapp) {
+    return (
+      <EscalationRow>
+        <Clock3 size={15} strokeWidth={2.2} />
+        Still under review — thanks for your patience.
+      </EscalationRow>
+    );
+  }
+
+  const message = `Hi, I submitted my ${ROLE_LABELS[role]} KYC on ${branding.platformName} (${user?.email || "no email on file"}) and it's still pending review after ${KYC_ESCALATION_MINUTES} minutes. Could you help?`;
+  const whatsappHref = `https://wa.me/91${branding.kycSupportWhatsapp}?text=${encodeURIComponent(message)}`;
+
+  return (
+    <WhatsAppLink href={whatsappHref} target="_blank" rel="noopener noreferrer">
+      <MessageCircle size={16} strokeWidth={2.2} />
+      Chat with us on WhatsApp
+    </WhatsAppLink>
+  );
+};
+
 const RoleUpload = ({ role, record, onSubmitted }) => {
   const [rows, setRows] = useState([{ docType: DOC_TYPE_OPTIONS[0].value, file: null }]);
   const [businessName, setBusinessName] = useState(record?.businessName || "");
@@ -183,7 +298,12 @@ const RoleUpload = ({ role, record, onSubmitted }) => {
         {status === "rejected" && record?.rejectReason && (
           <Muted>Reason for rejection: {record.rejectReason}</Muted>
         )}
-        {status === "pending" && <Muted>Your documents are being reviewed by our team.</Muted>}
+        {status === "pending" && (
+          <>
+            <Muted>Your documents are being reviewed by our team.</Muted>
+            <EscalationTimer role={role} submittedAt={record.createdAt} />
+          </>
+        )}
         {status === "verified" && <Muted>You're verified as a {role} — no action needed.</Muted>}
         {!record && (
           <Muted>Submit your documents so we can verify you as a {role}.</Muted>

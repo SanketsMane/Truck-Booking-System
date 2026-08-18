@@ -719,6 +719,7 @@ const updateBranding = async (req, res) => {
       faviconUrl: settings.faviconUrl,
       contactEmail: settings.contactEmail,
       contactMobile: settings.contactMobile,
+      kycSupportWhatsapp: settings.kycSupportWhatsapp,
       facebookUrl: settings.facebookUrl,
       instagramUrl: settings.instagramUrl,
       linkedinUrl: settings.linkedinUrl,
@@ -735,6 +736,7 @@ const updateBranding = async (req, res) => {
     settings.faviconUrl = value.faviconUrl || "";
     settings.contactEmail = value.contactEmail || "";
     settings.contactMobile = value.contactMobile || "";
+    settings.kycSupportWhatsapp = value.kycSupportWhatsapp || "";
     settings.facebookUrl = value.facebookUrl || "";
     settings.instagramUrl = value.instagramUrl || "";
     settings.linkedinUrl = value.linkedinUrl || "";
@@ -754,6 +756,7 @@ const updateBranding = async (req, res) => {
         faviconUrl: settings.faviconUrl,
         contactEmail: settings.contactEmail,
         contactMobile: settings.contactMobile,
+        kycSupportWhatsapp: settings.kycSupportWhatsapp,
         facebookUrl: settings.facebookUrl,
         instagramUrl: settings.instagramUrl,
         linkedinUrl: settings.linkedinUrl,

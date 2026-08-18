@@ -37,6 +37,7 @@ const getBranding = async (req, res) => {
         faviconUrl: settings.faviconUrl || "",
         contactEmail: settings.contactEmail || "",
         contactMobile: settings.contactMobile || "",
+        kycSupportWhatsapp: settings.kycSupportWhatsapp || "",
         facebookUrl: settings.facebookUrl || "",
         instagramUrl: settings.instagramUrl || "",
         linkedinUrl: settings.linkedinUrl || "",

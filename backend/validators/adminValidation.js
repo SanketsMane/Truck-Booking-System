@@ -42,6 +42,15 @@ const updateBrandingValidation = Joi.object({
     .pattern(MOBILE_PATTERN)
     .allow("", null)
     .messages({ "string.pattern.base": "Enter a valid 10-digit Indian mobile number" }),
+  // Surfaced to shippers/transporters once their KYC has sat pending for
+  // KYC_ESCALATION_MINUTES (see Profile.jsx) as a "chat with us" fallback —
+  // same 10-digit format as contactMobile since wa.me links need a plain
+  // number, not the trailing "+91" a user might otherwise type in.
+  kycSupportWhatsapp: Joi.string()
+    .trim()
+    .pattern(MOBILE_PATTERN)
+    .allow("", null)
+    .messages({ "string.pattern.base": "Enter a valid 10-digit Indian mobile number" }),
   // Real external links (unlike logoUrl/faviconUrl's internal /files/:id
   // paths), so these get an actual .uri() check — they're rendered as
   // <a href> in the footer, not fetched through our own API.

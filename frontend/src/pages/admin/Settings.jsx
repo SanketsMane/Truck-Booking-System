@@ -448,6 +448,7 @@ const BrandingCard = () => {
         faviconUrl: branding.faviconUrl,
         contactEmail: branding.contactEmail,
         contactMobile: branding.contactMobile,
+        kycSupportWhatsapp: branding.kycSupportWhatsapp,
         facebookUrl: branding.facebookUrl,
         instagramUrl: branding.instagramUrl,
         linkedinUrl: branding.linkedinUrl,
@@ -495,6 +496,7 @@ const BrandingCard = () => {
         faviconUrl: form.faviconUrl,
         contactEmail: form.contactEmail.trim(),
         contactMobile: form.contactMobile.trim(),
+        kycSupportWhatsapp: form.kycSupportWhatsapp.trim(),
         facebookUrl: form.facebookUrl.trim(),
         instagramUrl: form.instagramUrl.trim(),
         linkedinUrl: form.linkedinUrl.trim(),
@@ -615,6 +617,19 @@ const BrandingCard = () => {
               </Field>
             </FieldsGrid>
             <Muted>Shown in the site footer and About page.</Muted>
+            <FieldsGrid>
+              <Field label="KYC support WhatsApp number">
+                <Input
+                  value={form.kycSupportWhatsapp}
+                  onChange={(e) => setForm((f) => ({ ...f, kycSupportWhatsapp: e.target.value }))}
+                  placeholder="10-digit mobile number"
+                />
+              </Field>
+            </FieldsGrid>
+            <Muted>
+              Shown to a shipper or transporter as a "Chat on WhatsApp" fallback once their KYC has
+              been pending for 15 minutes. Leave blank to hide it.
+            </Muted>
           </Stack>
 
           <Divider />

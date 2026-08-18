@@ -13,6 +13,7 @@ const DEFAULT_BRANDING = {
   faviconUrl: "",
   contactEmail: "",
   contactMobile: "",
+  kycSupportWhatsapp: "",
   facebookUrl: "",
   instagramUrl: "",
   linkedinUrl: "",

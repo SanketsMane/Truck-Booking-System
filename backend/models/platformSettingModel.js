@@ -43,6 +43,11 @@ const platformSettingSchema = new mongoose.Schema(
     faviconUrl: { type: String, trim: true, default: "" },
     contactEmail: { type: String, trim: true, lowercase: true, default: "" },
     contactMobile: { type: String, trim: true, default: "" },
+    // Shown to a shipper/transporter as a "chat with us" fallback once
+    // their KYC has sat pending for KYC_ESCALATION_MINUTES (Profile.jsx) —
+    // plain 10-digit number, not a wa.me URL, so the frontend controls the
+    // link format (and can add a prefilled message) in one place.
+    kycSupportWhatsapp: { type: String, trim: true, default: "" },
     // Social profile URLs shown as icons in the site footer — plain external
     // links, not uploaded files, so (unlike logoUrl/faviconUrl) there's no
     // reclaim/ensurePublic step for these in updateBranding.
