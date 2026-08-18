@@ -1638,7 +1638,7 @@ export const Home = () => {
                     <path
                       d="M 258 32 C 230 70, 250 110, 235 178"
                       fill="none"
-                      stroke="#1d4ed8"
+                      stroke="#15803d"
                       strokeWidth="1.6"
                       strokeDasharray="1 8"
                       strokeLinecap="round"
@@ -1646,7 +1646,7 @@ export const Home = () => {
                     />
                   </RoutePath>
                   <RouteTo>
-                    <MapPin size={14} strokeWidth={2.6} color="#1d4ed8" fill="#1d4ed8" fillOpacity={0.15} />
+                    <MapPin size={14} strokeWidth={2.6} color="#15803d" fill="#15803d" fillOpacity={0.15} />
                     Delhi
                   </RouteTo>
                   <RouteFrom>

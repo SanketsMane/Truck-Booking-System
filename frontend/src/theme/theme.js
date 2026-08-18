@@ -1,10 +1,11 @@
 // Design tokens for Truckgee — light theme, black text on white with a
-// confident blue accent (trust/logistics-marketplace signal), card-based
-// layouts (SRS §5.7). Single theme by design: one visual language, not a
-// light/dark toggle.
+// confident green accent (trust/logistics-marketplace signal, and
+// deliberately not the blue most competitors in this space default to),
+// card-based layouts (SRS §5.7). Single theme by design: one visual
+// language, not a light/dark toggle.
 //
 // Neutrals are a cool gray scale (not the old warm/beige-tinted grays) —
-// reads crisper and less dated, and pairs cleanly with the blue accent
+// reads crisper and less dated, and pairs cleanly with the green accent
 // below.
 export const theme = {
   color: {
@@ -19,24 +20,30 @@ export const theme = {
     // 4.6:1 on white — WCAG AA.
     textFaint: "#6b7280",
 
-    // accentBright is a vivid, saturated blue (#3b82f6, ~3.1:1 on white) —
+    // accentBright is a vivid, saturated green (#22c55e, ~2.7:1 on white) —
     // for decorative-only surfaces (hero gradients, map markers,
     // illustration accents) where contrast isn't load-bearing. Any text or
     // interactive control (buttons, links, icon fills on white) must use
     // accent/accentStrong instead, which are WCAG AA-safe (4.5:1+) at the
     // same hue.
-    accentBright: "#3b82f6",
-    accent: "#1d4ed8",
-    accentStrong: "#1e40af",
-    accentSoft: "rgba(29, 78, 216, 0.1)",
+    accentBright: "#22c55e",
+    accent: "#15803d",
+    accentStrong: "#166534",
+    accentSoft: "rgba(21, 128, 61, 0.1)",
     onAccent: "#ffffff",
 
-    success: "#16a34a",
-    successSoft: "rgba(22, 163, 74, 0.12)",
+    // Moved off green (see accent above) to teal, so a "Confirmed"/
+    // "Verified" status badge no longer reads as the same color as every
+    // brand button/link on the page — the two need to stay visually
+    // distinct even though both are, loosely, "positive" colors.
+    success: "#0d9488",
+    successSoft: "rgba(13, 148, 136, 0.12)",
     warning: "#c98a04",
     warningSoft: "rgba(201, 138, 4, 0.12)",
     danger: "#dc2f3c",
     dangerSoft: "rgba(220, 47, 60, 0.1)",
+    // Unchanged — blue now reads as "informational/in-progress" rather
+    // than brand, which is the conventional meaning anyway.
     info: "#2563eb",
     infoSoft: "rgba(37, 99, 235, 0.1)",
 
@@ -159,9 +166,11 @@ export const theme = {
   // can't regress the shopper-facing product.
   admin: {
     color: {
-      primary: "#2563eb",
-      primaryDark: "#1d4ed8",
-      primarySoft: "rgba(37, 99, 235, 0.1)",
+      // Mirrors the consumer accent's green — same rebrand, same
+      // collision-avoidance reasoning (see theme.color.success above).
+      primary: "#15803d",
+      primaryDark: "#166534",
+      primarySoft: "rgba(21, 128, 61, 0.1)",
       onPrimary: "#ffffff",
 
       navy: "#0f172a",
@@ -178,8 +187,8 @@ export const theme = {
       textSecondary: "#64748b",
       textMuted: "#94a3b8",
 
-      success: "#16a34a",
-      successSoft: "rgba(22, 163, 74, 0.1)",
+      success: "#0d9488",
+      successSoft: "rgba(13, 148, 136, 0.1)",
       warning: "#d97706",
       warningSoft: "rgba(217, 119, 6, 0.1)",
       danger: "#dc2626",
