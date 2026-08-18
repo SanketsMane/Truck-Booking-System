@@ -1,5 +1,4 @@
-import { PageContainer, PageTitle, SectionTitle, Stack, Body, Muted } from "../components/ui/Layout";
-import { LegalNotice } from "../components/ui/LegalNotice";
+import { PageContainer, PageTitle, SectionTitle, Stack, Body } from "../components/ui/Layout";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useBranding } from "../context/BrandingContext";
 
@@ -19,13 +18,6 @@ export const Terms = () => {
     <PageContainer>
       <Stack $gap={5}>
         <PageTitle>Terms & Conditions</PageTitle>
-
-        <LegalNotice>
-          <strong>This is a business/product draft and must be reviewed and finalized by an Indian
-          lawyer before launch.</strong> The final terms must match {platformName}'s actual operating
-          model, registered entity, contracts, applicable laws and services. No wording is intended to
-          exclude liability that cannot legally be excluded.
-        </LegalNotice>
 
         <Stack $gap={2}>
           <SectionTitle>1. About {platformName}</SectionTitle>
@@ -397,8 +389,6 @@ export const Terms = () => {
             entity information and other notices applicable to the business.
           </Body>
         </Stack>
-
-        <Muted>Consolidated draft. Final legal drafting and review is required before public launch.</Muted>
       </Stack>
     </PageContainer>
   );

@@ -1,5 +1,4 @@
 import { PageContainer, PageTitle, SectionTitle, Stack, Body, Muted } from "../components/ui/Layout";
-import { LegalNotice } from "../components/ui/LegalNotice";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useBranding } from "../context/BrandingContext";
 
@@ -19,12 +18,6 @@ export const Privacy = () => {
     <PageContainer>
       <Stack $gap={5}>
         <PageTitle>Privacy Policy</PageTitle>
-
-        <LegalNotice>
-          <strong>Draft for legal review.</strong> This document should be finalized by an Indian
-          lawyer and aligned with {platformName}'s actual operating model, registered entity,
-          technology, services and applicable law before public launch.
-        </LegalNotice>
 
         <Stack $gap={2}>
           <SectionTitle>1. Information We May Collect</SectionTitle>
