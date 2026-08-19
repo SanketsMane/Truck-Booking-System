@@ -6,12 +6,24 @@
 
 const { getBranding } = require("../utils/brandingCache");
 
-// Mirrors frontend/src/theme/theme.js's consumer palette (blue accent, cool
-// neutrals) so transactional email reads as the same product as the app
-// rather than a leftover from the earlier orange brand.
-const BRAND_COLOR = "#1d4ed8";
-const BRAND_COLOR_STRONG = "#1e40af";
-const BRAND_SOFT = "#eef2ff";
+// Mirrors frontend/src/theme/theme.js's consumer palette (green accent,
+// cool neutrals) so transactional email reads as the same product as the
+// app rather than a leftover from an earlier rebrand.
+const BRAND_COLOR = "#15803d";
+const BRAND_COLOR_STRONG = "#166534";
+const BRAND_SOFT = "#f0fdf4";
+
+// Same pattern as emailTemplates/templates.js's own FRONTEND_URL() (not
+// imported from there — templates.js already imports FROM this file, so
+// the reverse import would be circular).
+const FRONTEND_URL = () => process.env.FRONTEND_URL || "http://localhost:5173";
+
+// frontend/public/email-logo.png — the wordmark, pre-cropped/sized for a
+// banner-height header image. Same "admin logo if set, else the bundled
+// default" rule frontend/src/components/ui/BrandLogo.jsx uses, so a
+// white-labeled deployment's own uploaded logo (admin Settings > Branding)
+// shows in email too, not just the app UI.
+const DEFAULT_LOGO_URL = () => `${FRONTEND_URL()}/email-logo.png`;
 const TEXT_COLOR = "#111318";
 const MUTED_COLOR = "#4b5563";
 const BORDER_COLOR = "#e5e7eb";
@@ -84,7 +96,7 @@ const statusPill = (label, tone = "neutral") => {
 const codeBox = (spacedCode) => `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 4px 0 20px;">
     <tr>
-      <td align="center" style="padding: 18px; background-color: ${BRAND_SOFT}; border: 1px solid rgba(29,78,216,0.18); border-radius: 10px; font-size: 30px; font-weight: 700; letter-spacing: 6px; color: ${BRAND_COLOR_STRONG}; font-variant-numeric: tabular-nums;">${escapeHtml(spacedCode)}</td>
+      <td align="center" style="padding: 18px; background-color: ${BRAND_SOFT}; border: 1px solid rgba(21,128,61,0.18); border-radius: 10px; font-size: 30px; font-weight: 700; letter-spacing: 6px; color: ${BRAND_COLOR_STRONG}; font-variant-numeric: tabular-nums;">${escapeHtml(spacedCode)}</td>
     </tr>
   </table>`;
 
@@ -104,18 +116,16 @@ const formatDateTime = (value) => {
   });
 };
 
-// The brand mark in the header — an admin-configured logo when it's a real
+// The header's logo banner — an admin-configured logo when it's a real
 // absolute URL (so it resolves from an inbox with no session/cookie), else
-// a letter mark in the accent color. A letter mark is also just a safer
-// default than an image: many clients block remote images until the user
-// opts in, so an <img>-only header would render as a blank box by default.
+// the bundled default wordmark. Both are the full brand mark (name baked
+// into the image), so this is the entire header — no separate "Truckgee"
+// text alongside it. alt carries the brand name for clients that block
+// remote images until the user opts in.
 const brandMark = (branding) => {
   const name = branding.platformName || "Truckgee";
-  const initial = escapeHtml((name.trim().charAt(0) || "T").toUpperCase());
-  if (branding.logoUrl && /^https?:\/\//i.test(branding.logoUrl)) {
-    return `<img src="${escapeHtml(branding.logoUrl)}" width="28" height="28" alt="${escapeHtml(name)}" style="display:inline-block; vertical-align:middle; border-radius:7px; object-fit:cover;" />`;
-  }
-  return `<span style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; background-color:${BRAND_COLOR}; border-radius:7px; vertical-align:middle; color:#ffffff; font-size:15px; font-weight:800;">${initial}</span>`;
+  const logoUrl = branding.logoUrl && /^https?:\/\//i.test(branding.logoUrl) ? branding.logoUrl : DEFAULT_LOGO_URL();
+  return `<img src="${escapeHtml(logoUrl)}" height="34" alt="${escapeHtml(name)}" style="display:block; height:34px; width:auto; border:0;" />`;
 };
 
 // title/preheader are plain text (never rendered as HTML); bodyHtml is
@@ -141,9 +151,8 @@ const renderEmail = ({ title, preheader = "", bodyHtml, ctaLabel, ctaUrl }) => {
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:14px; border:1px solid ${BORDER_COLOR};">
 
           <tr>
-            <td style="padding: 24px 32px; border-bottom: 1px solid ${BORDER_COLOR};">
+            <td style="padding: 22px 32px; border-bottom: 1px solid ${BORDER_COLOR};">
               ${brandMark(branding)}
-              <span style="font-size:18px; font-weight:800; color:${TEXT_COLOR}; vertical-align:middle; margin-left:10px;">${brandName}</span>
             </td>
           </tr>
 
