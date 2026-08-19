@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import styled, { keyframes, useTheme } from "styled-components";
 import {
   ArrowLeftRight,
@@ -1456,7 +1456,6 @@ const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id 
 
 export const Home = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const theme = useTheme();
   const { platformName } = useBranding();
   usePageMeta({
@@ -1512,17 +1511,8 @@ export const Home = () => {
     };
   }, []);
 
-  // Navbar's "How it Works" link (and any other same-page anchor) changes
-  // the URL to /#how-it-works, but React Router's client-side navigation
-  // doesn't trigger the browser's native scroll-to-anchor the way a full
-  // page load would — this fills that in, keyed on location.hash so it
-  // fires both on a fresh navigation here from another page and on a
-  // same-page click while already on "/".
-  useEffect(() => {
-    if (!location.hash) return;
-    const el = document.querySelector(location.hash);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [location.hash]);
+  // Same-page and cross-page hash-anchor scrolling (e.g. Navbar's "How it
+  // Works" link) is now handled app-wide by components/ScrollManager.jsx.
 
   // Search matches trips by date only (±1 day window). capacityTons carries
   // through as `minCapacity`, which SearchResults already reads to pre-fill
