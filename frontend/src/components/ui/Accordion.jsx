@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 import { ChevronDown } from "lucide-react";
 
@@ -50,31 +51,30 @@ const Answer = styled.div`
   padding: 0 ${({ theme }) => theme.space(1)} ${({ theme }) => theme.space(4)};
 `;
 
-// One FAQ entry. `id` is the stable anchor other pages deep-link to
-// (e.g. Home's FAQ teaser links to `/help#cancellation-policy`) — on
-// mount, if the URL hash matches, the item opens itself and scrolls into
-// view, so a deep link actually lands the visitor on an open answer
-// instead of a collapsed page.
+// One FAQ entry. `id` is the stable anchor other pages deep-link to (e.g.
+// the footer's "Cancellation Policy" links to `/faq#cancel-my-shipment`) —
+// when the URL hash matches this item's id, it opens itself. Scrolling to
+// it is handled separately by the app-wide ScrollManager
+// (components/ScrollManager.jsx), which works regardless of open state
+// since it targets this item's own wrapper element, not its answer panel.
 export const AccordionItem = ({ id, question, children, defaultOpen = false }) => {
-  // Lazy initializer, checked once against whatever hash was present when
-  // this page first mounted — a deep link (Home's FAQ teaser links to
-  // e.g. /help#cancellation-policy) opens straight to the right answer
-  // instead of landing on a collapsed page.
-  const [open, setOpen] = useState(
-    () => defaultOpen || (typeof window !== "undefined" && Boolean(id) && window.location.hash === `#${id}`)
-  );
+  const location = useLocation();
+  const [open, setOpen] = useState(defaultOpen);
+  // Tracks which hash we've already auto-opened for, so a same-page click
+  // to a *different* FAQ deep link (component doesn't remount, so a
+  // mount-only check would miss it) still opens the newly-targeted item,
+  // without this re-firing and re-opening one the visitor already closed.
+  const [autoOpenedFor, setAutoOpenedFor] = useState(null);
   const panelId = useId();
-  const ref = useRef(null);
 
-  useEffect(() => {
-    if (open) ref.current?.scrollIntoView({ block: "start" });
-    // Only the initial-mount scroll matters here — toggling the item open
-    // later via a click shouldn't yank the page's scroll position.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const hashMatches = Boolean(id) && location.hash === `#${id}`;
+  if (hashMatches && autoOpenedFor !== location.hash) {
+    setAutoOpenedFor(location.hash);
+    setOpen(true);
+  }
 
   return (
-    <Item id={id} ref={ref}>
+    <Item id={id}>
       <Question type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
         {question}
         <Chevron size={18} $open={open} />
