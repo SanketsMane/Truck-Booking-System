@@ -19,17 +19,28 @@ export const setUnauthorizedHandler = (fn) => {
 };
 
 const request = async (path, { method = "GET", body, isForm = false } = {}) => {
+  // Explicit Accept — the reverse proxy (see nginx config) routes a request
+  // under /bookings, /trips etc. to the FRONTEND instead of this API
+  // whenever its Accept header contains "text/html" (that's the mechanism
+  // that lets a hard refresh/deep link on an SPA route correctly re-serve
+  // index.html rather than 404). fetch() has no explicit Accept by
+  // default, and while that's normally fine, this pins it so this call can
+  // never ambiguously match that rule and get served the app shell instead
+  // of JSON — which silently parsed as text and crashed on the
+  // destructured field it expected, rather than failing loudly.
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     credentials: "include",
-    headers: isForm ? undefined : { "Content-Type": "application/json" },
+    headers: isForm
+      ? { Accept: "application/json" }
+      : { "Content-Type": "application/json", Accept: "application/json" },
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
 
   const contentType = res.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await res.json() : await res.text();
 
-  if (!res.ok) {
+  if (!res.ok || !contentType.includes("application/json")) {
     const message = (data && data.msg) || res.statusText || "Something went wrong";
     if (res.status === 401) unauthorizedHandler?.();
     throw new ApiError(message, res.status, data);

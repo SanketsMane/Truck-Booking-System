@@ -122,6 +122,12 @@ export const BookingDetail = () => {
   const loadBooking = useCallback(async () => {
     try {
       const { booking } = await getBooking(id);
+      // A resolved response with no `booking` is still a bug (api/client.js's
+      // request() throws for anything that isn't real JSON now, so this
+      // shouldn't happen) — but crashing on the next line's property read
+      // turns "the fetch went wrong somehow" into a raw, confusing "Cannot
+      // read properties of undefined" toast instead of just failing to load.
+      if (!booking) throw new Error("Booking data was empty — please try again");
       setBooking(booking);
       // Pre-check duplicate submission so we don't show a form that's
       // guaranteed to 409 — falls back to today's behavior (falsy) if the
