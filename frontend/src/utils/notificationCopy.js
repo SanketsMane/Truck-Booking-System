@@ -42,6 +42,11 @@ export const describeNotification = (n) => {
         text: `Your trip ${p.fromCity || "?"} → ${p.toCity || "?"} is now live — its truck was just verified`,
         to: p.tripId && `/trips/${p.tripId}/manage`,
       };
+    case "trip_expired":
+      return {
+        text: `Your trip ${p.fromCity || "?"} → ${p.toCity || "?"} expired — its departure time passed with no bookings`,
+        to: p.tripId && `/trips/${p.tripId}/manage`,
+      };
     case "truck_delete_request_resolved":
       return { text: `Your delete request for ${p.regNumber || "your truck"} was ${p.status}`, to: "/trucks" };
     case "truck_deleted":

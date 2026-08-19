@@ -447,7 +447,7 @@ export const ManageTrip = () => {
   }
 
   const canEdit = EDITABLE_STATUSES.includes(trip.status);
-  const tripStatusCancellable = !["completed", "cancelled"].includes(trip.status);
+  const tripStatusCancellable = !["completed", "cancelled", "expired"].includes(trip.status);
   // tripController.cancelTrip rejects cancellation outright if any booking
   // on the trip is "ongoing" (goods already picked up, in transit) — mirror
   // that here using the bookings this page already loaded, so the button

@@ -129,6 +129,7 @@ export const Trips = () => {
           <option value="ongoing">Ongoing</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="expired">Expired</option>
         </AdminSelect>
         <ToolbarSpacer />
         {hasFilters && <ClearFiltersButton onClick={clearFilters} />}

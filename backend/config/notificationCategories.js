@@ -21,6 +21,7 @@ const NOTIFICATION_CATEGORIES = {
   rating_prompt: "ratings",
   saved_search_match: "search_alerts",
   trip_departure_reminder: "reminders",
+  trip_expired: "reminders",
   dispute_raised: "disputes",
   dispute_resolved: "disputes",
 };

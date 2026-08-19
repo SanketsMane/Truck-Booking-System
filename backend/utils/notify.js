@@ -46,6 +46,11 @@ const pushCopy = (type, payload = {}) => {
         body: `Your trip ${payload.fromCity || "?"} → ${payload.toCity || "?"} is now live — its truck was just verified`,
         url: payload.tripId && `/trips/${payload.tripId}/manage`,
       };
+    case "trip_expired":
+      return {
+        body: `Your trip ${payload.fromCity || "?"} → ${payload.toCity || "?"} expired — its departure time passed with no bookings`,
+        url: payload.tripId && `/trips/${payload.tripId}/manage`,
+      };
     case "truck_delete_request_resolved":
       return { body: `Your delete request for ${payload.regNumber || "your truck"} was ${payload.status}`, url: "/trucks" };
     case "truck_deleted":

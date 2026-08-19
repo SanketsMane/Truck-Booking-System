@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 const { sendTripDepartureReminders } = require("./tripReminders");
 const { sweepStaleBookings } = require("./staleBookings");
+const { expireStaleTrips } = require("./tripExpiry");
 
 // Every 15 minutes is frequent enough that a trip departing in ~24h is
 // caught well within the reminder window without needing a per-trip timer.
@@ -32,6 +33,21 @@ const startScheduler = () => {
       }
     },
     { name: "sweep-stale-bookings", noOverlap: true }
+  );
+
+  // A trip whose departure has passed with nobody actively booked on it
+  // otherwise sits in "published"/"full" forever — see jobs/tripExpiry.js.
+  cron.schedule(
+    "*/15 * * * *",
+    async () => {
+      try {
+        const count = await expireStaleTrips();
+        if (count) console.log(`[scheduler] expired ${count} stale trip(s)`);
+      } catch (error) {
+        console.error("[scheduler] trip expiry sweep failed:", error.message);
+      }
+    },
+    { name: "expire-stale-trips", noOverlap: true }
   );
 };
 

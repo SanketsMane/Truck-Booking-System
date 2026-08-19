@@ -149,6 +149,7 @@ const StatusNotice = {
   completed: "This trip has already been completed.",
   ongoing: "This trip is already on the road and no longer accepting bookings.",
   draft: "This trip isn't published yet.",
+  expired: "This trip's departure time has already passed.",
 };
 
 export const TripDetail = () => {

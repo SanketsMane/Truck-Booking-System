@@ -72,7 +72,11 @@ const tripSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["draft", "published", "full", "ongoing", "completed", "cancelled"],
+      // "expired" — departureAt passed with no active (confirmed/ongoing)
+      // booking, set by jobs/tripExpiry.js. Distinct from "cancelled" (an
+      // explicit transporter action) so the two aren't visually/semantically
+      // conflated in StatusBadge or the transporter's trip list.
+      enum: ["draft", "published", "full", "ongoing", "completed", "cancelled", "expired"],
       default: "draft",
     },
 

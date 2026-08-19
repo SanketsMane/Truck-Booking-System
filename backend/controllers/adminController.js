@@ -472,7 +472,7 @@ const deactivateTrip = async (req, res) => {
     if (!trip) {
       return res.status(404).json({ success: false, msg: "Trip not found" });
     }
-    if (["completed", "cancelled"].includes(trip.status)) {
+    if (["completed", "cancelled", "expired"].includes(trip.status)) {
       return res.status(400).json({ success: false, msg: `Trip is already ${trip.status}` });
     }
 
