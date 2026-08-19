@@ -21,20 +21,11 @@ const smsConfigSchemas = {
   }),
 };
 
+// Resend only, by design — no SMTP/other-vendor option (see
+// utils/emailProvider.js). "console" is the internal not-yet-configured
+// fallback, not a second real choice.
 const emailConfigSchemas = {
   console: Joi.object({}),
-  smtp: Joi.object({
-    host: Joi.string().trim().required(),
-    port: Joi.number().integer().min(1).max(65535).required(),
-    secure: Joi.boolean().default(false),
-    user: Joi.string().trim().allow(""),
-    pass: Joi.string().trim().allow(""),
-    fromAddress: Joi.string().trim().email({ tlds: false }).required(),
-    fromName: Joi.string().trim().allow(""),
-  }),
-  // Resend's HTTP API (utils/emailProvider.js's sendViaResend) — an API key
-  // plus the same from-address/from-name shape SMTP already uses, so the
-  // rest of the send path (subject/html) needs no provider-specific work.
   resend: Joi.object({
     apiKey: Joi.string().trim().required(),
     fromAddress: Joi.string().trim().email({ tlds: false }).required(),
@@ -66,7 +57,7 @@ const updateSmsValidation = Joi.object({
 }, "sms config shape");
 
 const updateEmailValidation = Joi.object({
-  provider: Joi.string().valid("console", "smtp", "resend").required(),
+  provider: Joi.string().valid("console", "resend").required(),
   config: Joi.object().required(),
 }).custom((value, helpers) => {
   const schema = emailConfigSchemas[value.provider];

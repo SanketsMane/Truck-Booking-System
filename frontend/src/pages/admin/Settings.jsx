@@ -771,21 +771,13 @@ const SMS_FIELDS = {
   ],
 };
 
+// Resend only, by design — no SMTP/other-vendor option.
 const EMAIL_PROVIDERS = [
   { value: "console", label: "None — log to server console (dev only)" },
-  { value: "smtp", label: "SMTP (Gmail, SES, SendGrid, Mailgun, or any SMTP relay)" },
   { value: "resend", label: "Resend" },
 ];
 
 const EMAIL_FIELDS = {
-  smtp: [
-    { key: "host", label: "SMTP host", placeholder: "smtp.gmail.com" },
-    { key: "port", label: "Port", placeholder: "587" },
-    { key: "user", label: "Username" },
-    { key: "pass", label: "Password", secret: true },
-    { key: "fromAddress", label: "From address", placeholder: "no-reply@yourcompany.com" },
-    { key: "fromName", label: "From name (optional)", placeholder: "Your Company" },
-  ],
   resend: [
     { key: "apiKey", label: "API key", secret: true, placeholder: "re_xxxxxxxxxxxxxxxxxxxx" },
     {

@@ -1,13 +1,14 @@
-const nodemailer = require("nodemailer");
 const axios = require("axios");
 const PlatformSetting = require("../models/platformSettingModel");
 const { encrypt, decrypt } = require("./crypto");
 const { renderEmail, escapeHtml } = require("../emailTemplates/base");
 const { getBrandName } = require("./brandingCache");
 
+// Resend only, by design — no SMTP/other-vendor option. "console" remains
+// as the internal not-yet-configured fallback (see logToConsole), not a
+// second real provider choice.
 const EMAIL_PROVIDER_FIELDS = {
   console: [],
-  smtp: ["host", "port", "secure", "user", "pass", "fromAddress", "fromName"],
   resend: ["apiKey", "fromAddress", "fromName"],
 };
 
@@ -35,20 +36,7 @@ const setConfig = async (provider, config, adminId) => {
   await settings.save();
 };
 
-const buildTransport = (config) =>
-  nodemailer.createTransport({
-    host: config.host,
-    port: Number(config.port) || 587,
-    secure: Boolean(config.secure),
-    auth: config.user ? { user: config.user, pass: config.pass } : undefined,
-  });
-
 const formatFrom = (config) => (config.fromName ? `${config.fromName} <${config.fromAddress}>` : config.fromAddress);
-
-const sendViaSmtp = async ({ to, subject, html, config }) => {
-  const transport = buildTransport(config);
-  await transport.sendMail({ from: formatFrom(config), to, subject, html });
-};
 
 // Resend's HTTP API — a single POST, no SDK needed (same "call the vendor's
 // REST API directly with axios" convention smsProvider.js's Twilio/MSG91
@@ -83,15 +71,12 @@ const logToConsole = (to, subject, html) => {
   console.log(`[EMAIL:console] to=${to} subject="${subject}" -> ${plain}${suffix}`);
 };
 
-// General-purpose transactional email — works with any SMTP-capable vendor
-// (Gmail, SES, SendGrid, Mailgun, etc.) or Resend's API, configured through
-// the admin Settings page.
+// General-purpose transactional email — Resend's API, configured through
+// the admin Settings page. Falls back to console logging until it is.
 const sendEmail = async ({ to, subject, html }) => {
   const { provider, config } = await getConfig();
 
   switch (provider) {
-    case "smtp":
-      return sendViaSmtp({ to, subject, html, config });
     case "resend":
       return sendViaResend({ to, subject, html, config });
     default:
@@ -112,8 +97,6 @@ const sendTestEmail = async (to, provider, config) => {
   });
 
   switch (provider) {
-    case "smtp":
-      return sendViaSmtp({ to, subject, html, config });
     case "resend":
       return sendViaResend({ to, subject, html, config });
     default:
