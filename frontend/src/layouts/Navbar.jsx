@@ -172,23 +172,24 @@ const LanguageOption = styled.div`
 `;
 
 // The primary guest CTA — a single, direct link rather than a dropdown
-// (Login.jsx already offers "Create an account" from there), matching the
-// client reference's one navy "Login / Sign Up" button.
+// (Login.jsx already offers "Create an account" from there). Uses the
+// brand accent (green — see theme.js) rather than the hero's own navy,
+// which is a separate, deliberately-preserved landing-page-only palette.
 const AuthCta = styled(Link)`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 10px 20px;
   border-radius: ${({ theme }) => theme.radius.sm};
-  background: ${({ theme }) => theme.color.navy};
-  color: #fff;
+  background: ${({ theme }) => theme.color.accent};
+  color: ${({ theme }) => theme.color.onAccent};
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
   transition: background 0.15s ease, transform 0.15s ease;
 
   &:hover {
-    background: #0a2247;
+    background: ${({ theme }) => theme.color.accentStrong};
   }
 
   &:active {
