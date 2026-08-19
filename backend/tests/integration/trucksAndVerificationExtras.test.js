@@ -253,3 +253,34 @@ describe("GET /verification/queue", () => {
     expect(res.body.verifications.some((v) => v._id === verificationId)).toBe(true);
   });
 });
+
+describe("POST /verification — notifies admins", () => {
+  const setUpAdmin = async (seed, scope) => {
+    const { agent, user } = await signupUser(app, { email: emailFor(seed), name: `Admin ${seed}` });
+    await makeAdmin(user, scope);
+    return agent;
+  };
+
+  it("notifies a full-scope admin when a verification lands in the pending queue", async () => {
+    const fullAdminAgent = await setUpAdmin(170, "full");
+    const { agent } = await newTransporter(17);
+    await submitVerification(agent, "transporter");
+
+    const res = await fullAdminAgent.get("/notifications/me");
+    expect(res.status).toBe(200);
+    expect(res.body.notifications.some((n) => n.type === "verification_submitted")).toBe(true);
+  });
+
+  it("notifies a verification-scoped admin, but not a support-scoped one", async () => {
+    const verificationAdminAgent = await setUpAdmin(180, "verification");
+    const supportAdminAgent = await setUpAdmin(181, "support");
+    const { agent } = await newTransporter(18);
+    await submitVerification(agent, "transporter");
+
+    const verificationAdminRes = await verificationAdminAgent.get("/notifications/me");
+    expect(verificationAdminRes.body.notifications.some((n) => n.type === "verification_submitted")).toBe(true);
+
+    const supportAdminRes = await supportAdminAgent.get("/notifications/me");
+    expect(supportAdminRes.body.notifications.some((n) => n.type === "verification_submitted")).toBe(false);
+  });
+});

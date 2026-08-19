@@ -56,6 +56,11 @@ export const describeNotification = (n) => {
       };
     case "verification_status_changed":
       return { text: `Your ${p.type || ""} verification is now ${p.status}`.trim(), to: "/profile" };
+    case "verification_submitted":
+      return {
+        text: `New ${p.type || ""} verification submitted${p.submitterName ? ` by ${p.submitterName}` : ""}`.trim(),
+        to: "/admin/verification",
+      };
     case "account_status_changed":
       return { text: `Your account status changed to ${p.status}`, to: "/profile" };
     case "dispute_raised":

@@ -60,6 +60,11 @@ const pushCopy = (type, payload = {}) => {
       };
     case "verification_status_changed":
       return { body: `Your ${payload.type || ""} verification is now ${payload.status}`.trim(), url: "/profile" };
+    case "verification_submitted":
+      return {
+        body: `New ${payload.type || ""} verification submitted${payload.submitterName ? ` by ${payload.submitterName}` : ""}`.trim(),
+        url: "/admin/verification",
+      };
     case "account_status_changed":
       return { body: `Your account status changed to ${payload.status}`, url: "/profile" };
     case "dispute_raised":
@@ -111,4 +116,16 @@ const notify = async (userId, type, payload = {}) => {
   }
 };
 
-module.exports = { notify };
+// Fans notify() out to every admin who can act on the given queue —
+// "full" scope can act on anything, plus whichever scope actually owns
+// this queue (see middleWare/middleWare.js's requireAdminScope for the
+// same full-bypasses-everything rule). Deliberately not routed through
+// NOTIFICATION_CATEGORIES: an admin has no "which admin-queue events do I
+// want" preference UI, so these should always send, the same as
+// account_status_changed does for regular users.
+const notifyAdmins = async (scope, type, payload = {}) => {
+  const admins = await User.find({ isAdmin: true, adminScope: { $in: ["full", scope] } }).select("_id");
+  await Promise.all(admins.map((admin) => notify(admin._id, type, payload)));
+};
+
+module.exports = { notify, notifyAdmins };

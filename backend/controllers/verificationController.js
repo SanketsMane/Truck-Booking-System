@@ -1,6 +1,6 @@
 const Verification = require("../models/verificationModel");
 const User = require("../models/userModel");
-const { notify } = require("../utils/notify");
+const { notify, notifyAdmins } = require("../utils/notify");
 const resolveDocuments = require("../utils/resolveDocuments");
 const { logAdminAction } = require("../utils/audit");
 const emailProvider = require("../utils/emailProvider");
@@ -85,6 +85,18 @@ const submitVerification = async (req, res) => {
           .sendEmail({ to: submitter.email, subject, html })
           .catch((err) => console.error("verification status email failed:", err.message));
       }
+    } else {
+      // The common case — no automated KYC provider configured, so this
+      // sits in the manual queue until an admin reviews it. Nothing told
+      // an admin it was even there until now; the auto-reviewed branch
+      // above doesn't need this since that path already resolves the
+      // application without anyone needing to act on it.
+      const submitter = await User.findById(req.auth.id).select("name");
+      await notifyAdmins("verification", "verification_submitted", {
+        verificationId: verification._id,
+        type: verification.type,
+        submitterName: submitter?.name,
+      });
     }
 
     res.status(200).json({ success: true, msg: "Verification submitted", verification });
