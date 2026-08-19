@@ -33,6 +33,7 @@ import { Accordion, AccordionItem } from "../components/ui/Accordion";
 import { fadeInUp } from "../theme/animations";
 import { toDateInputValue } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
+import { WebsiteSchema } from "../components/WebsiteSchema";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useBranding } from "../context/BrandingContext";
@@ -1584,6 +1585,7 @@ export const Home = () => {
 
   return (
     <>
+      <WebsiteSchema />
       <HeroSection>
         <HeroGlow aria-hidden="true" />
         <HeroInner>

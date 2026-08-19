@@ -15,6 +15,7 @@ import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
 import { formatDate, formatINR, formatTons, ratingLabel } from "../utils/format";
 import { fadeInUp } from "../theme/animations";
 import { useUnitAmount } from "../hooks/useUnitAmount";
+import { usePageMeta } from "../hooks/usePageMeta";
 
 const ResultCard = styled(Card).attrs({ $padding: "0" })`
   display: block;
@@ -261,6 +262,18 @@ export const SearchResults = () => {
   const [savingAlert, setSavingAlert] = useState(false);
 
   const hasQuery = Boolean(fromCity && toCity && date);
+
+  usePageMeta(
+    hasQuery
+      ? {
+          title: `Truck capacity from ${fromCity} to ${toCity}`,
+          description: `Compare available truck capacity from ${fromCity} to ${toCity} on Truckgee — matched by route, zero commission, direct booking.`,
+        }
+      : {
+          title: "Search trucks",
+          description: "Search for available truck capacity by route and date on Truckgee — zero commission, direct booking.",
+        }
+  );
 
   useEffect(() => {
     if (!hasQuery) return;

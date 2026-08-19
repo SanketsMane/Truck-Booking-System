@@ -2,6 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Google's crawler reads /favicon.ico from the domain root independent
+         of these <link> tags, and falls back to a generic globe icon in
+         search results if it's missing — keep this even though every
+         browser also has an SVG/PNG option below. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -19,7 +26,7 @@
     <meta property="og:description" content="Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use." />
     <meta property="og:url" content="https://truckgee.com/" />
     <meta property="og:image" content="https://truckgee.com/icons/icon-512.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Truckgee — Ship for less. Earn from empty space." />
     <meta name="twitter:description" content="Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use." />
     <meta name="twitter:image" content="https://truckgee.com/icons/icon-512.png" />
