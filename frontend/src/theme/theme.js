@@ -67,6 +67,7 @@ export const theme = {
   status: {
     // Booking / trip / verification status -> semantic color key
     pending: "warning",
+    draft: "warning",
     published: "info",
     confirmed: "success",
     verified: "success",

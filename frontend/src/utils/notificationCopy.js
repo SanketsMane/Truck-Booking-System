@@ -37,6 +37,11 @@ export const describeNotification = (n) => {
       };
     case "truck_status_changed":
       return { text: `Truck ${p.regNumber || ""} is now ${p.status}`.trim(), to: "/trucks" };
+    case "trip_auto_published":
+      return {
+        text: `Your trip ${p.fromCity || "?"} → ${p.toCity || "?"} is now live — its truck was just verified`,
+        to: p.tripId && `/trips/${p.tripId}/manage`,
+      };
     case "truck_delete_request_resolved":
       return { text: `Your delete request for ${p.regNumber || "your truck"} was ${p.status}`, to: "/trucks" };
     case "truck_deleted":

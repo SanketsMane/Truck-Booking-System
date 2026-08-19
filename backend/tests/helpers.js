@@ -1,5 +1,6 @@
 const request = require("supertest");
 const User = require("../models/userModel");
+const Truck = require("../models/truckModel");
 const PlatformSetting = require("../models/platformSettingModel");
 
 const MASTER_OTP = process.env.MASTER_OTP || "123456";
@@ -105,8 +106,11 @@ const disableVerificationGate = async () => {
 
 // Registers a truck and publishes a trip as `transporterAgent`, with sane
 // defaults — for tests where the trip itself is just setup, not the thing
-// under test. Requires the verification gate to be off (see above) unless
-// the caller has already gotten this transporter/truck KYC-verified.
+// under test. The truck is verified directly via the DB (bypassing the real
+// admin-review flow, same shortcut `makeAdmin` takes) — tripController.
+// postTrip now saves a trip as "draft" instead of "published" for a
+// still-pending truck, and this helper's whole point is a trip that's
+// already live and bookable, not one exercising that draft path.
 const postTestTrip = async (transporterAgent, overrides = {}) => {
   const truckRes = await transporterAgent.post("/trucks").send({
     regNumber: overrides.regNumber || uniqueRegNumber(),
@@ -118,6 +122,9 @@ const postTestTrip = async (transporterAgent, overrides = {}) => {
     throw new Error(`postTestTrip: truck registration failed: ${truckRes.body.msg}`);
   }
   const truckId = truckRes.body.truck._id;
+  if (overrides.truckStatus !== "pending") {
+    await Truck.findByIdAndUpdate(truckId, { status: overrides.truckStatus || "verified" });
+  }
 
   const departureAt = overrides.departureAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
   const tripRes = await transporterAgent.post("/trips").send({

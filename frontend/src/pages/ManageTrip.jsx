@@ -141,7 +141,7 @@ const DraftDismiss = styled.button`
   }
 `;
 
-const EDITABLE_STATUSES = ["published", "full"];
+const EDITABLE_STATUSES = ["draft", "published", "full"];
 
 // Same session-only draft pattern as PostTrip.jsx's wizard, scoped per trip
 // id so a leftover in-progress edit on one trip never leaks into another
@@ -477,6 +477,13 @@ export const ManageTrip = () => {
             </Row>
             <Muted>Departs {formatDateTime(trip.departureAt)}</Muted>
             {trip.estimatedArrivalAt && <Muted>Est. arrival {formatDateTime(trip.estimatedArrivalAt)}</Muted>}
+            {trip.status === "draft" && (
+              <Muted>
+                {trip.truck?.status === "rejected"
+                  ? "This trip is hidden from shippers — its truck's documents were rejected. Resubmit them to continue."
+                  : "This trip is hidden from shippers until its truck passes verification — it'll go live automatically."}
+              </Muted>
+            )}
           </Stack>
           <PriceTag>
             <PriceValue>{formatINR(trip.pricePerTon)}</PriceValue>

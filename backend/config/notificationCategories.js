@@ -16,6 +16,7 @@ const NOTIFICATION_CATEGORIES = {
   truck_status_changed: "verification",
   truck_delete_request_resolved: "verification",
   truck_deleted: "verification",
+  trip_auto_published: "verification",
   new_rating: "ratings",
   rating_prompt: "ratings",
   saved_search_match: "search_alerts",

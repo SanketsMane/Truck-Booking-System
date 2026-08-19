@@ -43,12 +43,18 @@ const notifyMatchingSavedSearches = async (trip) => {
   );
 };
 
-// FR-05.5 / SRS-03.3 — optionally requires the truck AND the transporter's
-// own KYC to be verified before a trip can be published (admin-configurable
-// via PlatformSetting.verificationGateEnabled, off by default). With the
-// gate off, an unverified transporter can still publish — getTrip exposes
-// the real verification status instead, so a shipper booking it can see
-// who they're dealing with and decide for themselves.
+// FR-05.5 / SRS-03.3 — optionally requires the transporter's own KYC to be
+// verified before a trip can be published (admin-configurable via
+// PlatformSetting.verificationGateEnabled, off by default). With the gate
+// off, an unverified transporter can still publish — getTrip exposes the
+// real verification status instead, so a shipper booking it can see who
+// they're dealing with and decide for themselves.
+//
+// A truck that hasn't been verified yet doesn't block trip creation at
+// all (unless it was outright rejected) — the trip is created as a draft
+// instead, and truckController.reviewTruck auto-publishes it the moment
+// the truck passes verification. Lets a transporter set up the whole trip
+// once instead of waiting on the truck review and repeating the form later.
 const postTrip = async (req, res) => {
   try {
     const { error } = postTripValidation.validate(req.body);
@@ -62,6 +68,12 @@ const postTrip = async (req, res) => {
     if (!truck) {
       return res.status(404).json({ success: false, msg: "Truck not found" });
     }
+    if (truck.status === "rejected") {
+      return res.status(400).json({
+        success: false,
+        msg: "This truck's documents were rejected — resubmit them before creating a trip on it",
+      });
+    }
     if (totalCapacity > truck.totalCapacity) {
       return res.status(400).json({
         success: false,
@@ -71,14 +83,13 @@ const postTrip = async (req, res) => {
 
     const settings = await PlatformSetting.getSettings();
     if (settings.verificationGateEnabled) {
-      if (truck.status !== "verified") {
-        return res.status(403).json({ success: false, msg: "This truck isn't verified yet" });
-      }
       const transporterKyc = await Verification.findOne({ user: req.auth.id, type: "transporter" });
       if (!transporterKyc || transporterKyc.status !== "verified") {
         return res.status(403).json({ success: false, msg: "Complete transporter verification before publishing a trip" });
       }
     }
+
+    const status = truck.status === "verified" ? "published" : "draft";
 
     const trip = await Trip.create({
       truck: truck._id,
@@ -94,12 +105,18 @@ const postTrip = async (req, res) => {
       totalCapacity,
       availableCapacity,
       pricePerTon: req.body.pricePerTon,
-      status: "published",
+      status,
     });
 
-    await notifyMatchingSavedSearches(trip);
+    if (status === "published") {
+      await notifyMatchingSavedSearches(trip);
+    }
 
-    res.status(201).json({ success: true, msg: "Trip published", trip });
+    res.status(201).json({
+      success: true,
+      msg: status === "published" ? "Trip published" : "Trip saved as a draft — it'll go live once your truck is verified",
+      trip,
+    });
   } catch (error) {
     sendServerError(res, error, "tripController");
   }
@@ -249,7 +266,7 @@ const listMyTrips = async (req, res) => {
   try {
     const filter = { transporter: req.auth.id };
     if (req.query.status) filter.status = req.query.status;
-    const trips = await Trip.find(filter).populate("truck", "regNumber truckType photos").sort({ createdAt: -1 });
+    const trips = await Trip.find(filter).populate("truck", "regNumber truckType photos status").sort({ createdAt: -1 });
     res.status(200).json({ success: true, trips });
   } catch (error) {
     sendServerError(res, error, "tripController");
@@ -269,7 +286,7 @@ const editTrip = async (req, res) => {
     if (!trip) {
       return res.status(404).json({ success: false, msg: "Trip not found" });
     }
-    if (!["published", "full"].includes(trip.status)) {
+    if (!["draft", "published", "full"].includes(trip.status)) {
       return res.status(400).json({ success: false, msg: `Trip can't be edited while ${trip.status}` });
     }
 
@@ -313,10 +330,16 @@ const editTrip = async (req, res) => {
       );
     }
 
-    const nextStatus = updated.availableCapacity > 0 ? "published" : "full";
-    if (updated.status !== nextStatus) {
-      updated.status = nextStatus;
-      await updated.save();
+    // Only toggle between published/full — a draft trip stays draft no
+    // matter what capacity/price/date edits happen to it. It only ever
+    // becomes published via truckController.reviewTruck's auto-publish,
+    // once the truck it's waiting on is actually verified.
+    if (["published", "full"].includes(updated.status)) {
+      const nextStatus = updated.availableCapacity > 0 ? "published" : "full";
+      if (updated.status !== nextStatus) {
+        updated.status = nextStatus;
+        await updated.save();
+      }
     }
 
     res.status(200).json({ success: true, msg: "Trip updated", trip: updated });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import styled from "styled-components";
-import { MapPin, Loader2, CircleCheck, X } from "lucide-react";
+import styled, { keyframes } from "styled-components";
+import { toast } from "react-toastify";
+import { MapPin, Loader2, CircleCheck, X, LocateFixed } from "lucide-react";
 import { Input } from "./Form";
 import { useOnClickOutside } from "../../hooks/useOnClickOutside";
 
@@ -21,6 +22,12 @@ const IconLeft = styled.span`
   pointer-events: none;
 `;
 
+const spin = keyframes`
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
 const IconRight = styled.span`
   position: absolute;
   top: 50%;
@@ -31,13 +38,7 @@ const IconRight = styled.span`
   pointer-events: none;
 
   svg {
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+    animation: ${spin} 0.8s linear infinite;
   }
 `;
 
@@ -117,6 +118,53 @@ const EmptyOption = styled.li`
   color: ${({ theme }) => theme.color.textFaint};
 `;
 
+// A real <button>, not a clickable <li> like Option — this is an action
+// ("do something"), not a selection from a list of results, and native
+// button semantics give it correct keyboard/screen-reader behavior for
+// free. Wrapped in a plain <li> since a <ul> only accepts <li> as a direct
+// child.
+const GeolocateRow = styled.li`
+  list-style: none;
+  padding: 0;
+`;
+
+const GeolocateButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.color.accent};
+  text-align: left;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.color.accentSoft};
+  }
+
+  &:disabled {
+    color: ${({ theme }) => theme.color.textFaint};
+    cursor: default;
+  }
+
+  svg.spin {
+    animation: ${spin} 0.8s linear infinite;
+  }
+`;
+
+const OptionsDivider = styled.li`
+  list-style: none;
+  height: 1px;
+  margin: 5px 4px;
+  background: ${({ theme }) => theme.color.border};
+`;
+
 const Preview = styled.div`
   margin-top: 8px;
   border-radius: ${({ theme }) => theme.radius.sm};
@@ -163,6 +211,58 @@ const extractCity = (result) => {
   return a.city || a.town || a.village || a.county || a.state_district || result.display_name.split(",")[0].trim();
 };
 
+// Turns a browser-reported {lat,lng} into the same shape a picked
+// suggestion has (a LocationIQ result with display_name/address), so
+// "use my current location" can feed straight into selectSuggestion-style
+// handling. Only called when a LocationIQ token is configured — GPS
+// coordinates themselves don't need one, but naming them does.
+const reverseGeocode = async (lat, lng) => {
+  const url =
+    `https://api.locationiq.com/v1/reverse?key=${LOCATIONIQ_TOKEN}&lat=${lat}&lon=${lng}` +
+    `&format=json&normalizecity=1&addressdetails=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Reverse geocoding failed");
+  const data = await res.json();
+  if (!data || !data.display_name) throw new Error("No address found for this location");
+  return data;
+};
+
+// A reverse-geocoded display_name leads with whatever's nearest the exact
+// coordinates — often a specific building/POI ("Siddharth Free Reading
+// Room & Library, Shivaji Road, Kasba Peth, Pune, ..."), which is accurate
+// but not what anyone wants silently autofilled as their pickup address.
+// Built from the structured `address` object instead (road, area, city,
+// state + pincode), skipping named-place fields entirely, this reads like
+// an address a person would actually type — "Shivaji Road, Kasba Peth,
+// Pune, Maharashtra 411011". Only used for the GPS/current-location path;
+// a suggestion the user explicitly searched for and picked by name (e.g.
+// "Hadapsar Railway Station") keeps its real display_name in
+// selectSuggestion — there the specific place name is exactly what they
+// chose, not a side effect of raw coordinates.
+const formatReverseAddress = (result) => {
+  const a = result.address || {};
+  const road = [a.house_number, a.road].filter(Boolean).join(" ");
+  const area = a.suburb || a.neighbourhood || a.quarter || a.city_district;
+  const city = a.city || a.town || a.village || a.county;
+  const stateZip = [a.state, a.postcode].filter(Boolean).join(" ");
+
+  const parts = [road, area, city, stateZip].filter(Boolean);
+  // Drops a part that's identical to the one right before it (e.g. suburb
+  // and city both resolving to "Pune") rather than repeating it.
+  const deduped = parts.filter((part, i) => part !== parts[i - 1]);
+
+  return deduped.length ? deduped.join(", ") : result.display_name;
+};
+
+// GeolocationPositionError codes (no named export on the global — the
+// constants only exist on an actual error instance) — used to give a
+// specific, actionable message instead of one generic failure toast.
+const GEO_ERROR_MESSAGES = {
+  1: "Location access was denied — enable it for this site in your browser or device settings, then try again.",
+  2: "Your device couldn't determine your location right now. Try again, or type the address instead.",
+  3: "Finding your location took too long. Try again, or type the address instead.",
+};
+
 // Address-level autocomplete for a pickup/drop point — the specific spot
 // within a city, as opposed to CityAutocomplete's city-level search. Backed
 // by LocationIQ's Autocomplete API (free tier: 5,000 requests/day, no
@@ -182,6 +282,15 @@ const extractCity = (result) => {
 // showPreview — set false to skip the static map thumbnail once a
 // suggestion is confirmed (default on; PostTrip/ManageTrip/TripDetail want
 // it, a compact marketing search bar like Home.jsx's doesn't).
+//
+// "Use my current location" is always available (a pinned first row,
+// shown on focus, above any typed-search suggestions) — it needs the
+// browser's Geolocation API only, not a LocationIQ token, so it still
+// works when GEOCODING_UNAVAILABLE. Coordinates are reverse-geocoded into
+// a real address when a token IS configured; if that lookup fails (or
+// there's no token), the field falls back to a "lat, lng" string rather
+// than blocking — exact coordinates are what actually matters for a
+// pickup point, a human-readable name is a bonus.
 export const LocationAutocomplete = ({
   id,
   value,
@@ -197,12 +306,14 @@ export const LocationAutocomplete = ({
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
   const requestIdRef = useRef(0);
   const skipNextFetch = useRef(false);
+  const geoRequestId = useRef(0);
 
   useOnClickOutside(wrapRef, () => setOpen(false));
 
@@ -263,6 +374,78 @@ export const LocationAutocomplete = ({
     onChange({ address: text, lat: null, lng: null });
   };
 
+  const getPosition = (options) =>
+    new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options));
+
+  // Browser Geolocation → (optionally) LocationIQ reverse geocoding →
+  // the same {address, lat, lng} shape a picked suggestion produces.
+  // Coordinates are the part that must succeed; naming them is a
+  // best-effort layer on top, so a reverse-geocode failure (network,
+  // rate limit, no token configured) still leaves the user with a
+  // usable, precise pickup point instead of an error dead-end.
+  const handleUseCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      toast.error("Your browser doesn't support location access — type the address instead.");
+      return;
+    }
+    // The Geolocation API silently refuses to work outside a secure
+    // context (HTTPS), except on localhost — worth a specific message
+    // rather than letting it fail as a generic POSITION_UNAVAILABLE.
+    if (!window.isSecureContext) {
+      toast.error("Location access needs a secure (HTTPS) connection.");
+      return;
+    }
+
+    const requestId = ++geoRequestId.current;
+    setGeoLoading(true);
+
+    try {
+      let position;
+      try {
+        // GPS-chip precision first — what a real phone has and what a
+        // pickup point genuinely benefits from.
+        position = await getPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+      } catch (highAccuracyError) {
+        // A device with no real GPS (most laptops/desktops, some tablets)
+        // routinely times out or fails outright asking for high-accuracy —
+        // that's not the user's fault and shouldn't be a dead end. Retry
+        // once with network-based positioning (Wi-Fi/cell), which is
+        // faster and far more broadly supported, just less precise.
+        // Skip the retry if permission was actually denied — that will
+        // fail identically the second time.
+        if (highAccuracyError.code === highAccuracyError.PERMISSION_DENIED) throw highAccuracyError;
+        position = await getPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+      }
+      if (requestId !== geoRequestId.current) return;
+
+      const { latitude, longitude } = position.coords;
+      try {
+        if (GEOCODING_UNAVAILABLE) throw new Error("no token configured");
+        const result = await reverseGeocode(latitude, longitude);
+        if (requestId !== geoRequestId.current) return;
+        skipNextFetch.current = true;
+        onChange({ address: formatReverseAddress(result), lat: latitude, lng: longitude });
+        onResolve?.(extractCity(result), result);
+      } catch {
+        if (requestId !== geoRequestId.current) return;
+        // Still hand back exact coordinates — a named address is a nice-
+        // to-have, not a requirement for a usable pickup point.
+        skipNextFetch.current = true;
+        onChange({ address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, lat: latitude, lng: longitude });
+        toast.info("Got your location, but couldn't look up its address name.");
+      }
+      // Only a successful fix (with or without a resolved address) closes
+      // the dropdown — on error it stays open so the user can immediately
+      // hit "Use my current location" again without re-focusing the field.
+      if (requestId === geoRequestId.current) setOpen(false);
+    } catch (error) {
+      if (requestId !== geoRequestId.current) return;
+      toast.error(GEO_ERROR_MESSAGES[error.code] || "Couldn't get your location — type the address instead.");
+    } finally {
+      if (requestId === geoRequestId.current) setGeoLoading(false);
+    }
+  };
+
   // Clears both halves of this field's state — the address itself and
   // whatever city onResolve last resolved it to — so a parent (e.g. Home's
   // search form) can't act on a stale resolved city after the visible
@@ -276,7 +459,15 @@ export const LocationAutocomplete = ({
   };
 
   const handleKeyDown = (e) => {
-    if (!open || suggestions.length === 0) return;
+    if (!open) return;
+    // Checked before the "no suggestions" bail-out below — the dropdown
+    // now opens on every focus (to surface "use my current location"),
+    // so Escape must still close it even when there's nothing else in it.
+    if (e.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (suggestions.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
@@ -286,8 +477,6 @@ export const LocationAutocomplete = ({
     } else if (e.key === "Enter" && activeIndex >= 0) {
       e.preventDefault();
       selectSuggestion(suggestions[activeIndex]);
-    } else if (e.key === "Escape") {
-      setOpen(false);
     }
   };
 
@@ -308,7 +497,7 @@ export const LocationAutocomplete = ({
         value={address}
         autoFocus={autoFocus}
         onChange={(e) => handleTextChange(e.target.value)}
-        onFocus={() => address.trim().length >= MIN_QUERY_LENGTH && suggestions.length > 0 && setOpen(true)}
+        onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
       />
       {loading ? (
@@ -322,27 +511,43 @@ export const LocationAutocomplete = ({
           </ClearButton>
         )
       )}
-      {open && !loading && (suggestions.length > 0 || address.trim().length >= MIN_QUERY_LENGTH) && (
+      {open && (
         <Dropdown role="listbox">
-          {suggestions.length === 0 ? (
-            <EmptyOption>No matching address — you can still use what you've typed</EmptyOption>
-          ) : (
-            suggestions.map((result, i) => {
-              const { main, secondary } = splitPlaceName(result.display_name);
-              return (
-                <Option
-                  key={result.place_id}
-                  role="option"
-                  aria-selected={i === activeIndex}
-                  $active={i === activeIndex}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => selectSuggestion(result)}
-                >
-                  <OptionMain>{main}</OptionMain>
-                  {secondary && <OptionSecondary>{secondary}</OptionSecondary>}
-                </Option>
-              );
-            })
+          <GeolocateRow>
+            <GeolocateButton
+              type="button"
+              disabled={geoLoading}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleUseCurrentLocation}
+            >
+              {geoLoading ? <Loader2 size={15} className="spin" /> : <LocateFixed size={15} />}
+              {geoLoading ? "Finding your location…" : "Use my current location"}
+            </GeolocateButton>
+          </GeolocateRow>
+          {!loading && address.trim().length >= MIN_QUERY_LENGTH && (
+            <>
+              <OptionsDivider />
+              {suggestions.length === 0 ? (
+                <EmptyOption>No matching address — you can still use what you've typed</EmptyOption>
+              ) : (
+                suggestions.map((result, i) => {
+                  const { main, secondary } = splitPlaceName(result.display_name);
+                  return (
+                    <Option
+                      key={result.place_id}
+                      role="option"
+                      aria-selected={i === activeIndex}
+                      $active={i === activeIndex}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectSuggestion(result)}
+                    >
+                      <OptionMain>{main}</OptionMain>
+                      {secondary && <OptionSecondary>{secondary}</OptionSecondary>}
+                    </Option>
+                  );
+                })
+              )}
+            </>
           )}
         </Dropdown>
       )}

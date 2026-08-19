@@ -255,6 +255,27 @@ const reviewTruck = async (req, res) => {
       reason: truck.rejectReason,
     });
 
+    // A trip created while this truck was still pending (tripController.
+    // postTrip) was saved as a draft rather than blocked — now that the
+    // truck is verified, publish it automatically so the transporter
+    // doesn't have to come back and resubmit. Skips a draft whose
+    // departure already passed while it sat in review — that one needs a
+    // human to update the date, not a silent auto-publish into the past.
+    if (truck.status === "verified") {
+      const draftTrips = await Trip.find({ truck: truck._id, status: "draft", departureAt: { $gt: new Date() } });
+      await Promise.all(
+        draftTrips.map(async (trip) => {
+          trip.status = "published";
+          await trip.save();
+          await notify(trip.transporter, "trip_auto_published", {
+            tripId: trip._id,
+            fromCity: trip.fromCity,
+            toCity: trip.toCity,
+          });
+        })
+      );
+    }
+
     res.status(200).json({ success: true, msg: "Truck reviewed", truck });
   } catch (error) {
     sendServerError(res, error, "truckController");

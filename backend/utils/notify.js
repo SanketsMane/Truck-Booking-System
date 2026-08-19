@@ -41,6 +41,11 @@ const pushCopy = (type, payload = {}) => {
       };
     case "truck_status_changed":
       return { body: `Truck ${payload.regNumber || ""} is now ${payload.status}`.trim(), url: "/trucks" };
+    case "trip_auto_published":
+      return {
+        body: `Your trip ${payload.fromCity || "?"} → ${payload.toCity || "?"} is now live — its truck was just verified`,
+        url: payload.tripId && `/trips/${payload.tripId}/manage`,
+      };
     case "truck_delete_request_resolved":
       return { body: `Your delete request for ${payload.regNumber || "your truck"} was ${payload.status}`, url: "/trucks" };
     case "truck_deleted":

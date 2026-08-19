@@ -70,7 +70,7 @@ export const ReviewList = ({ userId, title = "Reviews" }) => {
   if (!userId) return null;
 
   return (
-    <Stack $gap={3}>
+    <Stack $gap={2}>
       <SectionTitle>{title}</SectionTitle>
 
       {loading ? (
@@ -82,10 +82,10 @@ export const ReviewList = ({ userId, title = "Reviews" }) => {
           <Muted>No reviews yet.</Muted>
         </EmptyState>
       ) : (
-        <Stack $gap={2}>
+        <Stack $gap={1}>
           {reviews.map((r) => (
-            <Card key={r._id}>
-              <Stack $gap={2}>
+            <Card key={r._id} $padding="12px">
+              <Stack $gap={1}>
                 <CardRow style={{ alignItems: "flex-start" }}>
                   <Stack $gap={0}>
                     <strong>{r.rater?.name || "Anonymous"}</strong>

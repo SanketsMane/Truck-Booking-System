@@ -299,7 +299,10 @@ export const PostTrip = () => {
   };
 
   const selectedTruck = trucks.find((t) => t._id === selectedTruckId);
-  const verifiedTrucks = trucks.filter((t) => t.status === "verified");
+  // A rejected truck's documents need fixing before it can be used at
+  // all — but a still-pending one is fine to pick now: postTrip saves the
+  // trip as a draft and it auto-publishes the moment the truck is verified.
+  const selectableTrucks = trucks.filter((t) => t.status !== "rejected");
   const transporterVerification = verifications.find((v) => v.type === "transporter");
   const transporterVerified = transporterVerification?.status === "verified";
 
@@ -426,7 +429,7 @@ export const PostTrip = () => {
                 your progress here is saved, so it's still here when you come back.
               </p>
             </div>
-            <Button as={Link} to="/profile" target="_blank" rel="noopener noreferrer" $size="sm" $variant="secondary">
+            <Button as={Link} to="/profile" $size="sm" $variant="secondary">
               Verify now
             </Button>
           </VerificationNotice>
@@ -523,16 +526,16 @@ export const PostTrip = () => {
                 <EmptyState>
                   <Stack $gap={3}>
                     <p>You haven't registered a truck yet.</p>
-                    <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
+                    <Button as={Link} to="/trucks" $size="sm">
                       Register a truck
                     </Button>
                   </Stack>
                 </EmptyState>
-              ) : verifiedTrucks.length === 0 ? (
+              ) : selectableTrucks.length === 0 ? (
                 <EmptyState>
                   <Stack $gap={3}>
-                    <p>None of your trucks are verified yet. A trip can only go live once its truck is verified.</p>
-                    <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
+                    <p>All of your trucks were rejected. Resubmit their documents before creating a trip.</p>
+                    <Button as={Link} to="/trucks" $size="sm">
                       Manage my trucks
                     </Button>
                   </Stack>
@@ -540,7 +543,7 @@ export const PostTrip = () => {
               ) : (
                 <Stack $gap={3}>
                   {trucks.map((truck) => {
-                    const disabled = truck.status !== "verified";
+                    const disabled = truck.status === "rejected";
                     return (
                       <TruckOption
                         key={truck._id}
@@ -568,6 +571,12 @@ export const PostTrip = () => {
                     );
                   })}
                 </Stack>
+              )}
+              {selectedTruck?.status === "pending" && (
+                <Muted>
+                  This truck is still awaiting verification — your trip will be saved as a draft and go live
+                  automatically as soon as it's verified.
+                </Muted>
               )}
               <Row $gap={3}>
                 <Button $variant="ghost" onClick={() => setStep(0)}>
@@ -711,17 +720,24 @@ export const PostTrip = () => {
                 </CardRow>
               </Stack>
 
+              {selectedTruck?.status === "pending" && (
+                <Muted>
+                  {selectedTruck.regNumber} is still awaiting verification — this trip will be saved as a draft and
+                  go live automatically once it's verified.
+                </Muted>
+              )}
+
               {submitError && (
                 <EmptyState>
                   <Stack $gap={3}>
                     <p>{submitError}</p>
                     {truckHint && (
-                      <Button as={Link} to="/trucks" target="_blank" rel="noopener noreferrer" $size="sm">
+                      <Button as={Link} to="/trucks" $size="sm">
                         Go to my trucks
                       </Button>
                     )}
                     {kycHint && (
-                      <Button as={Link} to="/profile" target="_blank" rel="noopener noreferrer" $size="sm">
+                      <Button as={Link} to="/profile" $size="sm">
                         Complete verification
                       </Button>
                     )}
@@ -734,7 +750,13 @@ export const PostTrip = () => {
                   Back
                 </Button>
                 <Button $fullWidth onClick={handleSubmit} disabled={submitting}>
-                  {submitting ? "Publishing…" : "Publish trip"}
+                  {selectedTruck?.status === "pending"
+                    ? submitting
+                      ? "Saving…"
+                      : "Save as draft"
+                    : submitting
+                      ? "Publishing…"
+                      : "Publish trip"}
                 </Button>
               </Row>
             </Stack>

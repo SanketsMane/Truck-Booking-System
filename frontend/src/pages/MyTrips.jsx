@@ -14,6 +14,7 @@ import { formatDateTime, formatINR, formatTons } from "../utils/format";
 
 const TABS = [
   { label: "All", value: undefined },
+  { label: "Draft", value: "draft" },
   { label: "Published", value: "published" },
   { label: "Full", value: "full" },
   { label: "Ongoing", value: "ongoing" },
@@ -233,6 +234,13 @@ export const MyTrips = () => {
                               <Muted>
                                 {trip.truck.truckType}
                                 {trip.truck.regNumber ? ` · ${trip.truck.regNumber}` : ""}
+                              </Muted>
+                            )}
+                            {trip.status === "draft" && (
+                              <Muted>
+                                {trip.truck?.status === "rejected"
+                                  ? "Truck was rejected — resubmit its documents to continue"
+                                  : "Waiting on truck verification — will go live automatically"}
                               </Muted>
                             )}
                           </Stack>

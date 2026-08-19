@@ -390,7 +390,6 @@ const MobileLangRow = styled.div`
 // surfaces Support — is the honest match rather than inventing a new
 // route).
 const NAV_LINKS = [
-  { to: "/search", label: "For Shippers" },
   { to: "/trips/new", label: "For Transporters" },
   // A same-page anchor, not a distinct destination — rendered as a plain
   // Link (via the `anchor` flag below) rather than NavLink, since its
