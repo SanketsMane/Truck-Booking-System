@@ -14,7 +14,15 @@ import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
-import { formatDateTime, formatINR, formatTons, toDateTimeInputValue, normalizePoint } from "../utils/format";
+import {
+  formatDateTime,
+  formatINR,
+  formatTons,
+  toDateInputValue,
+  buildDepartureAt,
+  buildEstimatedArrivalAt,
+  normalizePoint,
+} from "../utils/format";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const HeaderTop = styled.div`
@@ -196,8 +204,8 @@ export const ManageTrip = () => {
   // the "no draft" starting point, and also what discarding a draft falls
   // back to.
   const resetEditFieldsFromTrip = (t) => {
-    setDepartureAt(toDateTimeInputValue(t.departureAt));
-    setEstimatedArrivalAt(t.estimatedArrivalAt ? toDateTimeInputValue(t.estimatedArrivalAt) : "");
+    setDepartureAt(toDateInputValue(t.departureAt));
+    setEstimatedArrivalAt(t.estimatedArrivalAt ? toDateInputValue(t.estimatedArrivalAt) : "");
     setPickupPoint(normalizePoint(t.pickupPoint));
     setDropPoint(normalizePoint(t.dropPoint));
     totalCapacityAmount.setTons(t.totalCapacity);
@@ -215,9 +223,9 @@ export const ManageTrip = () => {
           // straight into edit mode with the draft's values pre-filled,
           // same as PostTrip.jsx restoring straight into its in-progress
           // step rather than making the user re-enter edit mode to see it.
-          setDepartureAt(draft.departureAt ?? toDateTimeInputValue(trip.departureAt));
+          setDepartureAt(draft.departureAt ?? toDateInputValue(trip.departureAt));
           setEstimatedArrivalAt(
-            draft.estimatedArrivalAt ?? (trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "")
+            draft.estimatedArrivalAt ?? (trip.estimatedArrivalAt ? toDateInputValue(trip.estimatedArrivalAt) : "")
           );
           setPickupPoint(draft.pickupPoint ?? normalizePoint(trip.pickupPoint));
           setDropPoint(draft.dropPoint ?? normalizePoint(trip.dropPoint));
@@ -319,7 +327,7 @@ export const ManageTrip = () => {
     if (!price || price <= 0) errors.pricePerTon = "Enter a price per ton";
     if (!pickupPoint.address.trim()) errors.pickupPoint = "Pickup point is required";
     if (!dropPoint.address.trim()) errors.dropPoint = "Drop point is required";
-    if (!departureAt) errors.departureAt = "Pick a departure date & time";
+    if (!departureAt) errors.departureAt = "Pick a departure date";
     setEditErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -336,12 +344,15 @@ export const ManageTrip = () => {
     if (dropPoint.address.trim() !== normalizePoint(trip.dropPoint).address) {
       updates.dropPoint = { ...dropPoint, address: dropPoint.address.trim() };
     }
-    if (departureAt !== toDateTimeInputValue(trip.departureAt)) {
-      updates.departureAt = new Date(departureAt).toISOString();
+    const departureChanged = departureAt !== toDateInputValue(trip.departureAt);
+    const departureAtInstant = departureChanged ? buildDepartureAt(departureAt) : new Date(trip.departureAt);
+    if (departureChanged) {
+      updates.departureAt = departureAtInstant.toISOString();
     }
-    const origArrival = trip.estimatedArrivalAt ? toDateTimeInputValue(trip.estimatedArrivalAt) : "";
-    if (estimatedArrivalAt && estimatedArrivalAt !== origArrival) {
-      updates.estimatedArrivalAt = new Date(estimatedArrivalAt).toISOString();
+    const origArrival = trip.estimatedArrivalAt ? toDateInputValue(trip.estimatedArrivalAt) : "";
+    if (estimatedArrivalAt && (estimatedArrivalAt !== origArrival || departureChanged)) {
+      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, departureAtInstant);
+      updates.estimatedArrivalAt = arrivalAtInstant.toISOString();
     }
 
     if (Object.keys(updates).length === 0) {
@@ -575,18 +586,20 @@ export const ManageTrip = () => {
 
               <FieldGroup $first>
                 <SubHeading>Schedule</SubHeading>
-                <Field label="Departure date & time" error={editErrors.departureAt}>
+                <Field label="Departure date" error={editErrors.departureAt}>
                   <Input
-                    type="datetime-local"
+                    type="date"
                     lang="en-GB"
+                    min={toDateInputValue()}
                     value={departureAt}
                     onChange={(e) => setDepartureAt(e.target.value)}
                   />
                 </Field>
-                <Field label="Estimated arrival (optional)">
+                <Field label="Estimated arrival date (optional)">
                   <Input
-                    type="datetime-local"
+                    type="date"
                     lang="en-GB"
+                    min={departureAt || toDateInputValue()}
                     value={estimatedArrivalAt}
                     onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                   />

@@ -246,7 +246,9 @@ export const Signup = () => {
   const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
   // "idle" (editable) -> "sent" (OTP emailed, awaiting code) -> "verified"
-  // (account created+session issued by verifyOtp — see handleVerifyOtp).
+  // (code confirmed correct via checkOtp — see handleVerifyOtp). The
+  // account itself isn't created until the real "Create account" submit
+  // (handleSubmit), which is the only thing that calls authApi.verifyOtp.
   const [emailStep, setEmailStep] = useState("idle");
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
@@ -308,19 +310,12 @@ export const Signup = () => {
     }
     setVerifyingOtp(true);
     try {
-      // This is also the call that actually creates the account (with the
-      // name/mobile/roles gathered so far) and signs the browser in —
-      // there's no separate "create account" step on the backend once the
-      // OTP is verified, only setPassword below to attach the password
-      // this form additionally asks for.
-      const { user } = await authApi.verifyOtp({
-        email: email.trim(),
-        otp,
-        name: name.trim(),
-        mobile,
-        roles: roles.length ? roles : undefined,
-      });
-      setUser(user);
+      // Server-confirms the code is right WITHOUT creating the account or
+      // signing anyone in — that only happens on the real "Create account"
+      // submit below (via authApi.verifyOtp), so someone who verifies their
+      // email and then abandons the form doesn't end up with a real,
+      // logged-in-but-passwordless account nobody asked to create.
+      await authApi.checkOtp({ email: email.trim(), otp });
       setEmailStep("verified");
       toast.success("Email verified");
     } catch (error) {
@@ -361,15 +356,43 @@ export const Signup = () => {
 
     setSubmitting(true);
     try {
-      // The account and session already exist (verifyOtp above) — this
-      // just attaches the password chosen on this form. No currentPassword:
-      // a brand-new account has none yet (backend/controllers/
-      // authController.js's setPassword only requires it when one already
-      // exists).
-      await authApi.setPassword({ newPassword: password, confirmPassword });
+      // Nothing exists until this click — handleVerifyOtp only confirmed
+      // the code was right via checkOtp. This is the real call that creates
+      // the account (with the name/mobile/roles gathered so far) and signs
+      // the browser in.
+      const { user } = await authApi.verifyOtp({
+        email: email.trim(),
+        otp,
+        name: name.trim(),
+        mobile,
+        roles: roles.length ? roles : undefined,
+      });
+      setUser(user);
+
+      try {
+        // No currentPassword: the account was just created above, so it
+        // has none yet (authController.setPassword only requires one when
+        // an account already had a password).
+        await authApi.setPassword({ newPassword: password, confirmPassword });
+      } catch (passwordError) {
+        // The account is real and they're already signed in at this point
+        // (verifyOtp succeeded) — stranding them on this form would be
+        // worse than letting them into the app without a password set yet;
+        // they can set one from their profile instead.
+        toast.error(`Account created, but couldn't set your password: ${passwordError.message}. Set one from your profile.`);
+        navigate(redirectTo, { replace: true });
+        return;
+      }
+
       toast.success(`Welcome to ${platformName}`);
       navigate(redirectTo, { replace: true });
     } catch (error) {
+      // A failure here (most likely the code expiring while the rest of
+      // the form was being filled in) means the OTP is no longer usable —
+      // send them back to re-verify rather than letting them resubmit
+      // against a code the backend will keep rejecting.
+      setEmailStep("sent");
+      setOtp("");
       toast.error(error.message);
     } finally {
       setSubmitting(false);

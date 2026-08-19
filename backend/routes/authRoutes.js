@@ -7,6 +7,7 @@ const authMiddleware = require("../middleWare/middleWare");
 const { authLimiter, otpLimiter } = require("../middleWare/rateLimit");
 
 router.post("/request-otp", otpLimiter, authController.requestOtp);
+router.post("/check-otp", otpLimiter, authController.checkOtp);
 router.post("/verify-otp", otpLimiter, authController.verifyOtp);
 router.post("/logout", authMiddleware, authController.logout);
 

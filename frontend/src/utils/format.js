@@ -34,11 +34,32 @@ export const toDateInputValue = (value) => {
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 };
 
-// Value for <input type="datetime-local">, in the browser's local time.
-export const toDateTimeInputValue = (value) => {
-  const d = value ? new Date(value) : new Date();
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 16);
+// PostTrip/ManageTrip only collect a departure/arrival DATE now (no
+// time-of-day picker) — these bake in a sensible fixed time so
+// departureAt/estimatedArrivalAt still land as real, correctly-ordered
+// datetimes for the backend (the search window, the T-24h reminder, and
+// the departure-passed expiry sweep all key off the actual instant, not
+// just the calendar date).
+const DEFAULT_DEPARTURE_HOUR = 9;
+const DEFAULT_ARRIVAL_HOUR = 18;
+
+// Picking "today" for departure could otherwise land on 9am earlier today —
+// falls back to a couple of hours from now so it's always still valid.
+export const buildDepartureAt = (dateStr) => {
+  const picked = new Date(`${dateStr}T00:00:00`);
+  picked.setHours(DEFAULT_DEPARTURE_HOUR, 0, 0, 0);
+  const now = new Date();
+  return picked > now ? picked : new Date(now.getTime() + 2 * 60 * 60 * 1000);
+};
+
+// 6pm same-day is always after the 9am (or later, per the fallback above)
+// departure it's paired with — same-day short-haul arrivals just work
+// without needing to special-case "same date picked for both."
+export const buildEstimatedArrivalAt = (dateStr, departureAt) => {
+  if (!dateStr) return undefined;
+  const picked = new Date(`${dateStr}T00:00:00`);
+  picked.setHours(DEFAULT_ARRIVAL_HOUR, 0, 0, 0);
+  return picked > departureAt ? picked : new Date(departureAt.getTime() + 60 * 60 * 1000);
 };
 
 // A pickup/drop point is always {address, lat, lng} in current data, but

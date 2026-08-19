@@ -291,6 +291,84 @@ const requestOtp = async (req, res) => {
   }
 };
 
+// Shared by verifyOtp (the real, account-creating/session-issuing call) and
+// checkOtp (a read-mostly "is this code currently right?" check used by
+// Signup.jsx's inline "Verify email" step — see checkOtp's own comment for
+// why that step must NOT itself create the account). A wrong guess counts
+// as an attempt either way, so both endpoints share the same
+// attempt-counting/lockout write, not two independent budgets.
+const checkOtpCode = async (user, otp, now) => {
+  if (!user || !user.otp || !user.otp.codeHash) {
+    return { ok: false, status: 400, msg: "Request an OTP first" };
+  }
+
+  if (user.otp.lockedUntil && user.otp.lockedUntil > now) {
+    return {
+      ok: false,
+      status: 429,
+      msg: `Too many attempts. Try again after ${user.otp.lockedUntil.toISOString()}`,
+    };
+  }
+
+  if (!user.otp.expiresAt || user.otp.expiresAt < now) {
+    return { ok: false, status: 400, msg: "OTP expired — request a new one" };
+  }
+
+  // TEMPORARY: a fixed master OTP that bypasses the real code, for easier
+  // manual testing before real SMS credentials are configured. Only active
+  // when MASTER_OTP is set — remove this block (and the env var) before
+  // going live with real users.
+  const isMasterOtp = Boolean(process.env.MASTER_OTP) && otp === process.env.MASTER_OTP;
+  if (isMasterOtp) {
+    console.warn(`[MASTER_OTP] Bypassed real OTP check for ${user.email}`);
+  }
+
+  const isMatch = isMasterOtp || (await bcrypt.compare(otp, user.otp.codeHash));
+  if (!isMatch) {
+    user.otp.verifyAttempts = (user.otp.verifyAttempts || 0) + 1;
+    if (user.otp.verifyAttempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+      user.otp.lockedUntil = new Date(now.getTime() + OTP_LOCKOUT_MINUTES * 60 * 1000);
+      user.otp.verifyAttempts = 0;
+    }
+    await user.save();
+    return { ok: false, status: 400, msg: "Invalid OTP" };
+  }
+
+  return { ok: true };
+};
+
+// Confirms an OTP is currently correct WITHOUT creating an account, issuing
+// a session, or consuming/clearing the code (verifyOtp below still does all
+// of that for real) — Signup.jsx's password-based form uses this for its
+// "Verify" button so it can give the user server-confirmed proof their code
+// is right before they fill in the rest of the form, without the account
+// actually springing into existence at that click. The account itself is
+// only ever created when they submit the full form (name/mobile/password),
+// which calls the real verifyOtp immediately followed by setPassword — see
+// Signup.jsx's handleSubmit.
+const checkOtp = async (req, res) => {
+  try {
+    const { error } = verifyOtpValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const { otp } = req.body;
+    const email = req.body.email.trim().toLowerCase();
+    const now = new Date();
+
+    const user = await User.findOne({ email });
+    const result = await checkOtpCode(user, otp, now);
+    if (!result.ok) {
+      return res.status(result.status).json({ success: false, msg: result.msg });
+    }
+
+    res.status(200).json({ success: true, msg: "OTP verified" });
+  } catch (error) {
+    sendServerError(res, error, "authController");
+  }
+};
+
 // Verify OTP — completes signup for a new email, or logs in an existing one
 const verifyOtp = async (req, res) => {
   try {
@@ -304,39 +382,9 @@ const verifyOtp = async (req, res) => {
     const now = new Date();
 
     const user = await User.findOne({ email }).select("+passwordHash");
-    if (!user || !user.otp || !user.otp.codeHash) {
-      return res.status(400).json({ success: false, msg: "Request an OTP first" });
-    }
-
-    if (user.otp.lockedUntil && user.otp.lockedUntil > now) {
-      return res.status(429).json({
-        success: false,
-        msg: `Too many attempts. Try again after ${user.otp.lockedUntil.toISOString()}`,
-      });
-    }
-
-    if (!user.otp.expiresAt || user.otp.expiresAt < now) {
-      return res.status(400).json({ success: false, msg: "OTP expired — request a new one" });
-    }
-
-    // TEMPORARY: a fixed master OTP that bypasses the real code, for easier
-    // manual testing before real SMS credentials are configured. Only active
-    // when MASTER_OTP is set — remove this block (and the env var) before
-    // going live with real users.
-    const isMasterOtp = Boolean(process.env.MASTER_OTP) && otp === process.env.MASTER_OTP;
-    if (isMasterOtp) {
-      console.warn(`[MASTER_OTP] Bypassed real OTP check for ${email}`);
-    }
-
-    const isMatch = isMasterOtp || (await bcrypt.compare(otp, user.otp.codeHash));
-    if (!isMatch) {
-      user.otp.verifyAttempts = (user.otp.verifyAttempts || 0) + 1;
-      if (user.otp.verifyAttempts >= OTP_MAX_VERIFY_ATTEMPTS) {
-        user.otp.lockedUntil = new Date(now.getTime() + OTP_LOCKOUT_MINUTES * 60 * 1000);
-        user.otp.verifyAttempts = 0;
-      }
-      await user.save();
-      return res.status(400).json({ success: false, msg: "Invalid OTP" });
+    const check = await checkOtpCode(user, otp, now);
+    if (!check.ok) {
+      return res.status(check.status).json({ success: false, msg: check.msg });
     }
 
     // loginPassword already blocks a suspended/banned account at login —
@@ -730,6 +778,7 @@ const setPassword = async (req, res) => {
 
 module.exports = {
   requestOtp,
+  checkOtp,
   verifyOtp,
   addRole,
   refreshToken,

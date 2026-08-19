@@ -14,7 +14,7 @@ import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
-import { formatINR, formatTons, toDateTimeInputValue } from "../utils/format";
+import { formatINR, formatTons, toDateInputValue, buildDepartureAt, buildEstimatedArrivalAt } from "../utils/format";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const STEPS = ["Route", "Truck", "Capacity", "Review"];
@@ -340,10 +340,10 @@ export const PostTrip = () => {
     if (fromCity.trim() && toCity.trim() && fromCity.trim().toLowerCase() === toCity.trim().toLowerCase()) {
       errors.toCity = "From and to city can't be the same";
     }
-    if (!departureAt) errors.departureAt = "Pick a departure date & time";
-    else if (new Date(departureAt) <= new Date()) errors.departureAt = "Departure must be in the future";
-    if (estimatedArrivalAt && departureAt && new Date(estimatedArrivalAt) <= new Date(departureAt)) {
-      errors.estimatedArrivalAt = "Arrival must be after departure";
+    if (!departureAt) errors.departureAt = "Pick a departure date";
+    else if (departureAt < toDateInputValue()) errors.departureAt = "Departure date can't be in the past";
+    if (estimatedArrivalAt && departureAt && estimatedArrivalAt < departureAt) {
+      errors.estimatedArrivalAt = "Arrival date can't be before departure";
     }
     setRouteErrors(errors);
     return Object.keys(errors).length === 0;
@@ -371,12 +371,14 @@ export const PostTrip = () => {
     setSubmitError(null);
     setSubmitting(true);
     try {
+      const departureAtInstant = buildDepartureAt(departureAt);
+      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, departureAtInstant);
       const res = await postTrip({
         truckId: selectedTruckId,
         fromCity: fromCity.trim(),
         toCity: toCity.trim(),
-        departureAt: new Date(departureAt).toISOString(),
-        estimatedArrivalAt: estimatedArrivalAt ? new Date(estimatedArrivalAt).toISOString() : undefined,
+        departureAt: departureAtInstant.toISOString(),
+        estimatedArrivalAt: arrivalAtInstant ? arrivalAtInstant.toISOString() : undefined,
         pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
         dropPoint: { ...dropPoint, address: dropPoint.address.trim() },
         totalCapacity: Number(totalCapacityAmount.tons),
@@ -480,23 +482,24 @@ export const PostTrip = () => {
                   showPreview={false}
                 />
               </Field>
-              <Field label="Departure date & time" error={routeErrors.departureAt}>
+              <Field label="Departure date" error={routeErrors.departureAt}>
                 <Input
-                  type="datetime-local"
+                  type="date"
                   lang="en-GB"
-                  min={toDateTimeInputValue()}
+                  min={toDateInputValue()}
                   value={departureAt}
                   onChange={(e) => setDepartureAt(e.target.value)}
                 />
               </Field>
               <Field
-                label="Estimated arrival (optional)"
+                label="Estimated arrival date (optional)"
                 error={routeErrors.estimatedArrivalAt}
                 help="Leave blank if you're not sure yet"
               >
                 <Input
-                  type="datetime-local"
+                  type="date"
                   lang="en-GB"
+                  min={departureAt || toDateInputValue()}
                   value={estimatedArrivalAt}
                   onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                 />
@@ -686,12 +689,12 @@ export const PostTrip = () => {
                 </CardRow>
                 <CardRow>
                   <Muted>Departs</Muted>
-                  <span>{departureAt && new Date(departureAt).toLocaleString("en-IN")}</span>
+                  <span>{departureAt && new Date(`${departureAt}T00:00:00`).toLocaleDateString("en-IN")}</span>
                 </CardRow>
                 {estimatedArrivalAt && (
                   <CardRow>
                     <Muted>Est. arrival</Muted>
-                    <span>{new Date(estimatedArrivalAt).toLocaleString("en-IN")}</span>
+                    <span>{new Date(`${estimatedArrivalAt}T00:00:00`).toLocaleDateString("en-IN")}</span>
                   </CardRow>
                 )}
                 <CardRow>
