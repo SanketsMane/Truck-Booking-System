@@ -1516,14 +1516,26 @@ export const Home = () => {
 
   // Search matches trips by date only (±1 day window). capacityTons carries
   // through as `minCapacity`, which SearchResults already reads to pre-fill
-  // its own capacity filter.
-  const goToSearch = (from, to, whenDate, capacityTons) => {
+  // its own capacity filter. fromPoint/toPoint's lat/lng (only set when a
+  // real suggestion was picked, not just typed) carry through too, so
+  // SearchResults can also find a trip whose route merely passes near these
+  // points — not just an exact city-name match (see tripController's
+  // route-corridor search mode).
+  const goToSearch = (from, to, whenDate, capacityTons, fromPointArg, toPointArg) => {
     const params = new URLSearchParams({
       fromCity: from.trim(),
       toCity: to.trim(),
       date: whenDate.slice(0, 10),
     });
     if (capacityTons) params.set("minCapacity", capacityTons);
+    if (fromPointArg?.lat != null && fromPointArg?.lng != null) {
+      params.set("fromLat", fromPointArg.lat);
+      params.set("fromLng", fromPointArg.lng);
+    }
+    if (toPointArg?.lat != null && toPointArg?.lng != null) {
+      params.set("toLat", toPointArg.lat);
+      params.set("toLng", toPointArg.lng);
+    }
     navigate(`/search?${params}`);
   };
 
@@ -1540,7 +1552,7 @@ export const Home = () => {
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    goToSearch(fromCity, toCity, departureAt, capacityAmount.tons);
+    goToSearch(fromCity, toCity, departureAt, capacityAmount.tons, fromPoint, toPoint);
   };
 
   const handleSwap = () => {

@@ -18,6 +18,22 @@ module.exports = {
   // (tripController.searchTrips) when the caller doesn't specify radiusKm.
   SEARCH_RADIUS_KM_DEFAULT: 25,
 
+  // Route-corridor search (tripController.searchTrips, utils/routeGeo.js):
+  // a shipper's pickup/drop point counts as "on" a truck's route if it's
+  // within this many km of the truck's straight-line pickup->drop path —
+  // e.g. Pune sits ~45km off the Bangalore->Mumbai line, well inside this,
+  // so a Pune->Mumbai search still surfaces that truck. Generous enough to
+  // catch real highway detours through a city near the line, not so wide
+  // it starts matching genuinely unrelated routes.
+  ROUTE_CORRIDOR_KM: 75,
+
+  // Lets a pickup/drop point project slightly before the route's start or
+  // past its end and still count as "along" it — a truck leaving from
+  // central Bangalore can reasonably pick up from just outside the city
+  // without that point being rejected purely for landing a few km outside
+  // the exact a->b segment.
+  ROUTE_ENDPOINT_SLACK_KM: 30,
+
   // Single-region assumptions, collected here so a future second
   // region/currency is a config edit instead of a grep-and-replace across
   // smsProvider/authValidation/indiaCities.

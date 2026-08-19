@@ -12,9 +12,18 @@ import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { TimeInput } from "../components/ui/TimeInput";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
-import { formatINR, formatTons, toDateInputValue, buildDepartureAt, buildEstimatedArrivalAt } from "../utils/format";
+import {
+  formatINR,
+  formatTons,
+  toDateInputValue,
+  buildDepartureAt,
+  buildEstimatedArrivalAt,
+  DEFAULT_DEPARTURE_TIME,
+  DEFAULT_ARRIVAL_TIME,
+} from "../utils/format";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const STEPS = ["Route", "Truck", "Capacity", "Review"];
@@ -207,7 +216,9 @@ export const PostTrip = () => {
   const [fromCityResolved, setFromCityResolved] = useState(draft?.fromCityResolved ?? "");
   const [toCityResolved, setToCityResolved] = useState(draft?.toCityResolved ?? "");
   const [departureAt, setDepartureAt] = useState(draft?.departureAt ?? "");
+  const [departureTime, setDepartureTime] = useState(draft?.departureTime ?? DEFAULT_DEPARTURE_TIME);
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState(draft?.estimatedArrivalAt ?? "");
+  const [arrivalTime, setArrivalTime] = useState(draft?.arrivalTime ?? DEFAULT_ARRIVAL_TIME);
   const [routeErrors, setRouteErrors] = useState({});
 
   // Step 2 — truck
@@ -262,7 +273,9 @@ export const PostTrip = () => {
       fromCityResolved,
       toCityResolved,
       departureAt,
+      departureTime,
       estimatedArrivalAt,
+      arrivalTime,
       selectedTruckId,
       totalCapacityTons: totalCapacityAmount.tons,
       availableCapacityTons: availableCapacityAmount.tons,
@@ -284,7 +297,9 @@ export const PostTrip = () => {
     fromCityResolved,
     toCityResolved,
     departureAt,
+    departureTime,
     estimatedArrivalAt,
+    arrivalTime,
     selectedTruckId,
     totalCapacityAmount.tons,
     availableCapacityAmount.tons,
@@ -371,8 +386,8 @@ export const PostTrip = () => {
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const departureAtInstant = buildDepartureAt(departureAt);
-      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, departureAtInstant);
+      const departureAtInstant = buildDepartureAt(departureAt, departureTime);
+      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, arrivalTime, departureAtInstant);
       const res = await postTrip({
         truckId: selectedTruckId,
         fromCity: fromCity.trim(),
@@ -491,6 +506,9 @@ export const PostTrip = () => {
                   onChange={(e) => setDepartureAt(e.target.value)}
                 />
               </Field>
+              <Field label="Departure time" help="24-hour format">
+                <TimeInput value={departureTime} onChange={setDepartureTime} />
+              </Field>
               <Field
                 label="Estimated arrival date (optional)"
                 error={routeErrors.estimatedArrivalAt}
@@ -504,6 +522,11 @@ export const PostTrip = () => {
                   onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                 />
               </Field>
+              {estimatedArrivalAt && (
+                <Field label="Estimated arrival time" help="24-hour format">
+                  <TimeInput value={arrivalTime} onChange={setArrivalTime} />
+                </Field>
+              )}
               <Button
                 $fullWidth
                 onClick={() => {
@@ -689,12 +712,16 @@ export const PostTrip = () => {
                 </CardRow>
                 <CardRow>
                   <Muted>Departs</Muted>
-                  <span>{departureAt && new Date(`${departureAt}T00:00:00`).toLocaleDateString("en-IN")}</span>
+                  <span>
+                    {departureAt && new Date(`${departureAt}T00:00:00`).toLocaleDateString("en-IN")} {departureTime}
+                  </span>
                 </CardRow>
                 {estimatedArrivalAt && (
                   <CardRow>
                     <Muted>Est. arrival</Muted>
-                    <span>{new Date(`${estimatedArrivalAt}T00:00:00`).toLocaleDateString("en-IN")}</span>
+                    <span>
+                      {new Date(`${estimatedArrivalAt}T00:00:00`).toLocaleDateString("en-IN")} {arrivalTime}
+                    </span>
                   </CardRow>
                 )}
                 <CardRow>

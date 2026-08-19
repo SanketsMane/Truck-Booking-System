@@ -12,6 +12,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { TimeInput } from "../components/ui/TimeInput";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
 import {
@@ -19,8 +20,11 @@ import {
   formatINR,
   formatTons,
   toDateInputValue,
+  toTimeInputValue,
   buildDepartureAt,
   buildEstimatedArrivalAt,
+  DEFAULT_DEPARTURE_TIME,
+  DEFAULT_ARRIVAL_TIME,
   normalizePoint,
 } from "../utils/format";
 import { useUnitAmount } from "../hooks/useUnitAmount";
@@ -183,7 +187,9 @@ export const ManageTrip = () => {
 
   const [editMode, setEditMode] = useState(false);
   const [departureAt, setDepartureAt] = useState("");
+  const [departureTime, setDepartureTime] = useState(DEFAULT_DEPARTURE_TIME);
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState("");
+  const [arrivalTime, setArrivalTime] = useState(DEFAULT_ARRIVAL_TIME);
   const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
   const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
   const totalCapacityAmount = useUnitAmount();
@@ -205,7 +211,9 @@ export const ManageTrip = () => {
   // back to.
   const resetEditFieldsFromTrip = (t) => {
     setDepartureAt(toDateInputValue(t.departureAt));
+    setDepartureTime(toTimeInputValue(t.departureAt, DEFAULT_DEPARTURE_TIME));
     setEstimatedArrivalAt(t.estimatedArrivalAt ? toDateInputValue(t.estimatedArrivalAt) : "");
+    setArrivalTime(toTimeInputValue(t.estimatedArrivalAt, DEFAULT_ARRIVAL_TIME));
     setPickupPoint(normalizePoint(t.pickupPoint));
     setDropPoint(normalizePoint(t.dropPoint));
     totalCapacityAmount.setTons(t.totalCapacity);
@@ -224,9 +232,11 @@ export const ManageTrip = () => {
           // same as PostTrip.jsx restoring straight into its in-progress
           // step rather than making the user re-enter edit mode to see it.
           setDepartureAt(draft.departureAt ?? toDateInputValue(trip.departureAt));
+          setDepartureTime(draft.departureTime ?? toTimeInputValue(trip.departureAt, DEFAULT_DEPARTURE_TIME));
           setEstimatedArrivalAt(
             draft.estimatedArrivalAt ?? (trip.estimatedArrivalAt ? toDateInputValue(trip.estimatedArrivalAt) : "")
           );
+          setArrivalTime(draft.arrivalTime ?? toTimeInputValue(trip.estimatedArrivalAt, DEFAULT_ARRIVAL_TIME));
           setPickupPoint(draft.pickupPoint ?? normalizePoint(trip.pickupPoint));
           setDropPoint(draft.dropPoint ?? normalizePoint(trip.dropPoint));
           totalCapacityAmount.setTons(draft.totalCapacityTons ?? trip.totalCapacity);
@@ -291,7 +301,9 @@ export const ManageTrip = () => {
     if (!editMode) return;
     const data = {
       departureAt,
+      departureTime,
       estimatedArrivalAt,
+      arrivalTime,
       pickupPoint,
       dropPoint,
       totalCapacityTons: totalCapacityAmount.tons,
@@ -307,7 +319,9 @@ export const ManageTrip = () => {
     editMode,
     id,
     departureAt,
+    departureTime,
     estimatedArrivalAt,
+    arrivalTime,
     pickupPoint,
     dropPoint,
     totalCapacityAmount.tons,
@@ -344,14 +358,17 @@ export const ManageTrip = () => {
     if (dropPoint.address.trim() !== normalizePoint(trip.dropPoint).address) {
       updates.dropPoint = { ...dropPoint, address: dropPoint.address.trim() };
     }
-    const departureChanged = departureAt !== toDateInputValue(trip.departureAt);
-    const departureAtInstant = departureChanged ? buildDepartureAt(departureAt) : new Date(trip.departureAt);
+    const departureChanged =
+      departureAt !== toDateInputValue(trip.departureAt) ||
+      departureTime !== toTimeInputValue(trip.departureAt, DEFAULT_DEPARTURE_TIME);
+    const departureAtInstant = departureChanged ? buildDepartureAt(departureAt, departureTime) : new Date(trip.departureAt);
     if (departureChanged) {
       updates.departureAt = departureAtInstant.toISOString();
     }
     const origArrival = trip.estimatedArrivalAt ? toDateInputValue(trip.estimatedArrivalAt) : "";
-    if (estimatedArrivalAt && (estimatedArrivalAt !== origArrival || departureChanged)) {
-      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, departureAtInstant);
+    const origArrivalTime = toTimeInputValue(trip.estimatedArrivalAt, DEFAULT_ARRIVAL_TIME);
+    if (estimatedArrivalAt && (estimatedArrivalAt !== origArrival || arrivalTime !== origArrivalTime || departureChanged)) {
+      const arrivalAtInstant = buildEstimatedArrivalAt(estimatedArrivalAt, arrivalTime, departureAtInstant);
       updates.estimatedArrivalAt = arrivalAtInstant.toISOString();
     }
 
@@ -595,6 +612,9 @@ export const ManageTrip = () => {
                     onChange={(e) => setDepartureAt(e.target.value)}
                   />
                 </Field>
+                <Field label="Departure time" help="24-hour format">
+                  <TimeInput value={departureTime} onChange={setDepartureTime} />
+                </Field>
                 <Field label="Estimated arrival date (optional)">
                   <Input
                     type="date"
@@ -604,6 +624,11 @@ export const ManageTrip = () => {
                     onChange={(e) => setEstimatedArrivalAt(e.target.value)}
                   />
                 </Field>
+                {estimatedArrivalAt && (
+                  <Field label="Estimated arrival time" help="24-hour format">
+                    <TimeInput value={arrivalTime} onChange={setArrivalTime} />
+                  </Field>
+                )}
               </FieldGroup>
 
               <FieldGroup>

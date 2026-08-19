@@ -11,6 +11,10 @@ export const formatDate = (value) => {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
 
+// hour12: false throughout this file — every departure/arrival/booking
+// time is shown in 24-hour format (00:00-23:59), not 12-hour AM/PM, so a
+// transporter setting a trip's time and a shipper viewing it always see
+// the exact same unambiguous format.
 export const formatDateTime = (value) => {
   if (!value) return "—";
   const d = new Date(value);
@@ -19,9 +23,17 @@ export const formatDateTime = (value) => {
     day: "numeric",
     month: "short",
     year: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
+};
+
+export const formatTime = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
 };
 
 export const formatTons = (value) =>
@@ -34,31 +46,46 @@ export const toDateInputValue = (value) => {
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 };
 
-// PostTrip/ManageTrip only collect a departure/arrival DATE now (no
-// time-of-day picker) — these bake in a sensible fixed time so
-// departureAt/estimatedArrivalAt still land as real, correctly-ordered
-// datetimes for the backend (the search window, the T-24h reminder, and
-// the departure-passed expiry sweep all key off the actual instant, not
-// just the calendar date).
-const DEFAULT_DEPARTURE_HOUR = 9;
-const DEFAULT_ARRIVAL_HOUR = 18;
+// PostTrip/ManageTrip collect a departure/arrival DATE plus a 24-hour
+// time-of-day (<input type="time">, always "HH:MM" regardless of how a
+// browser's native picker widget renders it — the value attribute's format
+// is fixed by the HTML spec, not locale). Sensible defaults (9am/6pm) only
+// matter for pre-filling those time fields now; combining is just the two
+// values into one real instant.
+export const DEFAULT_DEPARTURE_TIME = "09:00";
+export const DEFAULT_ARRIVAL_TIME = "18:00";
 
-// Picking "today" for departure could otherwise land on 9am earlier today —
-// falls back to a couple of hours from now so it's always still valid.
-export const buildDepartureAt = (dateStr) => {
-  const picked = new Date(`${dateStr}T00:00:00`);
-  picked.setHours(DEFAULT_DEPARTURE_HOUR, 0, 0, 0);
+// Value for <input type="time"> — pulls the 24-hour "HH:MM" out of an
+// existing datetime (e.g. an already-posted trip being edited), or hands
+// back the given default when there's nothing to pull from yet.
+export const toTimeInputValue = (value, fallback = DEFAULT_DEPARTURE_TIME) => {
+  if (!value) return fallback;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return fallback;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// Pure combiner — a <input type="date"> value ("YYYY-MM-DD") and <input
+// type="time"> value ("HH:MM") into one real Date instant. No "must be in
+// the future"/"must be after X" correction here; buildDepartureAt and
+// buildEstimatedArrivalAt below each apply their own distinct version of
+// that, same as this file always has.
+const combineDateAndTime = (dateStr, timeStr, fallback) => new Date(`${dateStr}T${timeStr || fallback}:00`);
+
+// Picking "today" with an already-past time could otherwise land in the
+// past — falls back to a couple of hours from now so it's always valid.
+export const buildDepartureAt = (dateStr, timeStr) => {
+  const picked = combineDateAndTime(dateStr, timeStr, DEFAULT_DEPARTURE_TIME);
   const now = new Date();
   return picked > now ? picked : new Date(now.getTime() + 2 * 60 * 60 * 1000);
 };
 
-// 6pm same-day is always after the 9am (or later, per the fallback above)
-// departure it's paired with — same-day short-haul arrivals just work
-// without needing to special-case "same date picked for both."
-export const buildEstimatedArrivalAt = (dateStr, departureAt) => {
+// Any arrival at or before its own departure is meaningless — pushes to an
+// hour after departure instead, rather than accepting a same-instant or
+// backwards "arrival."
+export const buildEstimatedArrivalAt = (dateStr, timeStr, departureAt) => {
   if (!dateStr) return undefined;
-  const picked = new Date(`${dateStr}T00:00:00`);
-  picked.setHours(DEFAULT_ARRIVAL_HOUR, 0, 0, 0);
+  const picked = combineDateAndTime(dateStr, timeStr, DEFAULT_ARRIVAL_TIME);
   return picked > departureAt ? picked : new Date(departureAt.getTime() + 60 * 60 * 1000);
 };
 

@@ -9,7 +9,13 @@ const { markBookingCancelled } = require("../utils/bookingCancellation");
 const escapeRegex = require("../utils/escapeRegex");
 const setLocationGeo = require("../utils/setLocationGeo");
 const { getPendingHeldMap, visibleAvailable } = require("../utils/capacityHelpers");
-const { SEARCH_DATE_RANGE_DAYS, SEARCH_RADIUS_KM_DEFAULT } = require("../config/marketplaceConfig");
+const { distanceFromRoute } = require("../utils/routeGeo");
+const {
+  SEARCH_DATE_RANGE_DAYS,
+  SEARCH_RADIUS_KM_DEFAULT,
+  ROUTE_CORRIDOR_KM,
+  ROUTE_ENDPOINT_SLACK_KM,
+} = require("../config/marketplaceConfig");
 const { postTripValidation, editTripValidation, searchAlertValidation } = require("../validators/tripValidation");
 const sendServerError = require("../utils/sendServerError");
 
@@ -132,12 +138,39 @@ const postTrip = async (req, res) => {
 // SEARCH_RADIUS_KM_DEFAULT) matches trips whose pickup point falls within
 // that radius, via the 2dsphere index on pickupPoint.location. Independent
 // of city search — either mode alone is enough to satisfy the "where"
-// requirement, and both can combine to narrow further. Multi-leg/route
-// matching (a trip matching a search for part of its route) isn't
-// attempted here — that needs real waypoint data, not just an endpoint.
+// requirement, and both can combine to narrow further.
+//
+// Route-corridor mode: when the search also carries fromLat/fromLng/toLat/
+// toLng (the shipper picked a real suggestion or used "current location",
+// not just typed a bare city name), a trip whose named cities DON'T match
+// is still included if the searched pickup and drop points both fall near
+// enough to — and in the right order along — the truck's own straight-line
+// pickup->drop path (utils/routeGeo.js). This is the actual, intended
+// behavior: a truck posted as Bangalore->Mumbai should be findable by a
+// Pune->Mumbai search, since Pune sits ~45km off that route, not a
+// different route entirely. Exact-city trips are always included
+// regardless (a strict subset of what the corridor check would find
+// anyway); the corridor check only ever adds more results, never removes
+// the exact match. Each returned trip carries a `matchType` ("exact" |
+// "route" | "near") so the frontend can tell shippers when a result isn't
+// a literal door-to-door match.
 const searchTrips = async (req, res) => {
   try {
-    const { fromCity, toCity, date, nearLat, nearLng, radiusKm, minCapacity, sort = "departure", rangeDays } = req.query;
+    const {
+      fromCity,
+      toCity,
+      fromLat,
+      fromLng,
+      toLat,
+      toLng,
+      date,
+      nearLat,
+      nearLng,
+      radiusKm,
+      minCapacity,
+      sort = "departure",
+      rangeDays,
+    } = req.query;
 
     const hasCitySearch = Boolean(fromCity && toCity);
     const hasNearSearch = nearLat !== undefined && nearLng !== undefined;
@@ -165,6 +198,11 @@ const searchTrips = async (req, res) => {
     const windowDays = Number(rangeDays) || SEARCH_DATE_RANGE_DAYS;
     const windowMs = windowDays * 24 * 60 * 60 * 1000;
 
+    const fromCoord = { lat: Number(fromLat), lng: Number(fromLng) };
+    const toCoord = { lat: Number(toLat), lng: Number(toLng) };
+    const hasRouteCoords =
+      hasCitySearch && [fromCoord.lat, fromCoord.lng, toCoord.lat, toCoord.lng].every(Number.isFinite);
+
     const filter = {
       status: "published",
       availableCapacity: { $gte: Number(minCapacity) || 0 },
@@ -174,7 +212,12 @@ const searchTrips = async (req, res) => {
       },
     };
 
-    if (hasCitySearch) {
+    // Exact-city stays a DB-level filter (real index seek) whenever it's
+    // the only check being made. Once route-corridor matching is also in
+    // play, an exact-city trip is just one outcome the corridor check below
+    // re-derives from coordinates anyway — filtering to it here would wrongly
+    // exclude every corridor-only match before JS ever gets to see them.
+    if (hasCitySearch && !hasRouteCoords) {
       filter.fromCityNormalized = fromCity.trim().toLowerCase();
       filter.toCityNormalized = toCity.trim().toLowerCase();
     }
@@ -196,19 +239,56 @@ const searchTrips = async (req, res) => {
     if (sort === "price") query = query.sort({ pricePerTon: 1 });
     else if (sort === "departure") query = query.sort({ departureAt: 1 });
 
-    let trips = await query.exec();
+    const trips = await query.exec();
+
+    // Pairs each trip with why it matched, rather than mutating the
+    // Mongoose document with an unmodeled property — matchType travels
+    // alongside the doc through sort/visibility below instead.
+    let matched;
+    if (!hasCitySearch) {
+      matched = trips.map((trip) => ({ trip, matchType: "near" }));
+    } else {
+      const fromNorm = fromCity.trim().toLowerCase();
+      const toNorm = toCity.trim().toLowerCase();
+      matched = trips
+        .map((trip) => {
+          if (trip.fromCityNormalized === fromNorm && trip.toCityNormalized === toNorm) {
+            return { trip, matchType: "exact" };
+          }
+          if (!hasRouteCoords) return null;
+
+          const a = trip.pickupPoint;
+          const b = trip.dropPoint;
+          if (!(a?.lat != null && a?.lng != null && b?.lat != null && b?.lng != null)) return null;
+
+          const routeA = { lat: a.lat, lng: a.lng };
+          const routeB = { lat: b.lat, lng: b.lng };
+          const fromCheck = distanceFromRoute(routeA, routeB, fromCoord);
+          const toCheck = distanceFromRoute(routeA, routeB, toCoord);
+          const onRoute =
+            fromCheck.crossTrackKm <= ROUTE_CORRIDOR_KM &&
+            toCheck.crossTrackKm <= ROUTE_CORRIDOR_KM &&
+            fromCheck.alongTrackKm >= -ROUTE_ENDPOINT_SLACK_KM &&
+            toCheck.alongTrackKm <= fromCheck.routeLengthKm + ROUTE_ENDPOINT_SLACK_KM &&
+            toCheck.alongTrackKm > fromCheck.alongTrackKm;
+
+          return onRoute ? { trip, matchType: "route" } : null;
+        })
+        .filter(Boolean);
+    }
 
     if (sort === "rating") {
-      trips = trips.sort((a, b) => (b.transporter?.ratingAvg || 0) - (a.transporter?.ratingAvg || 0));
+      matched = matched.sort((a, b) => (b.trip.transporter?.ratingAvg || 0) - (a.trip.transporter?.ratingAvg || 0));
     }
 
     // SRS-05.1 — capacity already claimed by other shippers' pending
     // requests should be visible here, not just enforced silently when a
     // new request is submitted.
-    const heldMap = await getPendingHeldMap(trips.map((t) => t._id));
-    const tripsWithVisibility = trips.map((trip) => ({
+    const heldMap = await getPendingHeldMap(matched.map(({ trip }) => trip._id));
+    const tripsWithVisibility = matched.map(({ trip, matchType }) => ({
       ...trip.toObject(),
       visibleAvailableCapacity: visibleAvailable(trip, heldMap),
+      matchType,
     }));
 
     res.status(200).json({ success: true, trips: tripsWithVisibility, count: tripsWithVisibility.length });

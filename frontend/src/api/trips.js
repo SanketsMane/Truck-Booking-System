@@ -1,11 +1,24 @@
 import { api } from "./client";
 
-// fromCity, toCity, date are required; minCapacity, sort ("price"|"departure"|"rating"), rangeDays are optional
-export const searchTrips = ({ fromCity, toCity, date, minCapacity, sort, rangeDays }) => {
+// fromCity, toCity, date are required; minCapacity, sort ("price"|"departure"|"rating"), rangeDays are optional.
+// fromLat/fromLng/toLat/toLng are optional too — only present when the
+// shipper picked a real suggestion (or used "current location") for From/To
+// rather than just typing a bare city name. When present, the backend also
+// matches trips whose route passes near the searched points even if their
+// named cities differ (see tripController.searchTrips's route-corridor mode).
+export const searchTrips = ({ fromCity, toCity, fromLat, fromLng, toLat, toLng, date, minCapacity, sort, rangeDays }) => {
   const params = new URLSearchParams({ fromCity, toCity, date });
   if (minCapacity) params.set("minCapacity", minCapacity);
   if (sort) params.set("sort", sort);
   if (rangeDays) params.set("rangeDays", rangeDays);
+  if (fromLat != null && fromLng != null) {
+    params.set("fromLat", fromLat);
+    params.set("fromLng", fromLng);
+  }
+  if (toLat != null && toLng != null) {
+    params.set("toLat", toLat);
+    params.set("toLng", toLng);
+  }
   return api.get(`/trips/search?${params}`);
 };
 

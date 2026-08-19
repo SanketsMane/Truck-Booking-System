@@ -179,7 +179,20 @@ export const TripDetail = () => {
       .then(({ trip }) => {
         if (cancelled) return;
         setTrip(trip);
-        setPickupPoint(normalizePoint(trip.pickupPoint));
+        // A route-corridor search result (SearchResults.jsx) carries the
+        // shipper's own searched pickup point through as pickupLat/
+        // pickupLng/pickupAddress — that's what they actually want to ship
+        // from, which may be a city away from the trip's own default
+        // pickup point (that's the whole reason it matched). Falls back to
+        // the trip's default otherwise, same as before.
+        const searchedLat = Number(searchParams.get("pickupLat"));
+        const searchedLng = Number(searchParams.get("pickupLng"));
+        const searchedAddress = searchParams.get("pickupAddress");
+        if (Number.isFinite(searchedLat) && Number.isFinite(searchedLng) && searchedAddress) {
+          setPickupPoint({ address: searchedAddress, lat: searchedLat, lng: searchedLng });
+        } else {
+          setPickupPoint(normalizePoint(trip.pickupPoint));
+        }
       })
       .catch(() => {
         if (!cancelled) setTrip(null);
@@ -190,6 +203,7 @@ export const TripDetail = () => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const isOwnTrip = user && trip && String(trip.transporter?._id) === String(user.id);

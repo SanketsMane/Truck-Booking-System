@@ -12,7 +12,7 @@ import { Button } from "../components/ui/Button";
 import { Field } from "../components/ui/Form";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
-import { formatDate, formatINR, formatTons, ratingLabel } from "../utils/format";
+import { formatDate, formatINR, formatTime, formatTons, ratingLabel } from "../utils/format";
 import { fadeInUp } from "../theme/animations";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -101,6 +101,32 @@ const BadgeRow = styled.div`
   gap: 6px 14px;
   font-size: 13px;
   color: ${({ theme }) => theme.color.textMuted};
+`;
+
+// Shown for every result, not just route matches — once route-corridor
+// matching can surface a trip whose named cities differ from what was
+// searched, the shipper needs the truck's ACTUAL route visible up front,
+// not just the searched query repeated in the page title above the list.
+const RouteLine = styled.div`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.color.textMuted};
+  margin-top: 1px;
+`;
+
+// Only for matchType "route" — makes it obvious this isn't a door-to-door
+// match on the exact searched cities, which is exactly the confusion this
+// feature exists to resolve (a shipper searching Pune->Mumbai finding a
+// Bangalore->Mumbai truck should understand WHY it showed up).
+const RouteMatchBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: ${({ theme }) => theme.radius.pill};
+  background: ${({ theme }) => theme.color.accentSoft};
+  color: ${({ theme }) => theme.color.accentStrong};
+  font-size: 11px;
+  font-weight: 700;
 `;
 
 const PriceCol = styled.div`
@@ -232,12 +258,6 @@ const SORT_OPTIONS = [
   { value: "rating", label: "Top rated" },
 ];
 
-const formatTime = (value) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
-};
-
 const formatShortDate = (value) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
@@ -254,6 +274,15 @@ export const SearchResults = () => {
   const date = searchParams.get("date") || "";
   const sort = searchParams.get("sort") || "departure";
   const minCapacity = searchParams.get("minCapacity") || "";
+  // Only present when Home's From/To fields resolved to a real picked
+  // location (suggestion or "current location"), not a bare typed city name
+  // — see api/trips.js's searchTrips for how these enable route-corridor
+  // matches (a trip whose route passes near these points, not just one
+  // whose named cities match exactly).
+  const fromLat = searchParams.get("fromLat");
+  const fromLng = searchParams.get("fromLng");
+  const toLat = searchParams.get("toLat");
+  const toLng = searchParams.get("toLng");
 
   const minCapacityAmount = useUnitAmount(minCapacity);
   const [trips, setTrips] = useState([]);
@@ -281,6 +310,10 @@ export const SearchResults = () => {
     searchTrips({
       fromCity,
       toCity,
+      fromLat: fromLat || undefined,
+      fromLng: fromLng || undefined,
+      toLat: toLat || undefined,
+      toLng: toLng || undefined,
       date,
       sort,
       minCapacity: minCapacity || undefined,
@@ -300,7 +333,7 @@ export const SearchResults = () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromCity, toCity, date, sort, minCapacity]);
+  }, [fromCity, toCity, fromLat, fromLng, toLat, toLng, date, sort, minCapacity]);
 
   const updateParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -405,10 +438,25 @@ export const SearchResults = () => {
           </EmptyState>
         ) : (
           <ResultList>
-            {trips.map((trip, i) => (
+            {trips.map((trip, i) => {
+              const linkParams = new URLSearchParams();
+              if (minCapacity) linkParams.set("capacity", minCapacity);
+              // A route match's actual pickup city differs from what was
+              // searched (that's the whole point) — carry the shipper's
+              // real desired pickup point through so TripDetail can default
+              // the booking form to it instead of the trip's own pickup
+              // point, which may be a city away.
+              if (trip.matchType === "route" && fromLat && fromLng) {
+                linkParams.set("pickupLat", fromLat);
+                linkParams.set("pickupLng", fromLng);
+                if (fromCity) linkParams.set("pickupAddress", fromCity);
+              }
+              const linkQs = linkParams.toString();
+
+              return (
               <ResultCard
                 as={Link}
-                to={minCapacity ? `/trips/${trip._id}?capacity=${minCapacity}` : `/trips/${trip._id}`}
+                to={linkQs ? `/trips/${trip._id}?${linkQs}` : `/trips/${trip._id}`}
                 key={trip._id}
                 $i={i}
                 $interactive
@@ -441,6 +489,15 @@ export const SearchResults = () => {
                           {" · "}
                           {ratingLabel(trip.transporter?.ratingAvg, trip.transporter?.ratingCount)}
                         </Muted>
+                        <RouteLine>
+                          {trip.fromCity} → {trip.toCity}
+                          {trip.matchType === "route" && (
+                            <>
+                              {" "}
+                              <RouteMatchBadge>Passes through your route</RouteMatchBadge>
+                            </>
+                          )}
+                        </RouteLine>
                       </div>
                     </Row>
                     <BadgeRow>
@@ -463,7 +520,8 @@ export const SearchResults = () => {
                   </ChevronCol>
                 </ResultRow>
               </ResultCard>
-            ))}
+              );
+            })}
           </ResultList>
         )}
       </Stack>
