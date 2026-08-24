@@ -352,9 +352,10 @@ export const PostTrip = () => {
     const errors = {};
     if (!fromCity.trim()) errors.fromCity = "Enter a pickup city";
     if (!toCity.trim()) errors.toCity = "Enter a drop city";
-    if (fromCity.trim() && toCity.trim() && fromCity.trim().toLowerCase() === toCity.trim().toLowerCase()) {
-      errors.toCity = "From and to city can't be the same";
-    }
+    // Same city is a real trip — local/intra-city delivery, not a mistake
+    // to guard against (a transporter moving goods across town posts
+    // Pune -> Pune with different pickup/drop points, same as any other
+    // trip). No backend rule requires these to differ either.
     if (!departureAt) errors.departureAt = "Pick a departure date";
     else if (departureAt < toDateInputValue()) errors.departureAt = "Departure date can't be in the past";
     if (estimatedArrivalAt && departureAt && estimatedArrivalAt < departureAt) {

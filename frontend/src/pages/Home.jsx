@@ -1547,9 +1547,8 @@ export const Home = () => {
     if (!fromCity) nextErrors.fromCity = "Enter a pickup location";
     if (!toCity) nextErrors.toCity = "Enter a drop location";
     if (!departureAt) nextErrors.departureAt = "Pick a date";
-    if (fromCity && toCity && fromCity.toLowerCase() === toCity.toLowerCase()) {
-      nextErrors.toCity = "From and to city can't be the same";
-    }
+    // Same city is a real search — local/intra-city delivery, not a
+    // mistake to guard against (see PostTrip.jsx's matching removal).
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     goToSearch(fromCity, toCity, departureAt, capacityAmount.tons, fromPoint, toPoint);
