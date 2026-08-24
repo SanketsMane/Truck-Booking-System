@@ -8,6 +8,7 @@ export const ADMIN_SCOPES = [
   { value: "full", label: "Full admin (superuser)" },
   { value: "verification", label: "Verification" },
   { value: "support", label: "Support" },
+  { value: "content", label: "Content (blog, news, updates)" },
 ];
 
 export default ADMIN_SCOPES;

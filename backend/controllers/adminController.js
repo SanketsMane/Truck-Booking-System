@@ -6,7 +6,6 @@ const Booking = require("../models/bookingModel");
 const Verification = require("../models/verificationModel");
 const Notification = require("../models/notificationModel");
 const PlatformSetting = require("../models/platformSettingModel");
-const UploadedFile = require("../models/uploadedFileModel");
 const { notify } = require("../utils/notify");
 const { logAdminAction } = require("../utils/audit");
 const { markBookingCancelled } = require("../utils/bookingCancellation");
@@ -16,7 +15,7 @@ const { welcomeEmail, accountStatusEmail } = require("../emailTemplates/template
 const { toCsv } = require("../utils/csv");
 const escapeRegex = require("../utils/escapeRegex");
 const sendServerError = require("../utils/sendServerError");
-const objectStorage = require("../utils/objectStorage");
+const { reclaimSupersededFile, ensurePublic } = require("../utils/uploadedFileRefs");
 const { refreshBrandingCache } = require("../utils/brandingCache");
 const { getPagination, paginatedResponse } = require("../utils/paginate");
 const {
@@ -665,38 +664,6 @@ const getSettings = async (req, res) => {
     res.status(200).json({ success: true, settings });
   } catch (error) {
     sendServerError(res, error, "adminController");
-  }
-};
-
-// A /files/:id URL's trailing segment is the UploadedFile's _id — used both
-// to best-effort clean up a superseded logo/favicon and to defensively mark
-// a newly-referenced file public (an admin who forgot isPublic on upload
-// shouldn't end up with a broken logo).
-const fileIdFromUrl = (url) => (url ? url.split("/").pop() : null);
-
-const reclaimSupersededFile = async (oldUrl, newUrl) => {
-  if (!oldUrl || oldUrl === newUrl) return;
-  const oldId = fileIdFromUrl(oldUrl);
-  if (!oldId) return;
-  try {
-    const oldFile = await UploadedFile.findById(oldId);
-    if (!oldFile) return;
-    await objectStorage.deleteFile(oldFile.storageKey);
-    await UploadedFile.deleteOne({ _id: oldId });
-  } catch (error) {
-    console.error("[adminController] failed to reclaim superseded branding file:", error.message);
-  }
-};
-
-const ensurePublic = async (url) => {
-  const id = fileIdFromUrl(url);
-  if (!id) return;
-  try {
-    await UploadedFile.updateOne({ _id: id, isPublic: false }, { $set: { isPublic: true } });
-  } catch {
-    // Not fatal — worst case the admin re-saves after fixing isPublic on
-    // the original upload, or the id doesn't resolve to a real file at all
-    // (a hand-crafted request), which the 404 on GET /files/:id will surface.
   }
 };
 

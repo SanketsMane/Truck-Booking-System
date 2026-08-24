@@ -8,6 +8,7 @@ const disputeController = require("../controllers/disputeController");
 const chatController = require("../controllers/chatController");
 const auditLogController = require("../controllers/auditLogController");
 const truckDeletionController = require("../controllers/truckDeletionController");
+const postController = require("../controllers/postController");
 const authMiddleware = require("../middleWare/middleWare");
 const { requireAdmin, requireAdminScope } = require("../middleWare/middleWare");
 
@@ -51,6 +52,15 @@ router.put("/disputes/:id/resolve", requireAdminScope("support"), disputeControl
 // a dispute). Same scope dispute resolution requires, since that's the
 // primary reason an admin would need this.
 router.get("/bookings/:bookingId/chat", requireAdminScope("support"), chatController.adminGetThread);
+
+router.get("/posts", postController.listAdminPosts);
+router.get("/posts/:id", postController.getAdminPost);
+router.post("/posts", requireAdminScope("content"), postController.createPost);
+router.put("/posts/:id", requireAdminScope("content"), postController.updatePost);
+router.put("/posts/:id/publish", requireAdminScope("content"), postController.publishPost);
+router.put("/posts/:id/unpublish", requireAdminScope("content"), postController.unpublishPost);
+router.put("/posts/:id/archive", requireAdminScope("content"), postController.archivePost);
+router.delete("/posts/:id", requireAdminScope("full"), postController.deletePost);
 
 router.get("/audit-logs", auditLogController.listAuditLogs);
 

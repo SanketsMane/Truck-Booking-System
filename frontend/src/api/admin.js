@@ -1,15 +1,4 @@
-import { api, downloadFile } from "./client";
-
-const withPaginationParams = (path, { page, limit, ...filters } = {}) => {
-  const params = new URLSearchParams();
-  if (page) params.set("page", page);
-  if (limit) params.set("limit", limit);
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") params.set(key, value);
-  });
-  const qs = params.toString();
-  return qs ? `${path}?${qs}` : path;
-};
+import { api, downloadFile, withPaginationParams } from "./client";
 
 export const getAdminDashboard = () => api.get("/admin/dashboard");
 
@@ -79,3 +68,19 @@ export const updateBranding = (branding) => api.put("/admin/settings/branding", 
 export const getAdminBookingChat = (bookingId) => api.get(`/admin/bookings/${bookingId}/chat`);
 
 export const listAuditLogs = (opts) => api.get(withPaginationParams("/admin/audit-logs", opts));
+
+export const listAdminPosts = (opts) => api.get(withPaginationParams("/admin/posts", opts));
+
+export const getAdminPost = (id) => api.get(`/admin/posts/${id}`);
+
+export const createAdminPost = (payload) => api.post("/admin/posts", payload);
+
+export const updateAdminPost = (id, payload) => api.put(`/admin/posts/${id}`, payload);
+
+export const publishAdminPost = (id) => api.put(`/admin/posts/${id}/publish`);
+
+export const unpublishAdminPost = (id) => api.put(`/admin/posts/${id}/unpublish`);
+
+export const archiveAdminPost = (id) => api.put(`/admin/posts/${id}/archive`);
+
+export const deleteAdminPost = (id) => api.del(`/admin/posts/${id}`);

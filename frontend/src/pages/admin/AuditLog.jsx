@@ -54,6 +54,12 @@ const ACTIONS = [
   { value: "truck.review", label: "Truck reviewed" },
   { value: "verification.autoReview", label: "Verification auto-reviewed" },
   { value: "verification.review", label: "Verification reviewed" },
+  { value: "post.create", label: "Post created" },
+  { value: "post.update", label: "Post updated" },
+  { value: "post.publish", label: "Post published" },
+  { value: "post.unpublish", label: "Post unpublished" },
+  { value: "post.archive", label: "Post archived" },
+  { value: "post.delete", label: "Post deleted" },
 ];
 
 const TARGET_TYPES = [
@@ -67,6 +73,7 @@ const TARGET_TYPES = [
   "Truck",
   "Verification",
   "Rating",
+  "Post",
 ];
 
 const actionLabel = (value) => ACTIONS.find((a) => a.value === value)?.label || value;

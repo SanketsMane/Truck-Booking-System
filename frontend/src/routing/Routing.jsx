@@ -38,6 +38,9 @@ const Terms = lazy(() => import("../pages/Terms"));
 const Privacy = lazy(() => import("../pages/Privacy"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
+const PostList = lazy(() => import("../pages/content/PostList"));
+const PostDetail = lazy(() => import("../pages/content/PostDetail"));
+
 const Login = lazy(() => import("../pages/Login"));
 const Signup = lazy(() => import("../pages/Signup"));
 const ForgotPassword = lazy(() => import("../pages/ForgotPassword"));
@@ -70,6 +73,8 @@ const AdminDisputes = lazy(() => import("../pages/admin/Disputes"));
 const AdminTruckDeletions = lazy(() => import("../pages/admin/TruckDeletions"));
 const AdminSettings = lazy(() => import("../pages/admin/Settings"));
 const AdminAuditLog = lazy(() => import("../pages/admin/AuditLog"));
+const AdminPosts = lazy(() => import("../pages/admin/Posts"));
+const AdminPostEditor = lazy(() => import("../pages/admin/PostEditor"));
 
 export const Routing = () => (
   <Routes>
@@ -136,6 +141,55 @@ export const Routing = () => (
         element={
           <Suspense fallback={<RouteFallback />}>
             <Privacy />
+          </Suspense>
+        }
+      />
+
+      <Route
+        path="/blog"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostList type="blog" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/blog/:slug"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostDetail type="blog" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/news"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostList type="news" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/news/:slug"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostDetail type="news" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/updates"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostList type="update" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/updates/:slug"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <PostDetail type="update" />
           </Suspense>
         }
       />
@@ -405,6 +459,30 @@ export const Routing = () => (
           element={
             <Suspense fallback={<RouteFallback />}>
               <AdminAuditLog />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/posts"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminPosts />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/posts/new"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminPostEditor />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/posts/:id/edit"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <AdminPostEditor />
             </Suspense>
           }
         />

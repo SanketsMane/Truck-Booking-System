@@ -38,6 +38,8 @@ const disputeRoutes = require("./routes/disputeRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const pushRoutes = require("./routes/pushRoutes");
+const contentRoutes = require("./routes/contentRoutes");
+const postController = require("./controllers/postController");
 
 const app = express();
 
@@ -117,6 +119,18 @@ app.use("/disputes", disputeRoutes);
 app.use("/admin", adminRoutes);
 app.use("/meta", metaRoutes);
 app.use("/push", pushRoutes);
+app.use("/content", contentRoutes);
+
+// Top-level, not under /content — crawlers and feed readers expect a
+// sitemap/feed at a root-level path, matching the "/" and "/health"
+// precedent right above. Production nginx must proxy these two paths to
+// the backend unconditionally (no Accept: text/html check) — see the
+// comment on that config for why: Googlebot's own sitemap fetch sends an
+// Accept header containing text/html, which would otherwise trip the same
+// rule that hands real page loads to the frontend, and Search Console
+// would silently receive the SPA shell instead of XML.
+app.get("/sitemap-content.xml", postController.getContentSitemap);
+app.get("/rss.xml", postController.getRssFeed);
 
 // Global error handler — must be the last middleware. Covers errors that
 // happen before any controller's own try/catch can run (a malformed JSON

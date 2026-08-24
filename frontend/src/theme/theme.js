@@ -78,6 +78,7 @@ export const theme = {
     rejected: "danger",
     cancelled: "danger",
     expired: "textFaint",
+    archived: "textFaint",
     suspended: "danger",
     banned: "danger",
     paid: "success",

@@ -70,12 +70,14 @@ const userSchema = new mongoose.Schema(
     },
 
     // "full" is a superuser — bypasses every requireAdminScope check.
-    // The other two scope an admin down to one area of the console
+    // The other three scope an admin down to one area of the console
     // (see middleWare/middleWare.js's requireAdminScope) — granted/revoked
-    // via PUT /admin/users/:id/admin-role, full-scope-only.
+    // via PUT /admin/users/:id/admin-role, full-scope-only. "content" can
+    // create/edit/publish blog/news/update posts but, like the other
+    // limited scopes, can't hard-delete one — that's "full"-only.
     adminScope: {
       type: String,
-      enum: ["full", "verification", "support"],
+      enum: ["full", "verification", "support", "content"],
     },
 
     status: {

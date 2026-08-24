@@ -23,6 +23,7 @@ import { Field, Input, Select, Textarea } from "../../components/ui/Form";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/Spinner";
 import { SOCIAL_PLATFORMS } from "../../components/ui/SocialIcons";
+import { UploadField, UploadTile, UploadTileImg, UploadOverlay } from "../../components/ui/UploadField";
 
 const Switch = styled.button`
   position: relative;
@@ -268,64 +269,6 @@ const UploadRow = styled(Row)`
   align-items: flex-start;
 `;
 
-const UploadTile = styled.label`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 96px;
-  height: 96px;
-  flex-shrink: 0;
-  border-radius: ${({ theme }) => theme.radius.md};
-  border: 1.5px dashed ${({ theme, $hasImage }) => ($hasImage ? "transparent" : theme.color.border)};
-  background: ${({ theme, $hasImage }) => ($hasImage ? theme.color.surface : theme.color.surfaceRaised)};
-  color: ${({ theme }) => theme.color.textFaint};
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.15s ease, background 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.color.accent};
-    background: ${({ theme, $hasImage }) => ($hasImage ? theme.color.surface : theme.color.accentSoft)};
-  }
-
-  input {
-    display: none;
-  }
-`;
-
-const UploadTileImg = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-`;
-
-const UploadOverlay = styled.span`
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(20, 21, 15, 0.55);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-
-  ${UploadTile}:hover & {
-    opacity: 1;
-  }
-`;
-
-const UploadHint = styled(Muted)`
-  font-size: 12px;
-  max-width: 150px;
-`;
-
 // A tiny mock browser tab so the admin sees exactly how the favicon reads
 // at real size, next to the platform name — not just a bare square image.
 const TabMock = styled.div`
@@ -400,27 +343,6 @@ const PreviewName = styled.span`
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.color.text};
 `;
-
-// An upload target for the logo/favicon — click to pick a file, uploads
-// immediately (isPublic:true, same as truck photos), shows an instant local
-// preview via createObjectURL before the network round-trip even resolves.
-const UploadField = ({ label, hint, imageSrc, uploading, onPick, renderPreview }) => (
-  <Stack $gap={2} style={{ width: "auto" }}>
-    {renderPreview ? (
-      renderPreview(imageSrc)
-    ) : (
-      <UploadTile $hasImage={Boolean(imageSrc)}>
-        {imageSrc ? <UploadTileImg src={imageSrc} alt={label} /> : <ImagePlus size={22} strokeWidth={1.8} />}
-        <UploadOverlay>{uploading ? "Uploading…" : imageSrc ? "Replace" : "Upload"}</UploadOverlay>
-        <input type="file" accept="image/jpeg,image/png" onChange={onPick} disabled={uploading} />
-      </UploadTile>
-    )}
-    <UploadHint>
-      <strong style={{ color: "inherit", display: "block", marginBottom: 2 }}>{label}</strong>
-      {hint}
-    </UploadHint>
-  </Stack>
-);
 
 // The flagship card — platform name, logo, favicon, and contact details,
 // all saved together via PUT /admin/settings/branding (one endpoint per

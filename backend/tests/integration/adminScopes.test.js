@@ -89,6 +89,38 @@ describe("scoped admin roles (requireAdminScope)", () => {
     expect(res.status).toBe(403);
   });
 
+  it("lets a content-scoped admin create a post, but blocks it from a support-gated write endpoint", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(11), name: "Admin" });
+    await makeAdmin(user, "content");
+
+    const postRes = await agent.post("/admin/posts").send({
+      type: "blog",
+      title: "Content Scope Test Post",
+      excerpt: "A quick test.",
+      body: "<p>hello</p>",
+    });
+    expect(postRes.status).toBe(201);
+
+    const disputeId = await buildDispute(11);
+    const disputeRes = await agent
+      .put(`/admin/disputes/${disputeId}/resolve`)
+      .send({ status: "resolved", resolutionAction: "none", resolutionNote: "n/a" });
+    expect(disputeRes.status).toBe(403);
+  });
+
+  it("blocks a support-scoped admin from the content-gated post-create endpoint", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(12), name: "Admin" });
+    await makeAdmin(user, "support");
+
+    const res = await agent.post("/admin/posts").send({
+      type: "blog",
+      title: "Should Not Be Created",
+      excerpt: "n/a",
+      body: "<p>x</p>",
+    });
+    expect(res.status).toBe(403);
+  });
+
   it("lets a full-scope admin reach every scope-gated endpoint", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(9), name: "Admin" });
     await makeAdmin(user, "full");

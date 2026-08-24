@@ -57,6 +57,21 @@ export const api = {
   upload: (path, formData) => request(path, { method: "POST", body: formData, isForm: true }),
 };
 
+// Builds a `?page=&limit=&...filters` query string, skipping any filter
+// that's undefined/null/empty — shared by every paginated list endpoint
+// (originally admin.js-only, lifted here once content.js needed the exact
+// same query-building for the public post list).
+export const withPaginationParams = (path, { page, limit, ...filters } = {}) => {
+  const params = new URLSearchParams();
+  if (page) params.set("page", page);
+  if (limit) params.set("limit", limit);
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") params.set(key, value);
+  });
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
+};
+
 // For binary GETs (KYC/truck documents) — fetch as a blob under the same
 // credentialed session rather than relying on <img crossorigin> cookie
 // behavior, which is unreliable across dev ports.

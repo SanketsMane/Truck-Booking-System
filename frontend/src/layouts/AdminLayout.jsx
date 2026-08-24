@@ -11,6 +11,7 @@ import {
   Settings as SettingsIcon,
   FileClock,
   Trash2,
+  Newspaper,
 } from "lucide-react";
 import DashboardShell from "./DashboardShell";
 
@@ -58,6 +59,17 @@ const NAV = [
         label: "Truck Deletions",
         description: "Deletion requests and permanent-delete history",
         icon: Trash2,
+      },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      {
+        to: "/admin/posts",
+        label: "Posts",
+        description: "Blog, news, and update articles",
+        icon: Newspaper,
       },
     ],
   },

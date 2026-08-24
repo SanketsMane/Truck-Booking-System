@@ -290,8 +290,9 @@ export const Footer = () => {
       items: [
         { label: `About ${platformName}`, icon: COLUMN_ICON_MAP.Building2, to: "/about" },
         { label: "Careers", icon: COLUMN_ICON_MAP.Briefcase, to: "/support" },
-        { label: "Blog", icon: COLUMN_ICON_MAP.FileText, to: "/about" },
-        { label: "News & Updates", icon: COLUMN_ICON_MAP.Megaphone, to: "/about" },
+        { label: "Blog", icon: COLUMN_ICON_MAP.FileText, to: "/blog" },
+        { label: "News", icon: COLUMN_ICON_MAP.Megaphone, to: "/news" },
+        { label: "Product Updates", icon: COLUMN_ICON_MAP.Megaphone, to: "/updates" },
         { label: "Contact Us", icon: COLUMN_ICON_MAP.Mail, to: "/support" },
       ],
     },

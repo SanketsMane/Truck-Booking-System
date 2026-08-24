@@ -12,6 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.30.3",
+    "@tiptap/extension-link": "^3.30.3",
+    "@tiptap/extension-placeholder": "^3.30.3",
+    "@tiptap/react": "^3.30.3",
+    "@tiptap/starter-kit": "^3.30.3",
     "lucide-react": "^1.31.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

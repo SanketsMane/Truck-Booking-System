@@ -71,7 +71,7 @@ const updateBrandingValidation = Joi.object({
 const setAdminRoleValidation = Joi.object({
   isAdmin: Joi.boolean().required(),
   adminScope: Joi.string()
-    .valid("full", "verification", "support")
+    .valid("full", "verification", "support", "content")
     .when("isAdmin", { is: true, then: Joi.required(), otherwise: Joi.optional().allow(null) }),
 }).required();
 
@@ -91,7 +91,7 @@ const createUserValidation = Joi.object({
   }),
   role: Joi.string().valid("shipper", "transporter", "admin").required(),
   adminScope: Joi.string()
-    .valid("full", "verification", "support")
+    .valid("full", "verification", "support", "content")
     .when("role", { is: "admin", then: Joi.required(), otherwise: Joi.forbidden() }),
 }).required();
 

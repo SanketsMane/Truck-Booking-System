@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://truckgee.com/sitemap.xml
+Sitemap: https://truckgee.com/sitemap-content.xml
