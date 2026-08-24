@@ -28,28 +28,17 @@ import {
 } from "../api/trucks";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { BASE_URL } from "../api/client";
-import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
+import { PageContainer, PageTitle, SectionTitle, SubHeading, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
 import { Field, Input, Textarea } from "../components/ui/Form";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
-import { Pagination } from "../components/ui/Pagination";
 import { SkeletonBlock, SkeletonText } from "../components/ui/Skeleton";
-import {
-  Toolbar,
-  SearchInput,
-  ToolbarSelect,
-  ToolbarSpacer,
-  ResultsCount,
-  ClearFiltersButton,
-} from "../components/ui/Toolbar";
 import { useUnitAmount } from "../hooks/useUnitAmount";
 import { formatTons } from "../utils/format";
 import { normalizeRegNumber, isValidRegNumber } from "../utils/regNumber";
 import { fadeIn, scaleIn } from "../theme/animations";
-
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const TRUCK_TYPE_PRESETS = ["14ft", "17ft", "20ft", "22ft", "24ft", "32ft SXL", "32ft MXL"];
 const BODY_TYPE_PRESETS = ["Open", "Closed Container", "Flatbed", "Tanker", "Refrigerated"];
@@ -356,7 +345,18 @@ const clearDraft = () => {
   }
 };
 
-const RegisterTruckForm = ({ onRegistered }) => {
+const ConsentRow = styled(Row)`
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 4px;
+
+  input[type="checkbox"] {
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+`;
+
+const RegisterTruckForm = ({ onRegistered, title = "Register a truck" }) => {
   // Unlike PostTrip's page-level draft (no setter — it clears via a full
   // page reload, since PostTrip *is* the whole page), this form is toggled
   // in and out inside MyTrucks. A reload would also collapse the parent's
@@ -374,6 +374,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
   // restoring them fully recovers already-uploaded documents/photos too.
   const [docs, setDocs] = useState(draft?.docs ?? emptyDocs);
   const [photos, setPhotos] = useState(draft?.photos ?? []);
+  const [authorizedToList, setAuthorizedToList] = useState(draft?.authorizedToList ?? false);
   const [errors, setErrors] = useState({});
   const [docsUploading, setDocsUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -390,6 +391,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
       totalCapacityTons: totalCapacityAmount.tons,
       docs,
       photos,
+      authorizedToList,
     };
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
@@ -397,7 +399,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
       // sessionStorage unavailable (private browsing, quota) — draft
       // persistence is a nice-to-have, not required for the form to work.
     }
-  }, [regNumber, truckType, bodyType, totalCapacityAmount.tons, docs, photos]);
+  }, [regNumber, truckType, bodyType, totalCapacityAmount.tons, docs, photos, authorizedToList]);
 
   const handleStartOver = () => {
     clearDraft();
@@ -408,6 +410,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
     totalCapacityAmount.setTons("");
     setDocs(emptyDocs);
     setPhotos([]);
+    setAuthorizedToList(false);
     setErrors({});
   };
 
@@ -419,6 +422,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
     if (!truckType.trim()) nextErrors.truckType = "Enter or pick a truck type";
     if (!totalCapacityAmount.tons || Number(totalCapacityAmount.tons) <= 0) nextErrors.totalCapacity = "Enter a valid capacity";
     if (!docs.rc?.fileId) nextErrors.rc = "Upload the RC to register this truck";
+    if (!authorizedToList) nextErrors.authorizedToList = "Confirm you're authorized to use and list this vehicle";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -431,6 +435,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
         totalCapacity: Number(totalCapacityAmount.tons),
         documents: collectDocuments(docs),
         photos: photos.map((p) => ({ fileId: p.fileId })),
+        authorizedToList: true,
       });
       toast.success("Truck registered — pending verification");
       clearDraft();
@@ -444,7 +449,7 @@ const RegisterTruckForm = ({ onRegistered }) => {
 
   return (
     <Card>
-      <SectionTitle style={{ marginBottom: 16 }}>Register a truck</SectionTitle>
+      <SectionTitle style={{ marginBottom: 16 }}>{title}</SectionTitle>
       {draft && (
         <DraftNotice style={{ marginBottom: 16 }}>
           <span>Restored your in-progress truck registration.</span>
@@ -504,6 +509,22 @@ const RegisterTruckForm = ({ onRegistered }) => {
         <DocumentUploadGroup docs={docs} setDocs={setDocs} errors={errors} onUploadingChange={setDocsUploading} />
 
         <PhotoUploadField photos={photos} setPhotos={setPhotos} />
+
+        <ConsentRow>
+          <input
+            id="authorizedToList"
+            type="checkbox"
+            checked={authorizedToList}
+            onChange={(e) => setAuthorizedToList(e.target.checked)}
+          />
+          <label htmlFor="authorizedToList">
+            <Muted style={{ fontSize: 13.5 }}>
+              I confirm that I am authorized to use and list this vehicle on TruckGee — the RC owner doesn't have to
+              be me, but I have permission to operate and post trips for it.
+            </Muted>
+          </label>
+        </ConsentRow>
+        {errors.authorizedToList && <Callout style={{ marginTop: 4 }}>{errors.authorizedToList}</Callout>}
 
         <Button type="submit" $fullWidth disabled={submitting || docsUploading} style={{ marginTop: 8 }}>
           {docsUploading ? "Uploading…" : submitting ? "Registering…" : "Register truck"}
@@ -744,7 +765,10 @@ const DeleteRequestModal = ({ truck, onCancel, onSubmit, submitting }) => {
 // One truck's at-a-glance summary — photo/type thumb, reg number, status,
 // and document/photo/capacity counts — with the full management panel
 // (TruckDetailPanel) tucked behind "Manage" so the list stays scannable.
-const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequestDelete }) => {
+// onChangeVehicle, passed only for the account's current ACTIVE truck, adds
+// a "Change Vehicle" button — registering a new truck while this one still
+// works, per the MVP's one-driver-one-active-truck flow.
+const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequestDelete, onChangeVehicle }) => {
   const StatusIcon = STATUS_ICON[truck.status];
   const docCount = truck.documents?.length || 0;
   const photoCount = truck.photos?.length || 0;
@@ -808,10 +832,17 @@ const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequ
         )}
 
         <Row $gap={2} $wrap style={{ justifyContent: "space-between" }}>
-          <Button type="button" $variant="secondary" $size="sm" onClick={onToggle}>
-            {expanded ? "Close" : "Manage"}
-            {expanded ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
-          </Button>
+          <Row $gap={2} $wrap>
+            <Button type="button" $variant="secondary" $size="sm" onClick={onToggle}>
+              {expanded ? "Close" : "Manage"}
+              {expanded ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
+            </Button>
+            {onChangeVehicle && (
+              <Button type="button" $variant="secondary" $size="sm" onClick={onChangeVehicle}>
+                Change Vehicle
+              </Button>
+            )}
+          </Row>
           {deleteRequest?.status === "pending" ? (
             <StatusBadge status="pending">
               <Clock size={12} strokeWidth={2.4} style={{ marginRight: 4, verticalAlign: -2 }} />
@@ -856,14 +887,17 @@ const TruckCardSkeleton = () => (
   </Card>
 );
 
+// One driver = one active truck (MVP scope) — trucks are no longer a
+// searchable/paginated fleet list. The account has at most one ACTIVE
+// truck (the one it can post trips against), at most one CANDIDATE truck
+// (a new registration awaiting verification — either the first truck ever,
+// or a Change Vehicle swap in progress), and any number of INACTIVE trucks
+// kept permanently as history once superseded.
 export const MyTrucks = () => {
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [showHistory, setShowHistory] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [deleteRequestsByTruck, setDeleteRequestsByTruck] = useState({});
   const [deleteRequestTarget, setDeleteRequestTarget] = useState(null);
@@ -910,120 +944,84 @@ export const MyTrucks = () => {
     }
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return trucks.filter((t) => {
-      if (status && t.status !== status) return false;
-      if (!q) return true;
-      return `${t.regNumber} ${t.truckType} ${t.bodyType || ""}`.toLowerCase().includes(q);
-    });
-  }, [trucks, search, status]);
+  const activeTruck = useMemo(() => trucks.find((t) => t.lifecycle === "active"), [trucks]);
+  const candidateTruck = useMemo(() => trucks.find((t) => t.lifecycle === "candidate"), [trucks]);
+  const historyTrucks = useMemo(() => trucks.filter((t) => t.lifecycle === "inactive"), [trucks]);
+  const hasBlockingCandidate = Boolean(candidateTruck && candidateTruck.status !== "rejected");
 
-  const total = filtered.length;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const hasFilters = Boolean(search || status);
-
-  const clearFilters = () => {
-    setSearch("");
-    setStatus("");
-    setPage(1);
-  };
+  const renderTruckCard = (truck, { changeable = false } = {}) => (
+    <TruckCard
+      key={truck._id}
+      truck={truck}
+      expanded={expandedId === truck._id}
+      onToggle={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
+      onUpdated={handleTruckUpdated}
+      deleteRequest={deleteRequestsByTruck[truck._id]}
+      onRequestDelete={() => setDeleteRequestTarget(truck)}
+      onChangeVehicle={changeable && !hasBlockingCandidate ? () => setShowForm(true) : undefined}
+    />
+  );
 
   return (
     <PageContainer style={{ maxWidth: 1080 }}>
       <Stack $gap={5}>
-        <Row $gap={3} $wrap style={{ justifyContent: "space-between" }}>
-          <Stack $gap={1}>
-            <PageTitle>My trucks</PageTitle>
-            <Muted>Register your trucks, upload documents, and track verification status.</Muted>
-          </Stack>
-          <Button type="button" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? (
-              "Cancel"
-            ) : (
-              <>
-                <Plus size={16} strokeWidth={2.4} />
-                Register a truck
-              </>
-            )}
-          </Button>
-        </Row>
+        <Stack $gap={1}>
+          <PageTitle>My truck</PageTitle>
+          <Muted>Your one active truck, its verification status, and your truck history.</Muted>
+        </Stack>
 
-        {showForm && <RegisterTruckForm onRegistered={handleRegistered} />}
-
-        <Toolbar>
-          <SearchInput
-            placeholder="Search by reg number or type…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-          <ToolbarSelect
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="verified">Verified</option>
-            <option value="rejected">Rejected</option>
-          </ToolbarSelect>
-          <ToolbarSpacer />
-          {hasFilters && <ClearFiltersButton onClick={clearFilters} />}
-          {!loading && <ResultsCount>{total} truck{total === 1 ? "" : "s"}</ResultsCount>}
-        </Toolbar>
-
-        {!loading && paged.length === 0 ? (
-          <EmptyState>
-            <Truck size={26} strokeWidth={1.6} />
-            <Muted>
-              {trucks.length === 0
-                ? "You haven't registered any trucks yet. Register one to start posting trips."
-                : "No trucks match these filters."}
-            </Muted>
-            {trucks.length === 0 && (
-              <Button type="button" $size="sm" onClick={() => setShowForm(true)} style={{ marginTop: 4 }}>
-                <Plus size={14} strokeWidth={2.4} />
-                Register a truck
-              </Button>
-            )}
-          </EmptyState>
+        {loading ? (
+          <TruckCardSkeleton />
         ) : (
           <>
-            <Stack $gap={3}>
-              {loading
-                ? Array.from({ length: Math.min(pageSize, 6) }).map((_, i) => <TruckCardSkeleton key={i} />)
-                : paged.map((truck) => (
-                    <TruckCard
-                      key={truck._id}
-                      truck={truck}
-                      expanded={expandedId === truck._id}
-                      onToggle={() => setExpandedId(expandedId === truck._id ? null : truck._id)}
-                      onUpdated={handleTruckUpdated}
-                      deleteRequest={deleteRequestsByTruck[truck._id]}
-                      onRequestDelete={() => setDeleteRequestTarget(truck)}
-                    />
-                  ))}
-            </Stack>
+            {!activeTruck && !candidateTruck && (
+              <EmptyState>
+                <Truck size={26} strokeWidth={1.6} />
+                <Muted>You haven't registered a truck yet. Register one to start posting trips.</Muted>
+                {!showForm && (
+                  <Button type="button" $size="sm" onClick={() => setShowForm(true)} style={{ marginTop: 4 }}>
+                    <Plus size={14} strokeWidth={2.4} />
+                    Register a truck
+                  </Button>
+                )}
+              </EmptyState>
+            )}
 
-            {!loading && (
-              <Pagination
-                page={page}
-                pages={pages}
-                total={total}
-                onPageChange={setPage}
-                pageSize={pageSize}
-                onPageSizeChange={(n) => {
-                  setPageSize(n);
-                  setPage(1);
-                }}
-                pageSizeOptions={PAGE_SIZE_OPTIONS}
-              />
+            {activeTruck && renderTruckCard(activeTruck, { changeable: true })}
+
+            {candidateTruck && (
+              <Stack $gap={2}>
+                {activeTruck && <SubHeading>New truck (Change Vehicle)</SubHeading>}
+                {renderTruckCard(candidateTruck)}
+              </Stack>
+            )}
+
+            {showForm && !hasBlockingCandidate && (
+              <RegisterTruckForm onRegistered={handleRegistered} title={activeTruck ? "Change Vehicle" : "Register a truck"} />
+            )}
+            {showForm && hasBlockingCandidate && (
+              <Muted>Your new truck is already awaiting verification — resubmit its documents above if it was rejected.</Muted>
+            )}
+            {activeTruck && showForm && (
+              <Row $gap={2}>
+                <Button type="button" $variant="ghost" $size="sm" onClick={() => setShowForm(false)}>
+                  Cancel
+                </Button>
+              </Row>
+            )}
+
+            {historyTrucks.length > 0 && (
+              <Stack $gap={2}>
+                <Button type="button" $variant="ghost" $size="sm" onClick={() => setShowHistory((s) => !s)}>
+                  {showHistory ? "Hide" : "Show"} truck history ({historyTrucks.length})
+                  {showHistory ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
+                </Button>
+                {showHistory && (
+                  <Stack $gap={3}>
+                    {historyTrucks.map((truck) => renderTruckCard(truck))}
+                  </Stack>
+                )}
+              </Stack>
             )}
           </>
         )}

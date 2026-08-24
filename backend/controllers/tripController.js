@@ -3,7 +3,6 @@ const Truck = require("../models/truckModel");
 const Booking = require("../models/bookingModel");
 const Verification = require("../models/verificationModel");
 const SavedSearch = require("../models/savedSearchModel");
-const PlatformSetting = require("../models/platformSettingModel");
 const { notify } = require("../utils/notify");
 const { markBookingCancelled } = require("../utils/bookingCancellation");
 const escapeRegex = require("../utils/escapeRegex");
@@ -49,18 +48,17 @@ const notifyMatchingSavedSearches = async (trip) => {
   );
 };
 
-// FR-05.5 / SRS-03.3 — optionally requires the transporter's own KYC to be
-// verified before a trip can be published (admin-configurable via
-// PlatformSetting.verificationGateEnabled, off by default). With the gate
-// off, an unverified transporter can still publish — getTrip exposes the
-// real verification status instead, so a shipper booking it can see who
-// they're dealing with and decide for themselves.
-//
-// A truck that hasn't been verified yet doesn't block trip creation at
-// all (unless it was outright rejected) — the trip is created as a draft
-// instead, and truckController.reviewTruck auto-publishes it the moment
-// the truck passes verification. Lets a transporter set up the whole trip
-// once instead of waiting on the truck review and repeating the form later.
+// One driver = one active truck: a trip can only be posted against the
+// account's current ACTIVE truck (truckController.reviewTruck is the only
+// place lifecycle -> "active" is ever set, which only happens once the
+// truck's own KYC has passed) — a candidate (awaiting verification) or
+// inactive (retired) truck can't be posted against. Driver person-level
+// KYC (Verification type "transporter") is checked unconditionally here,
+// unlike PlatformSetting.verificationGateEnabled's shipper-side use in
+// bookingController.acceptBooking, which stays admin-toggleable — driver
+// verification is a hard MVP requirement, not an optional platform switch.
+// Both gates being hard requirements means a trip is always created
+// "published" — there's no more unverified-draft path.
 const postTrip = async (req, res) => {
   try {
     const { error } = postTripValidation.validate(req.body);
@@ -74,10 +72,10 @@ const postTrip = async (req, res) => {
     if (!truck) {
       return res.status(404).json({ success: false, msg: "Truck not found" });
     }
-    if (truck.status === "rejected") {
+    if (truck.lifecycle !== "active") {
       return res.status(400).json({
         success: false,
-        msg: "This truck's documents were rejected — resubmit them before creating a trip on it",
+        msg: "You can only post trips against your active, verified truck",
       });
     }
     if (totalCapacity > truck.totalCapacity) {
@@ -87,15 +85,10 @@ const postTrip = async (req, res) => {
       });
     }
 
-    const settings = await PlatformSetting.getSettings();
-    if (settings.verificationGateEnabled) {
-      const transporterKyc = await Verification.findOne({ user: req.auth.id, type: "transporter" });
-      if (!transporterKyc || transporterKyc.status !== "verified") {
-        return res.status(403).json({ success: false, msg: "Complete transporter verification before publishing a trip" });
-      }
+    const transporterKyc = await Verification.findOne({ user: req.auth.id, type: "transporter" });
+    if (!transporterKyc || transporterKyc.status !== "verified") {
+      return res.status(403).json({ success: false, msg: "Complete driver verification before posting a trip" });
     }
-
-    const status = truck.status === "verified" ? "published" : "draft";
 
     const trip = await Trip.create({
       truck: truck._id,
@@ -111,18 +104,12 @@ const postTrip = async (req, res) => {
       totalCapacity,
       availableCapacity,
       pricePerTon: req.body.pricePerTon,
-      status,
+      status: "published",
     });
 
-    if (status === "published") {
-      await notifyMatchingSavedSearches(trip);
-    }
+    await notifyMatchingSavedSearches(trip);
 
-    res.status(201).json({
-      success: true,
-      msg: status === "published" ? "Trip published" : "Trip saved as a draft — it'll go live once your truck is verified",
-      trip,
-    });
+    res.status(201).json({ success: true, msg: "Trip published", trip });
   } catch (error) {
     sendServerError(res, error, "tripController");
   }

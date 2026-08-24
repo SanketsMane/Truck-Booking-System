@@ -105,12 +105,10 @@ const FieldGroup = styled(Stack).attrs({ $gap: 3 })`
 
 // Shown on every step (not just Review) — the whole point is finding out
 // before investing time filling in Route/Truck/Capacity, not just before
-// the final Publish click. Doesn't block the form (the verification gate
-// is admin-toggleable — see PlatformSetting.verificationGateEnabled — so a
-// hard client-side block could refuse a submission the backend would
-// actually accept); it just sets honest expectations up front instead of
-// letting the transporter discover this for the first time from a failed
-// POST at the very end.
+// the final Publish click. Doesn't block the form itself — tripController.
+// postTrip is what actually, unconditionally enforces this — it just sets
+// honest expectations up front instead of letting the transporter discover
+// this for the first time from a failed POST at the very end.
 const VerificationNotice = styled.div`
   display: flex;
   align-items: flex-start;
@@ -248,7 +246,15 @@ export const PostTrip = () => {
 
   useEffect(() => {
     listMyTrucks()
-      .then(({ trucks }) => setTrucks(trucks || []))
+      .then(({ trucks }) => {
+        setTrucks(trucks || []);
+        // There's only ever one selectable (active) truck now — auto-pick
+        // it instead of making the transporter click a single-item picker.
+        // A stale draft's selectedTruckId (from before a Change Vehicle
+        // swap) is corrected here too, not just left dangling.
+        const active = (trucks || []).find((t) => t.lifecycle === "active");
+        if (active) setSelectedTruckId(active._id);
+      })
       .catch(() => setTrucks([]))
       .finally(() => setLoadingTrucks(false));
   }, []);
@@ -314,10 +320,10 @@ export const PostTrip = () => {
   };
 
   const selectedTruck = trucks.find((t) => t._id === selectedTruckId);
-  // A rejected truck's documents need fixing before it can be used at
-  // all — but a still-pending one is fine to pick now: postTrip saves the
-  // trip as a draft and it auto-publishes the moment the truck is verified.
-  const selectableTrucks = trucks.filter((t) => t.status !== "rejected");
+  // One driver = one active truck — there's at most one truck a trip can
+  // ever be posted against (tripController.postTrip hard-requires
+  // lifecycle "active"), so this is a 0-or-1 list, not a picker.
+  const activeTruck = trucks.find((t) => t.lifecycle === "active");
   const transporterVerification = verifications.find((v) => v.type === "transporter");
   const transporterVerified = transporterVerification?.status === "verified";
 
@@ -412,8 +418,8 @@ export const PostTrip = () => {
     }
   };
 
-  const truckHint = /truck.*verified/i.test(submitError || "");
-  const kycHint = /verification/i.test(submitError || "") && !truckHint;
+  const truckHint = /active,\s*verified truck/i.test(submitError || "");
+  const kycHint = /driver verification/i.test(submitError || "");
 
   return (
     <PageContainer>
@@ -543,11 +549,11 @@ export const PostTrip = () => {
         {step === 1 && (
           <Card>
             <Stack $gap={4}>
-              <SectionTitle>Choose a truck</SectionTitle>
+              <SectionTitle>Your truck</SectionTitle>
               {loadingTrucks ? (
                 <Row $gap={2}>
                   <Spinner />
-                  <Muted>Loading your trucks…</Muted>
+                  <Muted>Loading your truck…</Muted>
                 </Row>
               ) : trucks.length === 0 ? (
                 <EmptyState>
@@ -558,52 +564,32 @@ export const PostTrip = () => {
                     </Button>
                   </Stack>
                 </EmptyState>
-              ) : selectableTrucks.length === 0 ? (
+              ) : !activeTruck ? (
                 <EmptyState>
                   <Stack $gap={3}>
-                    <p>All of your trucks were rejected. Resubmit their documents before creating a trip.</p>
+                    <p>Your truck isn't active yet — it needs to pass verification before you can post a trip.</p>
                     <Button as={Link} to="/trucks" $size="sm">
-                      Manage my trucks
+                      Check verification status
                     </Button>
                   </Stack>
                 </EmptyState>
               ) : (
-                <Stack $gap={3}>
-                  {trucks.map((truck) => {
-                    const disabled = truck.status === "rejected";
-                    return (
-                      <TruckOption
-                        key={truck._id}
-                        type="button"
-                        $active={selectedTruckId === truck._id}
-                        $disabled={disabled}
-                        disabled={disabled}
-                        onClick={() => setSelectedTruckId(truck._id)}
-                      >
-                        <CardRow>
-                          <Row $gap={3}>
-                            <TruckThumb>
-                              <TruckIcon size={19} strokeWidth={2} />
-                            </TruckThumb>
-                            <Stack $gap={1}>
-                              <strong>{truck.regNumber}</strong>
-                              <Muted>
-                                {truck.truckType} · {formatTons(truck.totalCapacity)} capacity
-                              </Muted>
-                            </Stack>
-                          </Row>
-                          <StatusBadge status={truck.status} />
-                        </CardRow>
-                      </TruckOption>
-                    );
-                  })}
-                </Stack>
-              )}
-              {selectedTruck?.status === "pending" && (
-                <Muted>
-                  This truck is still awaiting verification — your trip will be saved as a draft and go live
-                  automatically as soon as it's verified.
-                </Muted>
+                <TruckOption as="div" $active>
+                  <CardRow>
+                    <Row $gap={3}>
+                      <TruckThumb>
+                        <TruckIcon size={19} strokeWidth={2} />
+                      </TruckThumb>
+                      <Stack $gap={1}>
+                        <strong>{activeTruck.regNumber}</strong>
+                        <Muted>
+                          {activeTruck.truckType} · {formatTons(activeTruck.totalCapacity)} capacity
+                        </Muted>
+                      </Stack>
+                    </Row>
+                    <StatusBadge status={activeTruck.status} />
+                  </CardRow>
+                </TruckOption>
               )}
               <Row $gap={3}>
                 <Button $variant="ghost" onClick={() => setStep(0)}>
@@ -751,13 +737,6 @@ export const PostTrip = () => {
                 </CardRow>
               </Stack>
 
-              {selectedTruck?.status === "pending" && (
-                <Muted>
-                  {selectedTruck.regNumber} is still awaiting verification — this trip will be saved as a draft and
-                  go live automatically once it's verified.
-                </Muted>
-              )}
-
               {submitError && (
                 <EmptyState>
                   <Stack $gap={3}>
@@ -781,13 +760,7 @@ export const PostTrip = () => {
                   Back
                 </Button>
                 <Button $fullWidth onClick={handleSubmit} disabled={submitting}>
-                  {selectedTruck?.status === "pending"
-                    ? submitting
-                      ? "Saving…"
-                      : "Save as draft"
-                    : submitting
-                      ? "Publishing…"
-                      : "Publish trip"}
+                  {submitting ? "Publishing…" : "Publish trip"}
                 </Button>
               </Row>
             </Stack>

@@ -36,6 +36,12 @@ import { Field, Select } from "../../components/ui/Form";
 import { AdminCard } from "../../components/ui/AdminTable";
 import { formatDate, formatDateTime, formatINR } from "../../utils/format";
 
+// One driver = one active truck — Active is the account's current truck,
+// Candidate a new registration still awaiting verification (first truck
+// ever, or a Change Vehicle swap in progress), Inactive a superseded truck
+// kept permanently for its trip history.
+const TRUCK_LIFECYCLE_LABEL = { candidate: "Candidate", active: "Active", inactive: "Inactive" };
+
 // Opens a verification/truck document in a new tab. Unchanged from the
 // pre-redesign version — same api/files call, same window.open contract —
 // only the trigger element around it (DocChip below) changed shape.
@@ -789,7 +795,9 @@ export const UserDetail = () => {
                       {t.regNumber} · {t.truckType}
                       {t.bodyType ? ` / ${t.bodyType}` : ""}
                     </ItemTitle>
-                    <ItemMeta>Capacity: {t.totalCapacity}t</ItemMeta>
+                    <ItemMeta>
+                      Capacity: {t.totalCapacity}t · {TRUCK_LIFECYCLE_LABEL[t.lifecycle] || t.lifecycle}
+                    </ItemMeta>
                     {t.status === "rejected" && t.rejectReason && <ItemReason>Reason: {t.rejectReason}</ItemReason>}
                     <DocList documents={t.documents} />
                   </ItemMain>

@@ -18,14 +18,18 @@ const {
 // trail either way, so the logic lives in one place rather than being
 // duplicated per caller. Mirrors adminController.deactivateTrip's
 // dependent-live-state guard (409 instead of silently orphaning a trip).
+//
+// The guard checks for ANY trip ever, not just a currently live one — a
+// vehicle with trip history is a permanent record (Trip.truck has no
+// cascade/nullify on delete), so once a truck has ever been used for a
+// listing it can never be hard-deleted, only deactivated (see
+// truckController.reviewTruck's lifecycle flip). Only a truck that was
+// registered but never actually posted a trip is deletable.
 const performTruckDeletion = async ({ truck, reason, deletedBy, deleteRequest = null, adminScope }) => {
-  const blockingTrip = await Trip.exists({
-    truck: truck._id,
-    status: { $in: ["published", "full", "ongoing"] },
-  });
-  if (blockingTrip) {
+  const hasTripHistory = await Trip.exists({ truck: truck._id });
+  if (hasTripHistory) {
     const err = new Error(
-      "This truck has an active or upcoming trip — deactivate/cancel it first before deleting the truck."
+      "This truck has trip history and can't be deleted — it stays on record as inactive so past trips remain valid."
     );
     err.status = 409;
     throw err;

@@ -1,14 +1,14 @@
+// Covers what replaced the old "unverified truck -> draft trip, auto-
+// published on review" flow: postTrip now hard-blocks until the truck is
+// the account's ACTIVE truck (truckController.reviewTruck is the only
+// place that ever sets lifecycle "active") and the driver's own KYC is
+// verified — there's no more draft/auto-publish path for new trips.
 const request = require("supertest");
 const app = require("../../app");
-const Truck = require("../../models/truckModel");
-const Trip = require("../../models/tripModel");
-const { signupUser, makeAdmin, disableVerificationGate, uniqueRegNumber } = require("../helpers");
+const Verification = require("../../models/verificationModel");
+const { signupUser, makeAdmin, uniqueRegNumber } = require("../helpers");
 
 const emailFor = (seed) => `draft${seed}@example.test`;
-
-beforeEach(async () => {
-  await disableVerificationGate();
-});
 
 const registerTruck = async (agent, overrides = {}) => {
   const res = await agent.post("/trucks").send({
@@ -16,10 +16,27 @@ const registerTruck = async (agent, overrides = {}) => {
     truckType: "Open Body",
     bodyType: "Flatbed",
     totalCapacity: overrides.totalCapacity ?? 20,
+    authorizedToList: true,
   });
   if (!res.body.success) throw new Error(`registerTruck failed: ${res.body.msg}`);
   return res.body.truck;
 };
+
+const verifyTruck = async (truckId) => {
+  const { agent: adminAgent, user: admin } = await signupUser(app, {
+    email: emailFor(`admin-${truckId}`),
+    name: "Admin",
+  });
+  await makeAdmin(admin, "verification");
+  return adminAgent.put(`/trucks/${truckId}/review`).send({ status: "verified" });
+};
+
+const verifyDriverKyc = async (userId) =>
+  Verification.findOneAndUpdate(
+    { user: userId, type: "transporter" },
+    { $set: { status: "verified" } },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
 
 const postTripBody = (truckId, overrides = {}) => ({
   truckId,
@@ -33,27 +50,21 @@ const postTripBody = (truckId, overrides = {}) => ({
   pricePerTon: overrides.pricePerTon || 1000,
 });
 
-describe("POST /trips — with an unverified truck", () => {
-  it("saves the trip as a draft (not published) when the truck is still pending", async () => {
-    const { agent } = await signupUser(app, { email: emailFor(1), name: "Transporter", roles: ["transporter"] });
+describe("POST /trips — truck must be the account's active truck", () => {
+  it("blocks posting a trip while the truck is still a pending candidate", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(1), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
+    await verifyDriverKyc(user._id);
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
-    expect(res.status).toBe(201);
-    expect(res.body.trip.status).toBe("draft");
-    expect(res.body.msg).toMatch(/draft/i);
-
-    const persisted = await Trip.findById(res.body.trip._id);
-    expect(persisted.status).toBe("draft");
+    expect(res.status).toBe(400);
+    expect(res.body.msg).toMatch(/active, verified truck/i);
   });
 
-  it("rejects creating a trip on a truck whose documents were rejected", async () => {
-    const { agent, user: transporter } = await signupUser(app, {
-      email: emailFor(2),
-      name: "Transporter",
-      roles: ["transporter"],
-    });
+  it("blocks posting a trip on a truck whose documents were rejected", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(2), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
+    await verifyDriverKyc(user._id);
 
     const { agent: adminAgent, user: admin } = await signupUser(app, { email: emailFor(3), name: "Admin" });
     await makeAdmin(admin, "verification");
@@ -61,20 +72,30 @@ describe("POST /trips — with an unverified truck", () => {
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(400);
-    expect(res.body.msg).toMatch(/rejected/i);
-    expect(String(transporter._id)).toBeTruthy(); // sanity: fixture wired correctly
+    expect(res.body.msg).toMatch(/active, verified truck/i);
   });
 
-  it("a draft trip does not appear in trip search and cannot be booked", async () => {
-    const { agent } = await signupUser(app, { email: emailFor(4), name: "Transporter", roles: ["transporter"] });
+  it("publishes immediately (no draft) once the truck is verified and becomes active, and the trip is searchable/bookable", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(4), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
-    const created = await agent.post("/trips").send(postTripBody(truck._id, { fromCity: "Delhi", toCity: "Jaipur" }));
-    expect(created.body.trip.status).toBe("draft");
+    await verifyDriverKyc(user._id);
+    const reviewRes = await verifyTruck(truck._id);
+    expect(reviewRes.status).toBe(200);
+    expect(reviewRes.body.truck.lifecycle).toBe("active");
 
-    const date = created.body.trip.departureAt.slice(0, 10);
+    const created = await agent.post("/trips").send(postTripBody(truck._id, { fromCity: "Delhi", toCity: "Jaipur" }));
+    expect(created.status).toBe(201);
+    expect(created.body.trip.status).toBe("published");
+
+    // searchTrips anchors a plain YYYY-MM-DD `date` at IST midnight (see its
+    // own comment) — the search date must be departureAt's IST calendar
+    // date, not a naive UTC slice, or the ±1-day window can miss it
+    // depending on what wall-clock time the test happens to run at.
+    const date = new Date(new Date(created.body.trip.departureAt).getTime() + 5.5 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const searchRes = await request(app).get(`/trips/search?fromCity=Delhi&toCity=Jaipur&date=${date}`);
-    expect(searchRes.status).toBe(200);
-    expect(searchRes.body.trips.find((t) => t._id === created.body.trip._id)).toBeUndefined();
+    expect(searchRes.body.trips.map((t) => t._id)).toContain(created.body.trip._id);
 
     const { agent: shipperAgent } = await signupUser(app, { email: emailFor(5), name: "Shipper", roles: ["shipper"] });
     const bookRes = await shipperAgent.post("/bookings").send({
@@ -82,81 +103,58 @@ describe("POST /trips — with an unverified truck", () => {
       capacityRequested: 5,
       goodsDescription: "Textiles",
     });
-    expect(bookRes.status).toBe(400);
-    expect(bookRes.body.msg).toMatch(/isn't accepting bookings/i);
+    expect(bookRes.status).toBe(201);
+  });
+
+  it("blocks posting against a truck that's been superseded (Change Vehicle) and is now inactive", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(6), name: "Transporter", roles: ["transporter"] });
+    const truckA = await registerTruck(agent);
+    await verifyDriverKyc(user._id);
+    await verifyTruck(truckA._id);
+
+    const truckB = await registerTruck(agent, { regNumber: uniqueRegNumber() });
+    const reviewB = await verifyTruck(truckB._id);
+    expect(reviewB.body.truck.lifecycle).toBe("active");
+
+    const res = await agent.post("/trips").send(postTripBody(truckA._id));
+    expect(res.status).toBe(400);
+    expect(res.body.msg).toMatch(/active, verified truck/i);
   });
 });
 
-describe("PUT /trucks/:id/review — approving a truck with draft trips waiting on it", () => {
-  it("auto-publishes a future-dated draft trip once its truck is verified, and notifies the transporter", async () => {
-    const { agent } = await signupUser(app, { email: emailFor(6), name: "Transporter", roles: ["transporter"] });
+describe("POST /trips — driver verification is required unconditionally", () => {
+  it("blocks posting when the driver has no verification record at all, even with an active truck", async () => {
+    const { agent } = await signupUser(app, { email: emailFor(7), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
-    const created = await agent.post("/trips").send(postTripBody(truck._id));
-    expect(created.body.trip.status).toBe("draft");
+    await verifyTruck(truck._id);
 
-    const { agent: adminAgent, user: admin } = await signupUser(app, { email: emailFor(7), name: "Admin" });
-    await makeAdmin(admin, "verification");
-    const reviewRes = await adminAgent.put(`/trucks/${truck._id}/review`).send({ status: "verified" });
-    expect(reviewRes.status).toBe(200);
-
-    const publishedTrip = await Trip.findById(created.body.trip._id);
-    expect(publishedTrip.status).toBe("published");
-
-    const searchRes = await request(app).get(
-      `/trips/search?fromCity=Pune&toCity=Nashik&date=${publishedTrip.departureAt.toISOString().slice(0, 10)}`
-    );
-    expect(searchRes.body.trips.map((t) => t._id)).toContain(String(publishedTrip._id));
+    const res = await agent.post("/trips").send(postTripBody(truck._id));
+    expect(res.status).toBe(403);
+    expect(res.body.msg).toMatch(/driver verification/i);
   });
 
-  it("does not auto-publish a draft trip whose departure date has already passed", async () => {
-    const { agent } = await signupUser(app, { email: emailFor(8), name: "Transporter", roles: ["transporter"] });
+  it("blocks posting while driver verification is still pending", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(8), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
-    const created = await agent
-      .post("/trips")
-      .send(postTripBody(truck._id, { departureAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }));
-    expect(created.body.trip.status).toBe("draft");
+    await verifyTruck(truck._id);
+    await Verification.create({ user: user._id, type: "transporter", status: "pending" });
 
-    // Backdate it directly — postTripValidation requires a future date at
-    // creation time, so this simulates time passing while the truck sat in
-    // the review queue rather than trying to create an already-past trip.
-    await Trip.updateOne({ _id: created.body.trip._id }, { departureAt: new Date(Date.now() - 60 * 60 * 1000) });
-
-    const { agent: adminAgent, user: admin } = await signupUser(app, { email: emailFor(9), name: "Admin" });
-    await makeAdmin(admin, "verification");
-    await adminAgent.put(`/trucks/${truck._id}/review`).send({ status: "verified" });
-
-    const stillDraft = await Trip.findById(created.body.trip._id);
-    expect(stillDraft.status).toBe("draft");
-  });
-
-  it("leaves other transporters' draft trips on other trucks untouched", async () => {
-    const { agent: agentA } = await signupUser(app, { email: emailFor(10), name: "A", roles: ["transporter"] });
-    const truckA = await registerTruck(agentA);
-    const tripA = await agentA.post("/trips").send(postTripBody(truckA._id));
-
-    const { agent: agentB } = await signupUser(app, { email: emailFor(11), name: "B", roles: ["transporter"] });
-    const truckB = await registerTruck(agentB);
-    const tripB = await agentB.post("/trips").send(postTripBody(truckB._id, { fromCity: "Mumbai", toCity: "Surat" }));
-
-    const { agent: adminAgent, user: admin } = await signupUser(app, { email: emailFor(12), name: "Admin" });
-    await makeAdmin(admin, "verification");
-    await adminAgent.put(`/trucks/${truckA._id}/review`).send({ status: "verified" });
-
-    expect((await Trip.findById(tripA.body.trip._id)).status).toBe("published");
-    expect((await Trip.findById(tripB.body.trip._id)).status).toBe("draft");
+    const res = await agent.post("/trips").send(postTripBody(truck._id));
+    expect(res.status).toBe(403);
   });
 });
 
-describe("PUT /trips/:id — editing a draft trip", () => {
-  it("lets the owner edit a draft trip's price/capacity/date", async () => {
-    const { agent } = await signupUser(app, { email: emailFor(13), name: "Transporter", roles: ["transporter"] });
+describe("PUT /trips/:id — editing an open trip", () => {
+  it("lets the owner edit a published trip's price/capacity/date", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(9), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
+    await verifyDriverKyc(user._id);
+    await verifyTruck(truck._id);
     const created = await agent.post("/trips").send(postTripBody(truck._id));
-    expect(created.body.trip.status).toBe("draft");
+    expect(created.body.trip.status).toBe("published");
 
     const res = await agent.put(`/trips/${created.body.trip._id}`).send({ pricePerTon: 1500 });
     expect(res.status).toBe(200);
     expect(res.body.trip.pricePerTon).toBe(1500);
-    expect(res.body.trip.status).toBe("draft");
   });
 });

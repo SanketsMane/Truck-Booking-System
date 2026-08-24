@@ -53,6 +53,8 @@ const DOC_LABELS = {
 const prettyDocType = (value) =>
   DOC_LABELS[value] || (value ? value.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Document");
 
+const LIFECYCLE_LABEL = { candidate: "Candidate", active: "Active", inactive: "Inactive" };
+
 const CATEGORIES = [
   {
     key: "shipper",
@@ -74,7 +76,14 @@ const CATEGORIES = [
     icon: TruckIcon,
     fetch: (status) => listTruckQueue({ status }).then((r) => r.trucks),
     subjectOf: (t) => t.owner || {},
-    metaOf: (t) => `${t.regNumber} · ${t.truckType || "—"}${t.bodyType ? ` / ${t.bodyType}` : ""} · ${t.totalCapacity ?? "?"}t`,
+    // Reviewing a truck now has real stakes beyond its own KYC — approving
+    // a "candidate" makes it the driver's one ACTIVE truck (and retires
+    // any prior one) — so the admin sees which of the three it currently
+    // is, not just the document status.
+    metaOf: (t) =>
+      `${t.regNumber} · ${t.truckType || "—"}${t.bodyType ? ` / ${t.bodyType}` : ""} · ${t.totalCapacity ?? "?"}t · ${
+        LIFECYCLE_LABEL[t.lifecycle] || t.lifecycle
+      }`,
   },
 ];
 

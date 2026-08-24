@@ -103,11 +103,39 @@ const truckSchema = new mongoose.Schema(
     reviewedAt: {
       type: Date,
     },
+
+    // Orthogonal to `status` (which is purely the KYC review state) — this
+    // tracks which of an owner's trucks is their one official truck.
+    // "candidate": just registered, not yet the account's active truck.
+    // "active": the account's current truck — the only one it can post
+    // trips against. "inactive": a former active truck, permanently kept
+    // (never deleted) so historical trips referencing it stay resolvable.
+    // truckController.reviewTruck flips candidate -> active (and any prior
+    // active -> inactive for the same owner) the moment status -> verified.
+    lifecycle: {
+      type: String,
+      enum: ["candidate", "active", "inactive"],
+      default: "candidate",
+    },
+
+    // The self-declared "I confirm that I am authorized to use and list
+    // this vehicle on TruckGee" consent — required because the RC owner
+    // doesn't have to be the driver. Enforced by registerTruckValidation,
+    // not just UI copy.
+    authorizedToList: {
+      type: Boolean,
+      default: false,
+    },
+
+    authorizedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
 
 truckSchema.index({ owner: 1 });
+truckSchema.index({ owner: 1, lifecycle: 1 });
 
 const Truck = mongoose.model("Truck", truckSchema);
 

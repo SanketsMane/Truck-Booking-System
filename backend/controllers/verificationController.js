@@ -24,6 +24,29 @@ const submitVerification = async (req, res) => {
 
     const { type, businessName, documents } = req.body;
 
+    // Driver signup per the MVP spec requires Aadhaar/valid ID + driving
+    // licence + photo — role-scoped on top of the otherwise-freeform
+    // docType vocabulary shared with the shipper role, so a "transporter"
+    // verification record is actually guaranteed to contain a licence.
+    if (type === "transporter") {
+      const docTypes = documents.map((d) => d.docType);
+      const hasIdProof = docTypes.some((t) => t === "aadhaar" || t === "pan");
+      const hasDrivingLicense = docTypes.includes("driving_license");
+      if (!hasIdProof || !hasDrivingLicense) {
+        return res.status(400).json({
+          success: false,
+          msg: "Driver verification requires both an ID proof (Aadhaar or PAN) and a driving licence document",
+        });
+      }
+      const submitter = await User.findById(req.auth.id).select("profilePhoto");
+      if (!submitter?.profilePhoto) {
+        return res.status(400).json({
+          success: false,
+          msg: "Upload a profile photo before submitting driver verification",
+        });
+      }
+    }
+
     let resolvedDocuments;
     try {
       resolvedDocuments = await resolveDocuments(documents, req.auth.id);

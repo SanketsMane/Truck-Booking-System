@@ -62,10 +62,16 @@ describe("expireStaleTrips", () => {
 
   it("does not touch draft, completed, or already-cancelled trips", async () => {
     const { agent } = await signupUser(app, { email: emailFor(5), name: "T", roles: ["transporter"] });
-    const trip = await postTestTrip(agent, { truckStatus: "pending" });
-    expect(trip.status).toBe("draft");
-
-    await Trip.updateOne({ _id: trip._id }, { departureAt: new Date(Date.now() - 60 * 60 * 1000) });
+    // postTrip can no longer create a "draft" trip (a candidate/unverified
+    // truck is hard-blocked outright, not saved as a draft) — this status
+    // only exists on legacy data now, so it's set directly rather than
+    // through the API, purely to confirm expireStaleTrips's status filter
+    // still skips it regardless of how it got there.
+    const trip = await postTestTrip(agent);
+    await Trip.updateOne(
+      { _id: trip._id },
+      { status: "draft", departureAt: new Date(Date.now() - 60 * 60 * 1000) }
+    );
 
     const count = await expireStaleTrips();
     expect(count).toBe(0);

@@ -1,6 +1,7 @@
 const request = require("supertest");
 const User = require("../models/userModel");
 const Truck = require("../models/truckModel");
+const Verification = require("../models/verificationModel");
 const PlatformSetting = require("../models/platformSettingModel");
 
 const MASTER_OTP = process.env.MASTER_OTP || "123456";
@@ -83,12 +84,22 @@ const uploadTestFile = async (agent) => {
 };
 
 // Submits KYC for `type` ("shipper" | "transporter") through the real API
-// and returns the created verification's id.
+// and returns the created verification's id. Driver ("transporter") KYC
+// requires an ID doc + a driving licence doc + a profile photo already on
+// file (verificationController.submitVerification) — set here so every
+// existing caller keeps working without knowing about that requirement.
 const submitVerification = async (agent, type) => {
   const fileId = await uploadTestFile(agent);
-  const res = await agent
-    .post("/verification")
-    .send({ type, documents: [{ docType: "aadhaar", fileId }] });
+  const documents = [{ docType: "aadhaar", fileId }];
+  if (type === "transporter") {
+    // resolveDocuments dedupes by fileId (a Mongo $in doesn't return a doc
+    // twice), so the driving licence needs its own distinct upload — reusing
+    // the aadhaar fileId here would make documents.length !== files.length.
+    const dlFileId = await uploadTestFile(agent);
+    documents.push({ docType: "driving_license", fileId: dlFileId });
+    await agent.put("/auth/profile").send({ profilePhoto: "/files/test-profile-photo" });
+  }
+  const res = await agent.post("/verification").send({ type, documents });
   if (!res.body.success) {
     throw new Error(`submitVerification(${type}) failed: ${res.body.msg}`);
   }
@@ -107,23 +118,37 @@ const disableVerificationGate = async () => {
 // Registers a truck and publishes a trip as `transporterAgent`, with sane
 // defaults — for tests where the trip itself is just setup, not the thing
 // under test. The truck is verified directly via the DB (bypassing the real
-// admin-review flow, same shortcut `makeAdmin` takes) — tripController.
-// postTrip now saves a trip as "draft" instead of "published" for a
-// still-pending truck, and this helper's whole point is a trip that's
-// already live and bookable, not one exercising that draft path.
+// admin-review flow, same shortcut `makeAdmin` takes), including flipping
+// `lifecycle` to "active" the same way truckController.reviewTruck would —
+// tripController.postTrip now hard-requires an active truck, so skipping
+// that would make every trip-posting test fail on the one-active-truck
+// gate instead of exercising whatever it's actually testing. Driver KYC
+// (Verification type "transporter") is likewise auto-verified via the DB
+// unless `overrides.skipDriverKyc` is set — postTrip requires it
+// unconditionally now, independent of PlatformSetting.verificationGateEnabled.
 const postTestTrip = async (transporterAgent, overrides = {}) => {
   const truckRes = await transporterAgent.post("/trucks").send({
     regNumber: overrides.regNumber || uniqueRegNumber(),
     truckType: "Open Body",
     bodyType: "Flatbed",
     totalCapacity: overrides.totalCapacity || 20,
+    authorizedToList: true,
   });
   if (!truckRes.body.success) {
     throw new Error(`postTestTrip: truck registration failed: ${truckRes.body.msg}`);
   }
   const truckId = truckRes.body.truck._id;
   if (overrides.truckStatus !== "pending") {
-    await Truck.findByIdAndUpdate(truckId, { status: overrides.truckStatus || "verified" });
+    const status = overrides.truckStatus || "verified";
+    await Truck.findByIdAndUpdate(truckId, { status, lifecycle: status === "verified" ? "active" : "candidate" });
+  }
+
+  if (!overrides.skipDriverKyc) {
+    await Verification.findOneAndUpdate(
+      { user: truckRes.body.truck.owner, type: "transporter" },
+      { $set: { status: "verified" } },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
   }
 
   const departureAt = overrides.departureAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();

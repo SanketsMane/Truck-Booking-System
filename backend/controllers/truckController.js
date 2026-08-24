@@ -26,6 +26,24 @@ const registerTruck = async (req, res) => {
       return res.status(409).json({ success: false, msg: "This registration number is already listed" });
     }
 
+    // One driver = one truck "in flight" at a time. An owner with an
+    // already-ACTIVE truck can still register a new one — that's the
+    // Change Vehicle flow, and the old truck keeps working until this one
+    // clears verification — but a second simultaneous candidate is
+    // blocked. A rejected candidate doesn't count, so a bad submission
+    // never permanently traps the driver.
+    const pendingCandidate = await Truck.exists({
+      owner: req.auth.id,
+      lifecycle: "candidate",
+      status: { $ne: "rejected" },
+    });
+    if (pendingCandidate) {
+      return res.status(409).json({
+        success: false,
+        msg: "You already have a truck awaiting verification — wait for it to be verified or rejected before adding another.",
+      });
+    }
+
     let resolvedDocuments = [];
     if (documents.length) {
       try {
@@ -52,6 +70,10 @@ const registerTruck = async (req, res) => {
       totalCapacity,
       documents: resolvedDocuments,
       photos: resolvedPhotos,
+      // Joi already guarantees this is `true` — registerTruckValidation
+      // rejects anything else.
+      authorizedToList: true,
+      authorizedAt: new Date(),
     });
 
     res.status(201).json({ success: true, msg: "Truck registered", truck });
@@ -255,12 +277,29 @@ const reviewTruck = async (req, res) => {
       reason: truck.rejectReason,
     });
 
+    // This candidate truck just cleared verification — it becomes the
+    // account's ACTIVE truck. If the owner already had a different active
+    // truck (this was a Change Vehicle swap), that one steps down to
+    // inactive — kept forever, never deleted, so its trip history stays
+    // resolvable. One rule handles both "first truck ever" (nothing to
+    // deactivate) and "Change Vehicle" alike.
+    if (truck.status === "verified" && truck.lifecycle === "candidate") {
+      await Truck.updateMany(
+        { owner: truck.owner, lifecycle: "active", _id: { $ne: truck._id } },
+        { $set: { lifecycle: "inactive" } }
+      );
+      await Truck.updateOne({ _id: truck._id }, { $set: { lifecycle: "active" } });
+      truck.lifecycle = "active";
+    }
+
     // A trip created while this truck was still pending (tripController.
     // postTrip) was saved as a draft rather than blocked — now that the
     // truck is verified, publish it automatically so the transporter
     // doesn't have to come back and resubmit. Skips a draft whose
     // departure already passed while it sat in review — that one needs a
     // human to update the date, not a silent auto-publish into the past.
+    // (New draft trips can no longer be created — postTrip now hard-blocks
+    // until the truck is active — but this stays for any legacy data.)
     if (truck.status === "verified") {
       const draftTrips = await Trip.find({ truck: truck._id, status: "draft", departureAt: { $gt: new Date() } });
       await Promise.all(

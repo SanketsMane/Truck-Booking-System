@@ -28,6 +28,7 @@ const registerTruck = async (agent, overrides = {}) => {
     truckType: overrides.truckType || "Open Body",
     bodyType: overrides.bodyType || "Flatbed",
     totalCapacity: overrides.totalCapacity ?? 20,
+    authorizedToList: true,
   });
   if (!res.body.success) throw new Error(`registerTruck failed: ${res.body.msg}`);
   return res.body.truck;

@@ -25,6 +25,7 @@ const registerTruck = async (agent, overrides = {}) => {
     truckType: overrides.truckType || "Open Body",
     bodyType: overrides.bodyType || "Flatbed",
     totalCapacity: overrides.totalCapacity ?? 20,
+    authorizedToList: true,
   });
   if (!res.body.success) {
     throw new Error(`registerTruck failed: ${res.body.msg}`);
@@ -71,6 +72,7 @@ describe("POST /trucks — regNumber validation", () => {
       truckType: "Open Body",
       bodyType: "Flatbed",
       totalCapacity: 20,
+      authorizedToList: true,
     });
     expect(res.status).toBe(409);
     expect(res.body.success).toBe(false);
@@ -90,6 +92,7 @@ describe("POST /trucks — regNumber validation", () => {
       truckType: "Open Body",
       bodyType: "Flatbed",
       totalCapacity: 20,
+      authorizedToList: true,
     });
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);

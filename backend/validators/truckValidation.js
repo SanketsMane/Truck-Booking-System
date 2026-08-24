@@ -34,6 +34,13 @@ const registerTruckValidation = Joi.object({
   totalCapacity: Joi.number().positive().required(),
   documents: Joi.array().items(documentItem).default([]),
   photos: Joi.array().items(photoItem).default([]),
+  // The RC owner doesn't have to be the driver — this is the explicit
+  // "I confirm that I am authorized to use and list this vehicle on
+  // TruckGee" consent, required rather than optional UI copy.
+  authorizedToList: Joi.boolean().valid(true).required().messages({
+    "any.only": "Confirm you're authorized to use and list this vehicle",
+    "any.required": "Confirm you're authorized to use and list this vehicle",
+  }),
 });
 
 const updateTruckValidation = Joi.object({

@@ -30,6 +30,7 @@ it("walks the full shipper/transporter booking lifecycle", async () => {
     truckType: "Open Body",
     bodyType: "Flatbed",
     totalCapacity: 20,
+    authorizedToList: true,
   });
   expect(truckRes.status).toBe(201);
   const truckId = truckRes.body.truck._id;

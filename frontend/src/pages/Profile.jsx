@@ -238,7 +238,9 @@ const EscalationTimer = ({ role, submittedAt }) => {
   );
 };
 
-const RoleUpload = ({ role, record, onSubmitted }) => {
+const ID_PROOF_DOC_TYPES = ["aadhaar", "pan"];
+
+const RoleUpload = ({ role, record, onSubmitted, hasProfilePhoto }) => {
   const [rows, setRows] = useState([{ docType: DOC_TYPE_OPTIONS[0].value, file: null }]);
   const [businessName, setBusinessName] = useState(record?.businessName || "");
   const [submitting, setSubmitting] = useState(false);
@@ -266,6 +268,25 @@ const RoleUpload = ({ role, record, onSubmitted }) => {
     if (!usable.length) {
       toast.error("Attach at least one document before submitting");
       return;
+    }
+    // Driver verification requires an ID proof + driving licence + a
+    // profile photo already on file — mirrors verificationController.
+    // submitVerification's server-side check, so the transporter finds out
+    // here instead of after a round trip to the server.
+    if (role === "transporter") {
+      const docTypes = usable.map((r) => r.docType);
+      if (!docTypes.some((t) => ID_PROOF_DOC_TYPES.includes(t))) {
+        toast.error("Attach an ID proof (Aadhaar or PAN) for driver verification");
+        return;
+      }
+      if (!docTypes.includes("driving_license")) {
+        toast.error("Attach a driving licence for driver verification");
+        return;
+      }
+      if (!hasProfilePhoto) {
+        toast.error("Upload a profile photo above before submitting driver verification");
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -836,6 +857,7 @@ export const Profile = () => {
               role={role}
               record={verifications.find((v) => v.type === role)}
               onSubmitted={loadVerifications}
+              hasProfilePhoto={Boolean(user.profilePhoto)}
             />
           ))
         ) : null}
