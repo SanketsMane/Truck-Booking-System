@@ -240,8 +240,22 @@ const EscalationTimer = ({ role, submittedAt }) => {
 
 const ID_PROOF_DOC_TYPES = ["aadhaar", "pan"];
 
+// Driver ("transporter") verification requires an ID proof AND a driving
+// licence in the SAME submission (verificationController.submitVerification's
+// role-scoped check) — pre-seeding both slots means the transporter sees
+// two upload fields from the start instead of discovering, only after a
+// failed submit, that one document was never enough. Any other role keeps
+// the original single freeform row.
+const defaultRows = (role) =>
+  role === "transporter"
+    ? [
+        { docType: "aadhaar", file: null },
+        { docType: "driving_license", file: null },
+      ]
+    : [{ docType: DOC_TYPE_OPTIONS[0].value, file: null }];
+
 const RoleUpload = ({ role, record, onSubmitted, hasProfilePhoto }) => {
-  const [rows, setRows] = useState([{ docType: DOC_TYPE_OPTIONS[0].value, file: null }]);
+  const [rows, setRows] = useState(() => defaultRows(role));
   const [businessName, setBusinessName] = useState(record?.businessName || "");
   const [submitting, setSubmitting] = useState(false);
 
@@ -276,11 +290,11 @@ const RoleUpload = ({ role, record, onSubmitted, hasProfilePhoto }) => {
     if (role === "transporter") {
       const docTypes = usable.map((r) => r.docType);
       if (!docTypes.some((t) => ID_PROOF_DOC_TYPES.includes(t))) {
-        toast.error("Attach an ID proof (Aadhaar or PAN) for driver verification");
+        toast.error("Driver verification needs BOTH an ID proof and a driving licence — attach an ID proof (Aadhaar or PAN) too, using \"+ Add another document\"");
         return;
       }
       if (!docTypes.includes("driving_license")) {
-        toast.error("Attach a driving licence for driver verification");
+        toast.error("Driver verification needs BOTH an ID proof and a driving licence — attach a driving licence too, using \"+ Add another document\"");
         return;
       }
       if (!hasProfilePhoto) {
@@ -297,7 +311,7 @@ const RoleUpload = ({ role, record, onSubmitted, hasProfilePhoto }) => {
       }
       await verificationApi.submitVerification({ type: role, businessName: businessName.trim(), documents });
       toast.success("Documents submitted for review");
-      setRows([{ docType: DOC_TYPE_OPTIONS[0].value, file: null }]);
+      setRows(defaultRows(role));
       onSubmitted();
     } catch (error) {
       toast.error(error.message);
@@ -326,8 +340,14 @@ const RoleUpload = ({ role, record, onSubmitted, hasProfilePhoto }) => {
           </>
         )}
         {status === "verified" && <Muted>You're verified as a {role} — no action needed.</Muted>}
-        {!record && (
+        {!record && role !== "transporter" && (
           <Muted>Submit your documents so we can verify you as a {role}.</Muted>
+        )}
+        {!record && role === "transporter" && (
+          <Muted>
+            Driver verification needs all three: an ID proof (Aadhaar or PAN), a driving licence, and a profile
+            photo (upload it above). Attach both documents below before submitting.
+          </Muted>
         )}
 
         {record?.businessName && <Muted>Business name on file: {record.businessName}</Muted>}
