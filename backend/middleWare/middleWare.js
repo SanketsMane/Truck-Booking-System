@@ -1,15 +1,29 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 
+// Web sends the JWT as an httpOnly cookie; the mobile app has no equivalent
+// cookie jar, so it sends the same JWT shape as a bearer header instead
+// (issued by authController.issueMobileTokens/mobileRefresh). Bearer is
+// checked first — a mobile request has no cookie to fall back to anyway —
+// but this is purely additive: an existing cookie-only web request is
+// completely unaffected.
+const extractToken = (req) => {
+    const authHeader = req.headers.authorization || "";
+    if (authHeader.startsWith("Bearer ")) {
+        return authHeader.slice(7).trim();
+    }
+    return req.cookies.token;
+};
+
 // Verifies the JWT, then re-checks the account against the database on
 // every request rather than trusting the token's embedded claims — a banned
 // user's token, a stale role claim from before an addRole call, or a
 // logged-out session's token all get rejected here instead of silently
-// continuing to work until the token's natural 30-day expiry.
+// continuing to work until the token's natural expiry.
 const authMiddleware = async (req, res, next) => {
 
     try {
-        const token = req.cookies.token;
+        const token = extractToken(req);
 
         if (!token) {
             return res.status(401).json({ success: false, msg: "Unauthorized" });
@@ -53,7 +67,7 @@ const authMiddleware = async (req, res, next) => {
 // document still needs req.auth to run the owner-or-admin check downstream).
 const optionalAuthMiddleware = async (req, res, next) => {
     try {
-        const token = req.cookies.token;
+        const token = extractToken(req);
         if (!token) {
             return next();
         }

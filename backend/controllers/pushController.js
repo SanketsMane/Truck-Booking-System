@@ -1,5 +1,11 @@
 const PushSubscription = require("../models/pushSubscriptionModel");
-const { subscribePushValidation, unsubscribePushValidation } = require("../validators/pushValidation");
+const DeviceToken = require("../models/deviceTokenModel");
+const {
+  subscribePushValidation,
+  unsubscribePushValidation,
+  registerDeviceValidation,
+  unregisterDeviceValidation,
+} = require("../validators/pushValidation");
 const sendServerError = require("../utils/sendServerError");
 
 // Upsert by endpoint — a browser calling subscribe() again with the same
@@ -54,4 +60,53 @@ const unsubscribe = async (req, res) => {
   }
 };
 
-module.exports = { subscribe, unsubscribe };
+// The mobile app's counterpart to subscribe() — an FCM registration token
+// instead of a Web Push endpoint+keys pair (see deviceTokenModel.js's own
+// comment for why these are separate models). Same upsert-by-token,
+// race-safe-on-duplicate-insert shape as subscribe() above: a device
+// re-registering (app reopened, token rotated by the OS) reassigns the row
+// rather than erroring, and a shared device where a different user
+// subsequently registers correctly reassigns the token to them.
+const registerDevice = async (req, res) => {
+  try {
+    const { error, value } = registerDeviceValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    try {
+      await DeviceToken.findOneAndUpdate(
+        { token: value.token },
+        { user: req.auth.id, token: value.token, platform: value.platform, lastSeenAt: new Date() },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
+    } catch (upsertError) {
+      if (upsertError.code !== 11000) throw upsertError;
+      await DeviceToken.findOneAndUpdate(
+        { token: value.token },
+        { user: req.auth.id, token: value.token, platform: value.platform, lastSeenAt: new Date() }
+      );
+    }
+
+    res.status(200).json({ success: true, msg: "Device registered for push notifications" });
+  } catch (error) {
+    sendServerError(res, error, "pushController");
+  }
+};
+
+const unregisterDevice = async (req, res) => {
+  try {
+    const { error, value } = unregisterDeviceValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    await DeviceToken.deleteOne({ token: value.token, user: req.auth.id });
+
+    res.status(200).json({ success: true, msg: "Device unregistered" });
+  } catch (error) {
+    sendServerError(res, error, "pushController");
+  }
+};
+
+module.exports = { subscribe, unsubscribe, registerDevice, unregisterDevice };

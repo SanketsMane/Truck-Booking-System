@@ -1,0 +1,61 @@
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { theme } from "../../src/theme";
+
+const TAB_ICON = {
+  index: "search",
+  "bookings/index": "briefcase",
+  "trucks/index": "car",
+  "chat/index": "chatbubbles",
+  "profile/index": "person",
+};
+
+export default function AppTabsLayout() {
+  return (
+    <Tabs
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: theme.color.accent,
+        tabBarInactiveTintColor: theme.color.textFaint,
+        tabBarStyle: { borderTopColor: theme.color.border },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICON[route.name] || "ellipse"} size={size} color={color} />
+        ),
+      })}
+    >
+      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="bookings/index" options={{ title: "Bookings" }} />
+      <Tabs.Screen name="trucks/index" options={{ title: "My Truck" }} />
+      <Tabs.Screen name="chat/index" options={{ title: "Chat" }} />
+      <Tabs.Screen name="profile/index" options={{ title: "Profile" }} />
+
+      {/* Every other (app) screen — trip detail, post-trip wizard, booking
+          detail, verification, support, etc. — is pushed on top of a tab
+          from within these screens (via router.push) and shares the tab
+          bar's stack rather than getting its own bottom-tab entry. Hiding
+          it from the tab bar (not the router) keeps the URL/route usable
+          for deep links and back-navigation without cluttering the bar. */}
+      <Tabs.Screen name="search-results" options={{ href: null }} />
+      <Tabs.Screen name="trips/[id]/index" options={{ href: null }} />
+      <Tabs.Screen name="trips/[id]/manage" options={{ href: null }} />
+      <Tabs.Screen name="trips/mine" options={{ href: null }} />
+      <Tabs.Screen name="trips/new/route" options={{ href: null }} />
+      <Tabs.Screen name="trips/new/truck" options={{ href: null }} />
+      <Tabs.Screen name="trips/new/capacity" options={{ href: null }} />
+      <Tabs.Screen name="trips/new/review" options={{ href: null }} />
+      <Tabs.Screen name="bookings/[id]" options={{ href: null }} />
+      <Tabs.Screen name="trucks/register" options={{ href: null }} />
+      <Tabs.Screen name="trucks/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chat/[threadId]" options={{ href: null }} />
+      <Tabs.Screen name="profile/edit" options={{ href: null }} />
+      <Tabs.Screen name="profile/password" options={{ href: null }} />
+      <Tabs.Screen name="profile/roles" options={{ href: null }} />
+      <Tabs.Screen name="profile/verification/[role]" options={{ href: null }} />
+      <Tabs.Screen name="profile/notification-settings" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="support/index" options={{ href: null }} />
+      <Tabs.Screen name="support/new" options={{ href: null }} />
+      <Tabs.Screen name="disputes" options={{ href: null }} />
+    </Tabs>
+  );
+}

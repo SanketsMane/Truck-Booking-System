@@ -7,10 +7,15 @@ const registerChatHandlers = require("./chatHandlers");
 
 // Same checks as the HTTP authMiddleware — a banned or logged-out session
 // shouldn't be able to open (or keep) a live socket connection either.
+// Mobile has no cookie jar to ride on, so socket.io-client's standard
+// `{ auth: { token } }` connect-time option is checked first — the same
+// bearer access token the mobile app sends on REST calls (authMiddleware.
+// extractToken's counterpart for the socket handshake).
 const authenticateSocket = async (socket, next) => {
   try {
+    const bearerToken = socket.handshake.auth?.token;
     const cookies = parseCookie(socket.handshake.headers.cookie || "");
-    const token = cookies.token;
+    const token = bearerToken || cookies.token;
     if (!token) {
       return next(new Error("Unauthorized"));
     }

@@ -27,6 +27,20 @@ const updateSettingsValidation = Joi.object({
   verificationGateEnabled: Joi.boolean().required(),
 }).required();
 
+// A loose x.y.z check, not a strict semver library — this only ever feeds
+// a simple version-number comparison on the mobile app's side, not a
+// package-manager range resolver.
+const semverSchema = Joi.string().trim().pattern(/^\d+\.\d+\.\d+$/).messages({
+  "string.pattern.base": "Enter a version like 1.2.0",
+});
+
+const updateMobileConfigValidation = Joi.object({
+  minSupportedVersion: semverSchema.required(),
+  latestVersion: semverSchema.required(),
+  forceUpdate: Joi.boolean().required(),
+  maintenanceMode: Joi.boolean().required(),
+}).required();
+
 // A local email schema rather than importing authValidation.js's — that
 // file is mid-rewrite in a concurrently-running session, and branding's
 // contact email has no need to share a schema object with login/signup.
@@ -103,4 +117,5 @@ module.exports = {
   updateBrandingValidation,
   setAdminRoleValidation,
   createUserValidation,
+  updateMobileConfigValidation,
 };

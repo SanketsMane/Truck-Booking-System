@@ -5,6 +5,7 @@ import { ImagePlus, Check } from "lucide-react";
 import {
   getAdminSettings,
   updateAdminSettings,
+  updateMobileConfig,
   updateBranding,
   getIntegrations,
   updateSmsIntegration,
@@ -663,6 +664,138 @@ const VerificationGateCard = () => {
   );
 };
 
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+// The mobile app's launch-time gate (GET /meta/mobile-config) — lets a
+// critical fix force old app versions to update, or block launch entirely
+// for maintenance, without waiting on app-store review to reach every
+// install. Same shape as VerificationGateCard above (load, edit, save one
+// card), just with more than one field.
+const MobileConfigCard = () => {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { settings } = await getAdminSettings();
+        setConfig({
+          minSupportedVersion: settings?.mobile?.minSupportedVersion || "1.0.0",
+          latestVersion: settings?.mobile?.latestVersion || "1.0.0",
+          forceUpdate: !!settings?.mobile?.forceUpdate,
+          maintenanceMode: !!settings?.mobile?.maintenanceMode,
+        });
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!VERSION_PATTERN.test(config.minSupportedVersion) || !VERSION_PATTERN.test(config.latestVersion)) {
+      setError("Enter versions like 1.2.0");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await updateMobileConfig(config);
+      toast.success("Mobile app config updated");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || !config) {
+    return (
+      <AdminCard>
+        <Row style={{ justifyContent: "center", padding: "30px 0" }}>
+          <Spinner $size={24} />
+        </Row>
+      </AdminCard>
+    );
+  }
+
+  return (
+    <AdminCard>
+      <form onSubmit={handleSave}>
+        <Stack $gap={4}>
+          <Stack $gap={1}>
+            <SectionTitle>Mobile app</SectionTitle>
+            <Muted>Controls what the Android/iOS apps see on launch.</Muted>
+          </Stack>
+
+          <Row $gap={3} $wrap>
+            <Field label="Minimum supported version" error={error} help="e.g. 1.2.0">
+              <Input
+                value={config.minSupportedVersion}
+                onChange={(e) => setConfig((c) => ({ ...c, minSupportedVersion: e.target.value }))}
+              />
+            </Field>
+            <Field label="Latest available version" help="e.g. 1.3.0">
+              <Input
+                value={config.latestVersion}
+                onChange={(e) => setConfig((c) => ({ ...c, latestVersion: e.target.value }))}
+              />
+            </Field>
+          </Row>
+
+          <CardRow>
+            <Stack $gap={1}>
+              <Row $gap={2}>
+                <strong>Force update</strong>
+                <StatusBadge status={config.forceUpdate ? "verified" : "expired"}>
+                  {config.forceUpdate ? "Enabled" : "Disabled"}
+                </StatusBadge>
+              </Row>
+              <Muted>Block launch below the minimum supported version until the app is updated.</Muted>
+            </Stack>
+            <Switch
+              type="button"
+              $on={config.forceUpdate}
+              onClick={() => setConfig((c) => ({ ...c, forceUpdate: !c.forceUpdate }))}
+              aria-pressed={config.forceUpdate}
+              aria-label="Toggle force update"
+            />
+          </CardRow>
+
+          <CardRow>
+            <Stack $gap={1}>
+              <Row $gap={2}>
+                <strong>Maintenance mode</strong>
+                <StatusBadge status={config.maintenanceMode ? "rejected" : "expired"}>
+                  {config.maintenanceMode ? "Enabled" : "Disabled"}
+                </StatusBadge>
+              </Row>
+              <Muted>Blocks launch for every app version, regardless of update status.</Muted>
+            </Stack>
+            <Switch
+              type="button"
+              $on={config.maintenanceMode}
+              onClick={() => setConfig((c) => ({ ...c, maintenanceMode: !c.maintenanceMode }))}
+              aria-pressed={config.maintenanceMode}
+              aria-label="Toggle maintenance mode"
+            />
+          </CardRow>
+
+          <Row>
+            <Button type="submit" $size="sm" disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </Row>
+        </Stack>
+      </form>
+    </AdminCard>
+  );
+};
+
 const SMS_PROVIDERS = [
   { value: "console", label: "None — log to server console (dev only)" },
   { value: "twilio", label: "Twilio" },
@@ -1001,6 +1134,7 @@ export const Settings = () => {
                 description="Platform-wide behavior and access controls."
               />
               <VerificationGateCard />
+              <MobileConfigCard />
             </Stack>
           )}
 

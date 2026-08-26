@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const { emitToUser } = require("../realtime/io");
 const { NOTIFICATION_CATEGORIES } = require("../config/notificationCategories");
 const { sendPushToUser } = require("./webPush");
+const { sendFcmToUser } = require("./fcmPush");
 const { getBrandName } = require("./brandingCache");
 
 // Mirrors frontend/src/pages/Notifications.jsx's describe() copy exactly,
@@ -104,10 +105,15 @@ const notify = async (userId, type, payload = {}) => {
       sentAt: notification.sentAt,
     });
 
-    // Fire-and-forget — sendPushToUser never throws, and a caller awaiting
-    // notify() shouldn't also wait on push-service network latency.
+    // Fire-and-forget — neither push function ever throws, and a caller
+    // awaiting notify() shouldn't also wait on push-service network
+    // latency. Both are sent unconditionally: a dual-role/dual-device user
+    // (web browser open AND the mobile app installed) gets both, not one
+    // or the other — sendPushToUser/sendFcmToUser each independently no-op
+    // if that user has no subscriptions/device tokens of their kind.
     const { body, url } = pushCopy(type, payload);
     sendPushToUser(userId, { title: getBrandName(), body, url });
+    sendFcmToUser(userId, { title: getBrandName(), body, url });
 
     return notification;
   } catch (error) {

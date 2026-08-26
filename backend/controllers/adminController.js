@@ -26,6 +26,7 @@ const {
   updateBrandingValidation,
   setAdminRoleValidation,
   createUserValidation,
+  updateMobileConfigValidation,
 } = require("../validators/adminValidation");
 
 // Same cost factor authController.js's signup/resetPassword/setPassword use
@@ -667,6 +668,37 @@ const getSettings = async (req, res) => {
   }
 };
 
+// The operable side of GET /meta/mobile-config — lets a "full" admin force
+// old app versions to update (or block launch entirely for maintenance)
+// without a backend redeploy.
+const updateMobileConfig = async (req, res) => {
+  try {
+    const { error, value } = updateMobileConfigValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const settings = await PlatformSetting.getSettings();
+    const before = { ...(settings.mobile?.toObject?.() || settings.mobile || {}) };
+    settings.mobile = value;
+    await settings.save();
+
+    await logAdminAction({
+      actor: req.auth.id,
+      action: "settings.mobileConfig.update",
+      targetType: "PlatformSetting",
+      targetId: settings._id,
+      before,
+      after: value,
+      scope: req.auth.adminScope,
+    });
+
+    res.status(200).json({ success: true, msg: "Mobile config updated", settings });
+  } catch (error) {
+    sendServerError(res, error, "adminController");
+  }
+};
+
 // One endpoint for the whole branding concern (name + logo + favicon +
 // contact email/mobile) rather than one per field — matches how the
 // sms/email integration endpoints each cover several related fields under
@@ -845,6 +877,7 @@ module.exports = {
   forceCancelBooking,
   getSettings,
   updateSettings,
+  updateMobileConfig,
   updateBranding,
   exportBookingsCsv,
   exportBookingsByRouteCsv,

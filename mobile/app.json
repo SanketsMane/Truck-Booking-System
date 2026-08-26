@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "TruckGee",
+    "slug": "truckgee",
+    "scheme": "truckgee",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.truckgee.app"
+    },
+    "android": {
+      "package": "com.truckgee.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TruckGee uses your location to find your current pickup/drop point and nearby trips.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TruckGee needs access to your photos to upload KYC documents and truck photos.",
+          "cameraPermission": "TruckGee needs access to your camera to take photos of KYC documents and your truck.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to quickly and securely unlock TruckGee."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

@@ -5,6 +5,7 @@ const sendServerError = require("../utils/sendServerError");
 
 const User = require("../models/userModel");
 const Verification = require("../models/verificationModel");
+const RefreshToken = require("../models/refreshTokenModel");
 const otpProvider = require("../utils/otpProvider");
 const emailProvider = require("../utils/emailProvider");
 const { shouldBlockUnconfiguredOtp } = require("../utils/notificationGuard");
@@ -19,6 +20,7 @@ const {
   forgotPasswordValidation,
   resetPasswordValidation,
   setPasswordValidation,
+  mobileRefreshTokenValidation,
 } = require("../validators/authValidation");
 const {
   OTP_LENGTH,
@@ -30,6 +32,8 @@ const {
   OTP_LOCKOUT_MINUTES,
   JWT_EXPIRES_IN,
   PASSWORD_RESET_EXPIRY_MINUTES,
+  ACCESS_TOKEN_EXPIRES_IN,
+  REFRESH_TOKEN_EXPIRES_IN_DAYS,
 } = require("../config/authConfig");
 
 const saltRounds = 10;
@@ -65,6 +69,44 @@ const issueSession = (res, user) => {
     { expiresIn: JWT_EXPIRES_IN }
   );
   res.cookie("token", token, COOKIE_OPTIONS);
+};
+
+// The mobile app can't rely on the httpOnly cookie the way a browser does
+// (no shared cookie jar on RN's networking stack) — it identifies itself
+// with this header on every login/signup call so those handlers know to
+// ALSO hand back a bearer-token pair in the JSON body, alongside (not
+// instead of) issueSession's cookie, which stays harmless-but-unused for a
+// mobile client.
+const isMobileClient = (req) => req.headers["x-client-type"] === "mobile";
+
+const signAccessToken = (user) =>
+  jwt.sign(
+    { id: user._id, roles: user.roles, isAdmin: user.isAdmin, sessionVersion: user.sessionVersion },
+    process.env.SECRET_KEY,
+    { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+  );
+
+// Issues a short-lived access token plus a long-lived, per-device refresh
+// token (a new RefreshToken row — see that model's own comment for why this
+// is what makes real per-device "log out of just my phone" possible, unlike
+// the single sessionVersion scalar the cookie session relies on). The raw
+// refresh token is returned to the caller and NEVER stored — only its hash
+// is, same principle as password hashing.
+const issueMobileTokens = async (user, req) => {
+  const accessToken = signAccessToken(user);
+  const rawRefreshToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawRefreshToken).digest("hex");
+
+  await RefreshToken.create({
+    user: user._id,
+    tokenHash,
+    deviceId: req.body.deviceId,
+    deviceInfo: req.body.deviceInfo,
+    platform: req.body.platform,
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000),
+  });
+
+  return { accessToken, refreshToken: rawRefreshToken };
 };
 
 const publicProfile = (user) => ({
@@ -434,7 +476,11 @@ const verifyOtp = async (req, res) => {
       emailProvider.sendEmail({ to: user.email, subject, html }).catch((err) => console.error("[verifyOtp] welcome email failed:", err.message));
     }
 
-    res.status(200).json({ success: true, msg: "Login successful", user: publicProfile(user) });
+    const responseBody = { success: true, msg: "Login successful", user: publicProfile(user) };
+    if (isMobileClient(req)) {
+      responseBody.tokens = await issueMobileTokens(user, req);
+    }
+    res.status(200).json(responseBody);
   } catch (error) {
     sendServerError(res, error, "authController");
   }
@@ -488,6 +534,94 @@ const logout = async (req, res) => {
     await User.findByIdAndUpdate(req.auth.id, { $inc: { sessionVersion: 1 } });
     res.clearCookie("token", COOKIE_OPTIONS);
     res.status(200).json({ success: true, msg: "Logout successful" });
+  } catch (error) {
+    sendServerError(res, error, "authController");
+  }
+};
+
+// Exchanges a refresh token for a new access+refresh pair — takes proof of
+// possessing the refresh token, not an access token, since the whole point
+// is to work even after the short-lived access token has expired. Rotates
+// on every call: the presented token is marked revoked (not deleted) and
+// pointed at its replacement, so a REUSE of an already-rotated token — the
+// legitimate holder should only ever have the newest one — is a real theft
+// signal, answered by revoking every other still-live row for that user
+// rather than trusting either token further.
+const mobileRefresh = async (req, res) => {
+  try {
+    const { error, value } = mobileRefreshTokenValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(value.refreshToken).digest("hex");
+    const stored = await RefreshToken.findOne({ tokenHash });
+    if (!stored) {
+      return res.status(401).json({ success: false, msg: "Invalid session — please log in again" });
+    }
+
+    if (stored.revokedAt) {
+      await RefreshToken.updateMany({ user: stored.user, revokedAt: null }, { $set: { revokedAt: new Date() } });
+      return res.status(401).json({ success: false, msg: "Session compromised — please log in again" });
+    }
+
+    if (stored.expiresAt < new Date()) {
+      return res.status(401).json({ success: false, msg: "Session expired — please log in again" });
+    }
+
+    const user = await User.findById(stored.user);
+    if (!user || user.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        msg: user?.status === "banned" ? "This account has been banned" : "This account has been suspended",
+      });
+    }
+
+    // Create the replacement BEFORE revoking the presented token — if
+    // create() throws, the caller's still-valid token is untouched and they
+    // can just retry, instead of being stranded with no valid token at all.
+    const newRawToken = crypto.randomBytes(32).toString("hex");
+    const newTokenHash = crypto.createHash("sha256").update(newRawToken).digest("hex");
+    await RefreshToken.create({
+      user: user._id,
+      tokenHash: newTokenHash,
+      deviceId: stored.deviceId,
+      deviceInfo: stored.deviceInfo,
+      platform: stored.platform,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000),
+    });
+    stored.revokedAt = new Date();
+    stored.replacedByTokenHash = newTokenHash;
+    await stored.save();
+
+    res.status(200).json({
+      success: true,
+      msg: "Session refreshed",
+      tokens: { accessToken: signAccessToken(user), refreshToken: newRawToken },
+    });
+  } catch (error) {
+    sendServerError(res, error, "authController");
+  }
+};
+
+// Revokes just THIS device's refresh token — the real per-device "log out
+// of only my phone" logout() itself can't offer, since sessionVersion is a
+// single scalar shared by every session. Deliberately doesn't require a
+// still-valid access token (proof of holding the refresh token is enough),
+// so a device can log out cleanly even after its access token already
+// expired. Idempotent and silent on an unknown/already-revoked token — no
+// reason to let this endpoint confirm whether a given token was ever valid.
+const mobileLogout = async (req, res) => {
+  try {
+    const { error, value } = mobileRefreshTokenValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ success: false, msg: error.details[0].message });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(value.refreshToken).digest("hex");
+    await RefreshToken.updateOne({ tokenHash, revokedAt: null }, { $set: { revokedAt: new Date() } });
+
+    res.status(200).json({ success: true, msg: "Logged out" });
   } catch (error) {
     sendServerError(res, error, "authController");
   }
@@ -619,7 +753,11 @@ const signup = async (req, res) => {
     const { subject, html } = welcomeEmail({ name: user.name });
     emailProvider.sendEmail({ to: user.email, subject, html }).catch((err) => console.error("[signup] welcome email failed:", err.message));
 
-    res.status(201).json({ success: true, msg: "Account created", user: publicProfile(user) });
+    const responseBody = { success: true, msg: "Account created", user: publicProfile(user) };
+    if (isMobileClient(req)) {
+      responseBody.tokens = await issueMobileTokens(user, req);
+    }
+    res.status(201).json(responseBody);
   } catch (error) {
     sendServerError(res, error, "authController");
   }
@@ -660,7 +798,11 @@ const loginPassword = async (req, res) => {
 
     issueSession(res, user);
 
-    res.status(200).json({ success: true, msg: "Login successful", user: publicProfile(user) });
+    const responseBody = { success: true, msg: "Login successful", user: publicProfile(user) };
+    if (isMobileClient(req)) {
+      responseBody.tokens = await issueMobileTokens(user, req);
+    }
+    res.status(200).json(responseBody);
   } catch (error) {
     sendServerError(res, error, "authController");
   }
@@ -790,4 +932,6 @@ module.exports = {
   forgotPassword,
   resetPassword,
   setPassword,
+  mobileRefresh,
+  mobileLogout,
 };

@@ -43,6 +43,8 @@ export const getAdminSettings = () => api.get("/admin/settings");
 
 export const updateAdminSettings = (settings) => api.put("/admin/settings", settings);
 
+export const updateMobileConfig = (config) => api.put("/admin/settings/mobile-config", config);
+
 export const downloadAdminReport = (report) =>
   downloadFile(`/admin/reports/${report}.csv`, `${report}.csv`);
 

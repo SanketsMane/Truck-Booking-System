@@ -43,6 +43,7 @@ router.put("/bookings/:id/force-cancel", requireAdminScope("full"), adminControl
 
 router.get("/settings", adminController.getSettings);
 router.put("/settings", requireAdminScope("full"), adminController.updateSettings);
+router.put("/settings/mobile-config", requireAdminScope("full"), adminController.updateMobileConfig);
 router.put("/settings/branding", requireAdminScope("full"), adminController.updateBranding);
 
 router.get("/disputes", disputeController.listAllDisputes);

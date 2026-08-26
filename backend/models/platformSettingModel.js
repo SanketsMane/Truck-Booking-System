@@ -61,6 +61,24 @@ const platformSettingSchema = new mongoose.Schema(
     // "manual" — the existing upload-then-admin-queue flow — until an
     // admin configures a real KYC vendor. See utils/kycProvider.js.
     kyc: { type: integrationSchema, default: () => ({ provider: "manual" }) },
+
+    // Surfaced publicly via GET /meta/mobile-config — lets a critical
+    // backend-breaking-change ship without waiting on app-store review to
+    // reach every install. minSupportedVersion/forceUpdate gate versions
+    // that can no longer talk to this backend at all; maintenanceMode is a
+    // blunter "block every version" switch for planned downtime.
+    mobile: {
+      type: new mongoose.Schema(
+        {
+          minSupportedVersion: { type: String, trim: true, default: "1.0.0" },
+          latestVersion: { type: String, trim: true, default: "1.0.0" },
+          forceUpdate: { type: Boolean, default: false },
+          maintenanceMode: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
   },
   { timestamps: true, _id: false }
 );

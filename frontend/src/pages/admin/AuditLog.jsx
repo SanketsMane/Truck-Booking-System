@@ -43,6 +43,7 @@ const ACTIONS = [
   { value: "trip.deactivate", label: "Trip deactivated" },
   { value: "booking.forceCancel", label: "Booking force-cancelled" },
   { value: "settings.update", label: "Settings updated" },
+  { value: "settings.mobileConfig.update", label: "Mobile app config updated" },
   { value: "settings.branding.update", label: "Branding updated" },
   { value: "chat.view", label: "Chat viewed" },
   { value: "dispute.resolve", label: "Dispute resolved" },

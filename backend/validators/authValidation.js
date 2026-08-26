@@ -41,6 +41,17 @@ const passwordSchema = Joi.string().min(PASSWORD_MIN_LENGTH).required().messages
   "string.min": `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
 });
 
+// Optional on every login/signup entry point — present only when the caller
+// is the mobile app (see authController.isMobileClient), which uses them to
+// tag the RefreshToken row it creates. Ignored (harmlessly) if the web
+// client ever sent them, since nothing reads deviceId/deviceInfo/platform
+// outside the mobile-token issuance path.
+const deviceFields = {
+  deviceId: Joi.string().trim().max(200),
+  deviceInfo: Joi.string().trim().max(200),
+  platform: Joi.string().valid("ios", "android"),
+};
+
 const requestOtpValidation = Joi.object({
   email: emailSchema,
 });
@@ -52,6 +63,7 @@ const verifyOtpValidation = Joi.object({
   mobile: mobileSchema,
   city: Joi.string().trim(),
   roles: Joi.array().items(Joi.string().valid("shipper", "transporter")),
+  ...deviceFields,
 });
 
 const addRoleValidation = Joi.object({
@@ -75,11 +87,19 @@ const signupValidation = Joi.object({
     "any.only": "Passwords do not match",
   }),
   roles: Joi.array().items(Joi.string().valid("shipper", "transporter")),
+  ...deviceFields,
 });
 
 const loginPasswordValidation = Joi.object({
   email: emailSchema,
   password: Joi.string().required(),
+  ...deviceFields,
+});
+
+// Raw token is 32 random bytes hex-encoded (authController's
+// issueMobileTokens/mobileRefresh) — always exactly 64 hex characters.
+const mobileRefreshTokenValidation = Joi.object({
+  refreshToken: Joi.string().hex().length(64).required(),
 });
 
 const forgotPasswordValidation = Joi.object({
@@ -112,4 +132,5 @@ module.exports = {
   forgotPasswordValidation,
   resetPasswordValidation,
   setPasswordValidation,
+  mobileRefreshTokenValidation,
 };

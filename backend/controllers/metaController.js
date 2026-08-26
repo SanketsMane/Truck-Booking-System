@@ -49,4 +49,24 @@ const getBranding = async (req, res) => {
   }
 };
 
-module.exports = { listCities, getVapidPublicKey, getBranding };
+// Public — the mobile app checks this on launch to decide whether it can
+// keep running as-is, should nudge the user to update, or must force an
+// update/show a maintenance screen before making any other API call.
+const getMobileConfig = async (req, res) => {
+  try {
+    const settings = await PlatformSetting.getSettings();
+    res.status(200).json({
+      success: true,
+      config: {
+        minSupportedVersion: settings.mobile?.minSupportedVersion || "1.0.0",
+        latestVersion: settings.mobile?.latestVersion || "1.0.0",
+        forceUpdate: Boolean(settings.mobile?.forceUpdate),
+        maintenanceMode: Boolean(settings.mobile?.maintenanceMode),
+      },
+    });
+  } catch (error) {
+    sendServerError(res, error, "metaController");
+  }
+};
+
+module.exports = { listCities, getVapidPublicKey, getBranding, getMobileConfig };
