@@ -1,13 +1,13 @@
 import { Text, StyleSheet } from "react-native";
 import { theme } from "../../theme";
 
-export const PageTitle = ({ children, style }) => <Text style={[styles.pageTitle, style]}>{children}</Text>;
+export const PageTitle = ({ children, style, ...rest }) => <Text style={[styles.pageTitle, style]} {...rest}>{children}</Text>;
 
-export const SectionTitle = ({ children, style }) => <Text style={[styles.sectionTitle, style]}>{children}</Text>;
+export const SectionTitle = ({ children, style, ...rest }) => <Text style={[styles.sectionTitle, style]} {...rest}>{children}</Text>;
 
-export const Body = ({ children, style }) => <Text style={[styles.body, style]}>{children}</Text>;
+export const Body = ({ children, style, ...rest }) => <Text style={[styles.body, style]} {...rest}>{children}</Text>;
 
-export const Muted = ({ children, style }) => <Text style={[styles.muted, style]}>{children}</Text>;
+export const Muted = ({ children, style, ...rest }) => <Text style={[styles.muted, style]} {...rest}>{children}</Text>;
 
 const styles = StyleSheet.create({
   pageTitle: {

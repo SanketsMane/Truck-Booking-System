@@ -49,3 +49,10 @@ export const forgotPassword = (email) => api.post("/auth/forgot-password", { ema
 
 export const setPassword = ({ currentPassword, newPassword, confirmPassword }) =>
   api.put("/auth/set-password", { currentPassword, newPassword, confirmPassword });
+
+// Real per-device session management (backend/controllers/
+// authController.js's listMySessions/revokeSession) — the account-facing
+// counterpart to logout()'s single-device revoke above.
+export const listSessions = () => api.get("/auth/mobile/sessions");
+
+export const revokeSession = (id) => api.del(`/auth/mobile/sessions/${id}`);

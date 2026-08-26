@@ -561,8 +561,20 @@ const mobileRefresh = async (req, res) => {
     }
 
     if (stored.revokedAt) {
-      await RefreshToken.updateMany({ user: stored.user, revokedAt: null }, { $set: { revokedAt: new Date() } });
-      return res.status(401).json({ success: false, msg: "Session compromised — please log in again" });
+      // Only a replay of a token that was already ROTATED AWAY (superseded
+      // by replacedByTokenHash) is a real reuse/theft signal — the
+      // legitimate holder should only ever have the newest token in the
+      // chain, so someone presenting an ancestor means the chain is
+      // compromised and every session on the account should die. A token
+      // revoked WITHOUT being rotated (mobileLogout, or the account holder
+      // revoking this one device from Manage Devices) is just an ended
+      // session, not theft — only this one device is dead; every other
+      // device's session must stay untouched.
+      if (stored.replacedByTokenHash) {
+        await RefreshToken.updateMany({ user: stored.user, revokedAt: null }, { $set: { revokedAt: new Date() } });
+        return res.status(401).json({ success: false, msg: "Session compromised — please log in again" });
+      }
+      return res.status(401).json({ success: false, msg: "Session expired — please log in again" });
     }
 
     if (stored.expiresAt < new Date()) {
@@ -622,6 +634,42 @@ const mobileLogout = async (req, res) => {
     await RefreshToken.updateOne({ tokenHash, revokedAt: null }, { $set: { revokedAt: new Date() } });
 
     res.status(200).json({ success: true, msg: "Logged out" });
+  } catch (error) {
+    sendServerError(res, error, "authController");
+  }
+};
+
+// The account-management counterpart to mobileLogout — "what devices am I
+// signed into, and can I kick one out" — gated by a real access token
+// (unlike refresh/mobileLogout, which only need proof of holding a
+// specific refresh token) since this is browsing/managing the whole
+// account's sessions, not acting on one device's own. Only ever returns
+// this user's own rows (scoped by req.auth.id — never another account's).
+const listMySessions = async (req, res) => {
+  try {
+    const sessions = await RefreshToken.find({ user: req.auth.id, revokedAt: null })
+      .select("_id deviceId deviceInfo platform createdAt expiresAt")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, sessions });
+  } catch (error) {
+    sendServerError(res, error, "authController");
+  }
+};
+
+// Revokes one specific device's session by its RefreshToken row id (not the
+// raw token itself, which this endpoint's caller never has for a device
+// other than the one they're currently on) — scoped to req.auth.id so a
+// user can only ever revoke their own sessions, never someone else's.
+const revokeSession = async (req, res) => {
+  try {
+    const result = await RefreshToken.updateOne(
+      { _id: req.params.id, user: req.auth.id, revokedAt: null },
+      { $set: { revokedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, msg: "Session not found" });
+    }
+    res.status(200).json({ success: true, msg: "Session revoked" });
   } catch (error) {
     sendServerError(res, error, "authController");
   }
@@ -934,4 +982,6 @@ module.exports = {
   setPassword,
   mobileRefresh,
   mobileLogout,
+  listMySessions,
+  revokeSession,
 };

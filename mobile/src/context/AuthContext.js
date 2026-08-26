@@ -36,8 +36,9 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // A 401 that survives client.js's own silent-refresh-and-retry means
     // the refresh token itself is dead (expired/revoked/reused) — there's
-    // no session left to recover, so just clear local state and let the
-    // root layout's Stack.Protected guard redirect to the auth flow.
+    // no session left to recover, so just clear local state. (app) stays
+    // mounted either way (see app/_layout.js); any screen gated by
+    // AuthRequired re-renders its login prompt on its own.
     setUnauthorizedHandler(() => setUser(null));
   }, []);
 

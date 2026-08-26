@@ -12,6 +12,7 @@ import { theme } from "../../../src/theme";
 import { listMyBookings } from "../../../src/api/bookings";
 import { formatINR, formatTons, formatDate } from "../../../src/utils/format";
 import { useAuth } from "../../../src/context/AuthContext";
+import { AuthRequired } from "../../../src/components/AuthRequired";
 
 export const MyBookingsScreen = () => {
   const router = useRouter();
@@ -22,55 +23,58 @@ export const MyBookingsScreen = () => {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
+    if (!user) return;
     setLoading(true);
     listMyBookings({ role })
       .then((res) => setBookings(res.bookings || []))
       .catch(() => setBookings([]))
       .finally(() => setLoading(false));
-  }, [role]);
+  }, [role, user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <Screen scroll={false}>
-      <View style={styles.header}>
-        <PageTitle>My Bookings</PageTitle>
-        {hasBothRoles && (
-          <View style={styles.roleTabs}>
-            <Button title="As Shipper" variant={role === "shipper" ? "primary" : "secondary"} onPress={() => setRole("shipper")} />
-            <Button title="As Transporter" variant={role === "transporter" ? "primary" : "secondary"} onPress={() => setRole("transporter")} />
-          </View>
-        )}
-      </View>
-
-      {loading ? (
-        <LoadingView />
-      ) : bookings.length === 0 ? (
-        <EmptyState>No bookings yet.</EmptyState>
-      ) : (
-        <FlatList
-          data={bookings}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => router.push(`/(app)/bookings/${item._id}`)}>
-              <Card>
-                <View style={styles.rowBetween}>
-                  <Body>
-                    {item.trip?.fromCity} → {item.trip?.toCity}
-                  </Body>
-                  <StatusBadge status={item.status} />
-                </View>
-                <Muted>{formatDate(item.trip?.departureAt)}</Muted>
-                <View style={styles.rowBetween}>
-                  <Muted>{formatTons(item.capacityRequested)}</Muted>
-                  <Body>{formatINR(item.priceEstimate)}</Body>
-                </View>
-              </Card>
-            </Pressable>
+      <AuthRequired title="Log in to see your bookings" body="Track requests and manage shipments once you're signed in.">
+        <View style={styles.header}>
+          <PageTitle>My Bookings</PageTitle>
+          {hasBothRoles && (
+            <View style={styles.roleTabs}>
+              <Button title="As Shipper" variant={role === "shipper" ? "primary" : "secondary"} onPress={() => setRole("shipper")} />
+              <Button title="As Transporter" variant={role === "transporter" ? "primary" : "secondary"} onPress={() => setRole("transporter")} />
+            </View>
           )}
-        />
-      )}
+        </View>
+
+        {loading ? (
+          <LoadingView />
+        ) : bookings.length === 0 ? (
+          <EmptyState>No bookings yet.</EmptyState>
+        ) : (
+          <FlatList
+            data={bookings}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <Pressable onPress={() => router.push(`/(app)/bookings/${item._id}`)}>
+                <Card>
+                  <View style={styles.rowBetween}>
+                    <Body>
+                      {item.trip?.fromCity} → {item.trip?.toCity}
+                    </Body>
+                    <StatusBadge status={item.status} />
+                  </View>
+                  <Muted>{formatDate(item.trip?.departureAt)}</Muted>
+                  <View style={styles.rowBetween}>
+                    <Muted>{formatTons(item.capacityRequested)}</Muted>
+                    <Body>{formatINR(item.priceEstimate)}</Body>
+                  </View>
+                </Card>
+              </Pressable>
+            )}
+          />
+        )}
+      </AuthRequired>
     </Screen>
   );
 };

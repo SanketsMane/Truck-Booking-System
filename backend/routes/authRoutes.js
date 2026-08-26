@@ -17,6 +17,8 @@ router.post("/logout", authMiddleware, authController.logout);
 // protection every other credential-adjacent auth route gets.
 router.post("/mobile/refresh", authLimiter, authController.mobileRefresh);
 router.post("/mobile/logout", authLimiter, authController.mobileLogout);
+router.get("/mobile/sessions", authMiddleware, authController.listMySessions);
+router.delete("/mobile/sessions/:id", authMiddleware, authController.revokeSession);
 
 router.post("/signup", authLimiter, authController.signup);
 router.post("/login-password", authLimiter, authController.loginPassword);

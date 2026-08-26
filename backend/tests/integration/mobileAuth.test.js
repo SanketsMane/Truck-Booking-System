@@ -14,6 +14,13 @@ const emailFor = (seed) => `mobileauth${seed}@example.test`;
 // with the mobile client header — mobile has no cookie jar to carry, so
 // there's no reason to use a cookie-jar-backed supertest agent here.
 const mobileVerifyOtp = async (email, overrides = {}) => {
+  // Backdate any still-cooling-down OTP resend gate (authConfig's
+  // OTP_RESEND_COOLDOWN_SECONDS) before asking for a fresh one — the
+  // sessions tests below deliberately log the same email in twice in
+  // immediate succession (two "devices"), which a real user wouldn't do
+  // inside the 30s window but this helper needs to for the scenario. A
+  // no-op for a brand-new email (no matching document yet).
+  await User.updateOne({ email }, { $set: { "otp.lastSentAt": new Date(0) } });
   await request(app).post("/auth/request-otp").send({ email });
   return request(app)
     .post("/auth/verify-otp")
@@ -179,5 +186,72 @@ describe("POST /auth/mobile/logout", () => {
       .post("/auth/mobile/logout")
       .send({ refreshToken: "b".repeat(64) });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("GET /auth/mobile/sessions and DELETE /auth/mobile/sessions/:id", () => {
+  it("lists only this user's own active sessions, newest first", async () => {
+    const first = await mobileVerifyOtp(emailFor(9), { deviceId: "phone-1" });
+    const second = await mobileVerifyOtp(emailFor(9), { deviceId: "phone-2" });
+    const accessToken = second.body.tokens.accessToken;
+
+    const res = await request(app).get("/auth/mobile/sessions").set("Authorization", `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.sessions).toHaveLength(2);
+    expect(res.body.sessions[0].deviceId).toBe("phone-2");
+    expect(res.body.sessions[1].deviceId).toBe("phone-1");
+    // Never the raw or hashed token itself.
+    expect(res.body.sessions[0].tokenHash).toBeUndefined();
+    expect(first.body.tokens.refreshToken).toBeTruthy();
+  });
+
+  it("revokes one session by id without affecting the others", async () => {
+    const first = await mobileVerifyOtp(emailFor(10), { deviceId: "phone-1" });
+    const second = await mobileVerifyOtp(emailFor(10), { deviceId: "phone-2" });
+
+    const listRes = await request(app)
+      .get("/auth/mobile/sessions")
+      .set("Authorization", `Bearer ${second.body.tokens.accessToken}`);
+    const phoneOneSessionId = listRes.body.sessions.find((s) => s.deviceId === "phone-1")._id;
+
+    const revokeRes = await request(app)
+      .delete(`/auth/mobile/sessions/${phoneOneSessionId}`)
+      .set("Authorization", `Bearer ${second.body.tokens.accessToken}`);
+    expect(revokeRes.status).toBe(200);
+
+    const phoneOneRefresh = await request(app)
+      .post("/auth/mobile/refresh")
+      .send({ refreshToken: first.body.tokens.refreshToken });
+    expect(phoneOneRefresh.status).toBe(401);
+
+    const phoneTwoRefresh = await request(app)
+      .post("/auth/mobile/refresh")
+      .send({ refreshToken: second.body.tokens.refreshToken });
+    expect(phoneTwoRefresh.status).toBe(200);
+  });
+
+  it("does not let a user revoke another user's session", async () => {
+    const victim = await mobileVerifyOtp(emailFor(11), { deviceId: "phone-1" });
+    const attacker = await mobileVerifyOtp(emailFor(12), { deviceId: "phone-1" });
+
+    const listRes = await request(app)
+      .get("/auth/mobile/sessions")
+      .set("Authorization", `Bearer ${victim.body.tokens.accessToken}`);
+    const victimSessionId = listRes.body.sessions[0]._id;
+
+    const res = await request(app)
+      .delete(`/auth/mobile/sessions/${victimSessionId}`)
+      .set("Authorization", `Bearer ${attacker.body.tokens.accessToken}`);
+    expect(res.status).toBe(404);
+
+    const stillWorks = await request(app)
+      .post("/auth/mobile/refresh")
+      .send({ refreshToken: victim.body.tokens.refreshToken });
+    expect(stillWorks.status).toBe(200);
+  });
+
+  it("401s without a bearer token", async () => {
+    const res = await request(app).get("/auth/mobile/sessions");
+    expect(res.status).toBe(401);
   });
 });

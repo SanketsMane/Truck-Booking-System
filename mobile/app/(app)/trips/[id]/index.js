@@ -64,7 +64,12 @@ export const TripDetailScreen = () => {
   if (loading) return <LoadingView />;
   if (!trip) return <Screen><Muted>{error || "Trip not found"}</Muted></Screen>;
 
-  const canBook = trip.status === "published" && user?.roles?.includes("shipper");
+  const isBookable = trip.status === "published";
+  const canBook = isBookable && user?.roles?.includes("shipper");
+  // Viewing a trip is public (matches the web app) — only requesting to
+  // book it needs an account, so a logged-out visitor sees a "log in to
+  // book" prompt here rather than the trip being gated entirely.
+  const needsLoginToBook = isBookable && !user;
 
   return (
     <Screen>
@@ -125,6 +130,14 @@ export const TripDetailScreen = () => {
           <TextField label="Handling notes (optional)" value={handlingNotes} onChangeText={setHandlingNotes} placeholder="Fragile, needs a tail lift, etc." />
           {error ? <Muted style={styles.error}>{error}</Muted> : null}
           <Button title="Request to book" onPress={handleBook} loading={submitting} fullWidth />
+        </Card>
+      )}
+
+      {needsLoginToBook && (
+        <Card>
+          <SectionTitle>Want to book this trip?</SectionTitle>
+          <Muted>Log in or create a free account to send a booking request.</Muted>
+          <Button title="Log in to book" onPress={() => router.push("/(auth)/login")} fullWidth />
         </Card>
       )}
     </Screen>

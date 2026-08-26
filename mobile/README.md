@@ -7,7 +7,7 @@ Native Android and iOS app for TruckGee, built with Expo (managed workflow) and 
 ```bash
 cd mobile
 npm install
-cp .env.example .env   # fill in EXPO_PUBLIC_API_URL and (optionally) EXPO_PUBLIC_LOCATIONIQ_TOKEN
+cp .env.example .env   # fill in EXPO_PUBLIC_API_URL and (optionally) EXPO_PUBLIC_LOCATIONIQ_TOKEN / EXPO_PUBLIC_WEB_URL
 npm start
 ```
 
@@ -17,9 +17,11 @@ Then press `i` (iOS Simulator), `a` (Android Emulator), or scan the QR code with
 
 ## What's implemented
 
-**Backend** (in `../backend`, already shipped): a parallel bearer-token auth path alongside the web app's cookie session (`POST /auth/mobile/refresh`, `POST /auth/mobile/logout`, `X-Client-Type: mobile` header), FCM device-token push registration (`POST /push/device/register`), and an app-version gate (`GET /meta/mobile-config`, editable from the admin Settings page). See that plan doc for the full design rationale.
+**Backend** (in `../backend`, already shipped): a parallel bearer-token auth path alongside the web app's cookie session (`POST /auth/mobile/refresh`, `POST /auth/mobile/logout`, `X-Client-Type: mobile` header), real per-device session management (`GET /auth/mobile/sessions`, `DELETE /auth/mobile/sessions/:id`), FCM device-token push registration (`POST /push/device/register`), and an app-version gate (`GET /meta/mobile-config`, editable from the admin Settings page). See that plan doc for the full design rationale.
 
-**App**: all 34 screens from the plan's inventory, wired to real API calls — auth (OTP + password login/signup, forgot password), shipper search → results → trip detail → booking, transporter truck registration/Change Vehicle → post-trip wizard → manage trip, chat (real-time via Socket.IO), profile + KYC verification + notification settings, support, disputes. Admin stays web-only, as scoped.
+**App**: the plan's 34-screen inventory, plus this round's gap-filling pass, wired to real API calls — auth (OTP + password login/signup, forgot password), a first-launch onboarding carousel, shipper search → results → trip detail → booking, transporter truck registration/Change Vehicle → post-trip wizard → manage trip, chat (real-time via Socket.IO), profile + KYC verification + notification settings + Manage Devices, support, disputes, Blog/News/Updates (list + detail, reusing `/content/posts`), and the static About/For Shippers/Help/FAQ pages (ported from the real web copy). Admin stays web-only, as scoped.
+
+**Public browsing** (added this round, matching the web app): Home, Search Results, and Trip Detail work for anyone — only actually requesting to book, and every account-scoped screen (Bookings/Trucks/Chat/Profile's real content), require login. `(app)` and `(auth)` are both always-mounted sibling routes now (not the old `Stack.Protected` split); a gated screen shows a "log in to continue" prompt via `src/components/AuthRequired.js` rather than the whole app branching on auth state.
 
 ## What's NOT done yet — known gaps before this can ship
 
@@ -29,7 +31,8 @@ Then press `i` (iOS Simulator), `a` (Android Emulator), or scan the QR code with
 - **PDF KYC documents aren't supported** — `DocumentUploadField` only offers camera/gallery image capture (`expo-image-picker`), not `expo-document-picker` for an existing PDF file. The backend accepts PDFs; this app currently doesn't let you pick one.
 - **Reset Password stays a web flow** — the emailed link opens the web `/reset-password` page in the device browser rather than deep-linking back into the app. Deliberate v1 simplification (see the plan), not an oversight.
 - **Trip-post draft isn't persisted** — `PostTripContext` holds the in-progress trip in memory only; backgrounding/killing the app mid-wizard loses it (the web app persists its equivalent draft to `sessionStorage`).
-- **Blog/News/Updates has no native screens** — deferred per the plan; link out to the web site instead if this becomes wanted.
+- **Terms and Privacy stay web pages, opened in the device browser** — deliberate, not deferred: they're long legal documents that need one single source of truth, so `EXPO_PUBLIC_WEB_URL` + `Linking.openURL` are used instead of a second native copy that could drift out of sync with the real one.
+- **Blog/News/Updates cover images and body text are unauthenticated `<Image>`/plain-text only** — no native HTML renderer is included (post bodies are sanitized HTML server-side); `src/utils/stripHtml.js` strips tags down to readable text rather than pulling in a new dependency just for this.
 
 ## Project layout
 

@@ -11,6 +11,8 @@ import { LoadingView } from "../../../src/components/ui/LoadingView";
 import { theme } from "../../../src/theme";
 import { listMyTrucks } from "../../../src/api/trucks";
 import { formatTons } from "../../../src/utils/format";
+import { useAuth } from "../../../src/context/AuthContext";
+import { AuthRequired } from "../../../src/components/AuthRequired";
 
 // Same one-driver-one-active-truck model as frontend/src/pages/MyTrucks.jsx:
 // at most one active truck, at most one candidate (new registration
@@ -33,18 +35,28 @@ const TruckRow = ({ truck, onPress }) => (
 
 export const MyTruckScreen = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
+    if (!user) return;
     setLoading(true);
     listMyTrucks()
       .then((res) => setTrucks(res.trucks || []))
       .catch(() => setTrucks([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  if (!user) {
+    return (
+      <Screen>
+        <AuthRequired title="Log in to manage your truck" body="Register your truck and post trips once you're signed in." />
+      </Screen>
+    );
+  }
 
   if (loading) return <LoadingView />;
 

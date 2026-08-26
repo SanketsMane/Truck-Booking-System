@@ -52,10 +52,22 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="profile/roles" options={{ href: null }} />
       <Tabs.Screen name="profile/verification/[role]" options={{ href: null }} />
       <Tabs.Screen name="profile/notification-settings" options={{ href: null }} />
+      <Tabs.Screen name="profile/devices" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="support/index" options={{ href: null }} />
       <Tabs.Screen name="support/new" options={{ href: null }} />
       <Tabs.Screen name="disputes" options={{ href: null }} />
+
+      {/* Public info/content screens — reachable from Profile's "More"
+          section regardless of login state. */}
+      <Tabs.Screen name="about" options={{ href: null }} />
+      <Tabs.Screen name="for-shippers" options={{ href: null }} />
+      <Tabs.Screen name="help" options={{ href: null }} />
+      <Tabs.Screen name="faq" options={{ href: null }} />
+      <Tabs.Screen name="terms" options={{ href: null }} />
+      <Tabs.Screen name="privacy" options={{ href: null }} />
+      <Tabs.Screen name="content/[type]/index" options={{ href: null }} />
+      <Tabs.Screen name="content/[type]/[slug]" options={{ href: null }} />
     </Tabs>
   );
 }

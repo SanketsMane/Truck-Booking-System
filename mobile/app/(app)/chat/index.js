@@ -10,19 +10,23 @@ import { theme } from "../../../src/theme";
 import { listInbox } from "../../../src/api/chat";
 import { connectSocket } from "../../../src/utils/socket";
 import { formatDateTime } from "../../../src/utils/format";
+import { useAuth } from "../../../src/context/AuthContext";
+import { AuthRequired } from "../../../src/components/AuthRequired";
 
 export const ChatInboxScreen = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
+    if (!user) return;
     setLoading(true);
     listInbox()
       .then((res) => setThreads(res.threads || []))
       .catch(() => setThreads([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -41,37 +45,39 @@ export const ChatInboxScreen = () => {
 
   return (
     <Screen scroll={false}>
-      <View style={styles.header}>
-        <PageTitle>Chat</PageTitle>
-      </View>
+      <AuthRequired title="Log in to chat" body="Message shippers and drivers about a booking once you're signed in.">
+        <View style={styles.header}>
+          <PageTitle>Chat</PageTitle>
+        </View>
 
-      {loading ? (
-        <LoadingView />
-      ) : threads.length === 0 ? (
-        <EmptyState>No conversations yet.</EmptyState>
-      ) : (
-        <FlatList
-          data={threads}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => router.push(`/(app)/chat/${item._id}`)}>
-              <Card>
-                <View style={styles.rowBetween}>
-                  <Body>{item.counterparty?.name}</Body>
-                  {item.unreadCount > 0 && (
-                    <View style={styles.unreadBadge}>
-                      <Body style={styles.unreadText}>{item.unreadCount}</Body>
-                    </View>
-                  )}
-                </View>
-                <Muted>{item.trip ? `${item.trip.fromCity} → ${item.trip.toCity}` : ""}</Muted>
-                <Muted>{item.lastMessageAt ? formatDateTime(item.lastMessageAt) : ""}</Muted>
-              </Card>
-            </Pressable>
-          )}
-        />
-      )}
+        {loading ? (
+          <LoadingView />
+        ) : threads.length === 0 ? (
+          <EmptyState>No conversations yet.</EmptyState>
+        ) : (
+          <FlatList
+            data={threads}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <Pressable onPress={() => router.push(`/(app)/chat/${item._id}`)}>
+                <Card>
+                  <View style={styles.rowBetween}>
+                    <Body>{item.counterparty?.name}</Body>
+                    {item.unreadCount > 0 && (
+                      <View style={styles.unreadBadge}>
+                        <Body style={styles.unreadText}>{item.unreadCount}</Body>
+                      </View>
+                    )}
+                  </View>
+                  <Muted>{item.trip ? `${item.trip.fromCity} → ${item.trip.toCity}` : ""}</Muted>
+                  <Muted>{item.lastMessageAt ? formatDateTime(item.lastMessageAt) : ""}</Muted>
+                </Card>
+              </Pressable>
+            )}
+          />
+        )}
+      </AuthRequired>
     </Screen>
   );
 };
