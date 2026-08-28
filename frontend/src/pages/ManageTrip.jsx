@@ -12,6 +12,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { TripStopsField, cleanStops } from "../components/ui/TripStopsField";
 import { TimeInput } from "../components/ui/TimeInput";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
@@ -90,7 +91,12 @@ const TimelineDot = styled.div`
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: ${({ theme, $variant }) => ($variant === "drop" ? theme.color.text : theme.color.accent)};
+  background: ${({ theme, $variant }) =>
+    $variant === "drop" ? theme.color.text : $variant === "stop" ? theme.color.surface : theme.color.accent};
+  // A stop is a place the truck passes THROUGH, not an end of the run — a
+  // hollow dot says that at a glance, where a third solid colour would just
+  // read as a third kind of endpoint.
+  box-shadow: ${({ theme, $variant }) => ($variant === "stop" ? `inset 0 0 0 2px ${theme.color.accent}` : "none")};
 `;
 
 const TimelineLine = styled.div`
@@ -192,6 +198,7 @@ export const ManageTrip = () => {
   const [arrivalTime, setArrivalTime] = useState(DEFAULT_ARRIVAL_TIME);
   const [pickupPoint, setPickupPoint] = useState({ address: "", lat: null, lng: null });
   const [dropPoint, setDropPoint] = useState({ address: "", lat: null, lng: null });
+  const [stops, setStops] = useState([]);
   const totalCapacityAmount = useUnitAmount();
   const [pricePerTon, setPricePerTon] = useState("");
   const [editErrors, setEditErrors] = useState({});
@@ -216,6 +223,7 @@ export const ManageTrip = () => {
     setArrivalTime(toTimeInputValue(t.estimatedArrivalAt, DEFAULT_ARRIVAL_TIME));
     setPickupPoint(normalizePoint(t.pickupPoint));
     setDropPoint(normalizePoint(t.dropPoint));
+    setStops((t.stops || []).map(normalizePoint));
     totalCapacityAmount.setTons(t.totalCapacity);
     setPricePerTon(String(t.pricePerTon));
   };
@@ -239,6 +247,7 @@ export const ManageTrip = () => {
           setArrivalTime(draft.arrivalTime ?? toTimeInputValue(trip.estimatedArrivalAt, DEFAULT_ARRIVAL_TIME));
           setPickupPoint(draft.pickupPoint ?? normalizePoint(trip.pickupPoint));
           setDropPoint(draft.dropPoint ?? normalizePoint(trip.dropPoint));
+          setStops(draft.stops ?? (trip.stops || []).map(normalizePoint));
           totalCapacityAmount.setTons(draft.totalCapacityTons ?? trip.totalCapacity);
           setPricePerTon(draft.pricePerTon ?? String(trip.pricePerTon));
           setEditMode(true);
@@ -306,6 +315,7 @@ export const ManageTrip = () => {
       arrivalTime,
       pickupPoint,
       dropPoint,
+      stops,
       totalCapacityTons: totalCapacityAmount.tons,
       pricePerTon,
     };
@@ -324,6 +334,7 @@ export const ManageTrip = () => {
     arrivalTime,
     pickupPoint,
     dropPoint,
+    stops,
     totalCapacityAmount.tons,
     pricePerTon,
   ]);
@@ -358,6 +369,15 @@ export const ManageTrip = () => {
     if (dropPoint.address.trim() !== normalizePoint(trip.dropPoint).address) {
       updates.dropPoint = { ...dropPoint, address: dropPoint.address.trim() };
     }
+    // Compared as an ordered list of addresses, since order IS the route —
+    // swapping two stops is a real edit even though the same places appear.
+    // Sent whole (the API replaces the list), including an empty array,
+    // which is how a driver says "this run is direct after all".
+    const nextStops = cleanStops(stops);
+    const stopsChanged =
+      nextStops.length !== (trip.stops || []).length ||
+      nextStops.some((stop, i) => stop.address !== (trip.stops || [])[i]?.address);
+    if (stopsChanged) updates.stops = nextStops;
     const departureChanged =
       departureAt !== toDateInputValue(trip.departureAt) ||
       departureTime !== toTimeInputValue(trip.departureAt, DEFAULT_DEPARTURE_TIME);
@@ -550,6 +570,18 @@ export const ManageTrip = () => {
                   <div>{normalizePoint(trip.pickupPoint).address}</div>
                 </TimelineContent>
               </TimelineRow>
+              {(trip.stops || []).map((stop, i) => (
+                <TimelineRow key={`${stop.address}-${i}`}>
+                  <TimelineMarker>
+                    <TimelineDot $variant="stop" />
+                    <TimelineLine />
+                  </TimelineMarker>
+                  <TimelineContent>
+                    <Muted>Stop {i + 1}</Muted>
+                    <div>{stop.address}</div>
+                  </TimelineContent>
+                </TimelineRow>
+              ))}
               <TimelineRow>
                 <TimelineMarker>
                   <TimelineDot $variant="drop" />
@@ -655,6 +687,12 @@ export const ManageTrip = () => {
                 <SubHeading>Route</SubHeading>
                 <Field label="Pickup point" error={editErrors.pickupPoint}>
                   <LocationAutocomplete value={pickupPoint} onChange={setPickupPoint} />
+                </Field>
+                <Field
+                  label="Stops along the way"
+                  help="Shippers searching any leg of this route will find the trip."
+                >
+                  <TripStopsField stops={stops} onChange={setStops} />
                 </Field>
                 <Field label="Drop point" error={editErrors.dropPoint}>
                   <LocationAutocomplete value={dropPoint} onChange={setDropPoint} />

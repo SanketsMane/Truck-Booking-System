@@ -1,5 +1,7 @@
 const Joi = require("joi");
 
+const { MAX_TRIP_STOPS } = require("../config/marketplaceConfig");
+
 // Matches backend/models/locationPointSchema.js — address is always
 // required (this app has always required a pickup/drop point), lat/lng
 // are only present when the frontend's Mapbox-backed autocomplete
@@ -19,6 +21,10 @@ const postTripValidation = Joi.object({
   estimatedArrivalAt: Joi.date().greater(Joi.ref("departureAt")),
   pickupPoint: locationPointValidation.required(),
   dropPoint: locationPointValidation.required(),
+  // Ordered intermediate stops. Optional — a direct run just sends none.
+  stops: Joi.array().items(locationPointValidation).max(MAX_TRIP_STOPS).default([]).messages({
+    "array.max": `A trip can have at most ${MAX_TRIP_STOPS} stops`,
+  }),
   totalCapacity: Joi.number().positive().required(),
   availableCapacity: Joi.number().positive().max(Joi.ref("totalCapacity")).required(),
   pricePerTon: Joi.number().positive().required(),
@@ -29,6 +35,12 @@ const editTripValidation = Joi.object({
   estimatedArrivalAt: Joi.date(),
   pickupPoint: locationPointValidation,
   dropPoint: locationPointValidation,
+  // Sent as the WHOLE new list, not a patch — reordering and removing a
+  // stop are both ordinary edits, and there's no stable per-stop id to
+  // address one individually by (see tripModel's stops, _id: false).
+  stops: Joi.array().items(locationPointValidation).max(MAX_TRIP_STOPS).messages({
+    "array.max": `A trip can have at most ${MAX_TRIP_STOPS} stops`,
+  }),
   totalCapacity: Joi.number().positive(),
   pricePerTon: Joi.number().positive(),
 });

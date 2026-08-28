@@ -108,7 +108,12 @@ const TimelineDot = styled.div`
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: ${({ theme, $variant }) => ($variant === "drop" ? theme.color.text : theme.color.accent)};
+  background: ${({ theme, $variant }) =>
+    $variant === "drop" ? theme.color.text : $variant === "stop" ? theme.color.surface : theme.color.accent};
+  // A stop is a place the truck passes THROUGH, not an end of the run — a
+  // hollow dot says that at a glance, where a third solid colour would just
+  // read as a third kind of endpoint.
+  box-shadow: ${({ theme, $variant }) => ($variant === "stop" ? `inset 0 0 0 2px ${theme.color.accent}` : "none")};
 `;
 
 const TimelineLine = styled.div`
@@ -357,6 +362,18 @@ export const TripDetail = () => {
                   </TimelineTime>
                 </TimelineContent>
               </TimelineRow>
+              {(trip.stops || []).map((stop, i) => (
+                <TimelineRow key={`${stop.address}-${i}`}>
+                  <TimelineMarker>
+                    <TimelineDot $variant="stop" />
+                    <TimelineLine />
+                  </TimelineMarker>
+                  <TimelineContent>
+                    <Muted>Stop {i + 1}</Muted>
+                    <div>{stop.address}</div>
+                  </TimelineContent>
+                </TimelineRow>
+              ))}
               <TimelineRow>
                 <TimelineMarker>
                   <TimelineDot $variant="drop" />

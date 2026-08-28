@@ -60,47 +60,43 @@ export const MyTruckScreen = () => {
 
   if (loading) return <LoadingView />;
 
-  const activeTruck = trucks.find((t) => t.lifecycle === "active");
-  const candidateTruck = trucks.find((t) => t.lifecycle === "candidate");
+  // A transporter runs a fleet now, not one nominated vehicle — anything
+  // verified and not retired can take a trip. Verified first, so the trucks
+  // that can actually work today sit at the top.
+  const fleetTrucks = trucks
+    .filter((t) => t.lifecycle !== "inactive")
+    .sort((a, b) => Number(b.status === "verified") - Number(a.status === "verified"));
   const historyTrucks = trucks.filter((t) => t.lifecycle === "inactive");
-  const hasBlockingCandidate = Boolean(candidateTruck && candidateTruck.status !== "rejected");
+  const readyCount = fleetTrucks.filter((t) => t.status === "verified").length;
 
   return (
     <Screen>
       <View style={styles.header}>
-        <PageTitle>My Truck</PageTitle>
-        <Muted>Your one active truck, its verification status, and your history.</Muted>
+        <PageTitle>My Trucks</PageTitle>
+        <Muted>
+          {readyCount > 0
+            ? `${readyCount} truck${readyCount === 1 ? "" : "s"} ready to take trips.`
+            : "Register the vehicles you run — each one can take trips once it's verified."}
+        </Muted>
       </View>
 
-      {!activeTruck && !candidateTruck && (
-        <EmptyState>You haven’t registered a truck yet.</EmptyState>
-      )}
+      {fleetTrucks.length === 0 && <EmptyState>You haven’t registered a truck yet.</EmptyState>}
 
-      {activeTruck && (
+      {fleetTrucks.length > 0 && (
         <View>
-          <SectionTitle style={styles.sectionSpacing}>Active</SectionTitle>
-          <TruckRow truck={activeTruck} onPress={() => router.push(`/(app)/trucks/${activeTruck._id}`)} />
+          <SectionTitle style={styles.sectionSpacing}>In service</SectionTitle>
+          {fleetTrucks.map((t) => (
+            <TruckRow key={t._id} truck={t} onPress={() => router.push(`/(app)/trucks/${t._id}`)} />
+          ))}
         </View>
       )}
 
-      {candidateTruck && (
-        <View>
-          <SectionTitle style={styles.sectionSpacing}>{activeTruck ? "New truck (Change Vehicle)" : "Awaiting verification"}</SectionTitle>
-          <TruckRow truck={candidateTruck} onPress={() => router.push(`/(app)/trucks/${candidateTruck._id}`)} />
-        </View>
-      )}
-
-      {(!hasBlockingCandidate) && (
-        <Button
-          title={activeTruck ? "Change Vehicle" : "Register a truck"}
-          variant="secondary"
-          onPress={() => router.push("/(app)/trucks/register")}
-          fullWidth
-        />
-      )}
-      {hasBlockingCandidate && (
-        <Muted>Your new truck is awaiting verification — resubmit its documents above if it was rejected.</Muted>
-      )}
+      <Button
+        title={fleetTrucks.length > 0 ? "Add another truck" : "Register a truck"}
+        variant="secondary"
+        onPress={() => router.push("/(app)/trucks/register")}
+        fullWidth
+      />
 
       {historyTrucks.length > 0 && (
         <View>

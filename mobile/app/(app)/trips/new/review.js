@@ -7,6 +7,7 @@ import { Card } from "../../../../src/components/ui/Card";
 import { Button } from "../../../../src/components/ui/Button";
 import { theme } from "../../../../src/theme";
 import { postTrip } from "../../../../src/api/trips";
+import { cleanStops } from "../../../../src/components/TripStopsField";
 import { usePostTripDraft } from "../../../../src/context/PostTripContext";
 import { formatINR, formatTons, formatDate } from "../../../../src/utils/format";
 
@@ -28,6 +29,7 @@ export const PostTripReviewScreen = () => {
         estimatedArrivalAt: draft.estimatedArrivalAt ? draft.estimatedArrivalAt.toISOString() : undefined,
         pickupPoint: { ...draft.pickupPoint, address: draft.pickupPoint.address.trim() },
         dropPoint: { ...draft.dropPoint, address: draft.dropPoint.address.trim() },
+        stops: cleanStops(draft.stops),
         totalCapacity: Number(draft.totalCapacity),
         availableCapacity: Number(draft.availableCapacity),
         pricePerTon: Number(draft.pricePerTon),
@@ -67,6 +69,9 @@ export const PostTripReviewScreen = () => {
           <Body>{formatINR(draft.pricePerTon)}/ton</Body>
         </View>
         <Muted>Pickup: {draft.pickupPoint.address}</Muted>
+        {cleanStops(draft.stops).length > 0 && (
+          <Muted>Via: {cleanStops(draft.stops).map((stop) => stop.address).join(" → ")}</Muted>
+        )}
         <Muted>Drop: {draft.dropPoint.address}</Muted>
       </Card>
 

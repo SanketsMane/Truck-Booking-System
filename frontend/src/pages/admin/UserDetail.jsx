@@ -21,8 +21,10 @@ import {
   FileText,
   ArrowUpRight,
   Inbox,
+  Search as SearchIcon,
+  ArrowRight,
 } from "lucide-react";
-import { getAdminUserDetail, setAdminUserStatus, setAdminRole } from "../../api/admin";
+import { getAdminUserDetail, setAdminUserStatus, setAdminRole, listSearchLogs } from "../../api/admin";
 import { getFileBlobUrl } from "../../api/files";
 import { ADMIN_SCOPES } from "../../utils/adminScopes";
 import { useAuth } from "../../context/AuthContext";
@@ -41,6 +43,11 @@ import { formatDate, formatDateTime, formatINR } from "../../utils/format";
 // ever, or a Change Vehicle swap in progress), Inactive a superseded truck
 // kept permanently for its trip history.
 const TRUCK_LIFECYCLE_LABEL = { candidate: "Candidate", active: "Active", inactive: "Inactive" };
+
+// Enough to see what this account has been hunting for without turning the
+// profile into a log viewer — /admin/search-logs is where the full history
+// lives.
+const RECENT_SEARCH_LIMIT = 8;
 
 // Opens a verification/truck document in a new tab. Unchanged from the
 // pre-redesign version — same api/files call, same window.open contract —
@@ -456,12 +463,20 @@ export const UserDetail = () => {
   const [submitting, setSubmitting] = useState(false);
   const [scopeDraft, setScopeDraft] = useState("");
   const [savingRole, setSavingRole] = useState(false);
+  const [searches, setSearches] = useState([]);
 
   const load = async (cancelled) => {
     try {
-      const detail = await getAdminUserDetail(id);
+      const [detail, searchRes] = await Promise.all([
+        getAdminUserDetail(id),
+        // Swallowed on failure rather than awaited alongside the profile:
+        // this section is context about the account, not part of the record
+        // itself, and losing it must never blank out the whole page.
+        listSearchLogs({ userId: id, limit: RECENT_SEARCH_LIMIT }).catch(() => ({ items: [] })),
+      ]);
       if (cancelled?.current) return;
       setData(detail);
+      setSearches(searchRes.items || []);
       setScopeDraft(detail.user.adminScope || "");
     } catch (error) {
       if (cancelled?.current) return;
@@ -746,6 +761,50 @@ export const UserDetail = () => {
       </Section>
 
       <Section>{isFullAdmin ? <TwoCol>{ProfileInfoCard}{AdminAccessCard}</TwoCol> : ProfileInfoCard}</Section>
+
+      <Section>
+        <AdminCard>
+          <SectionHead>
+            <SectionIconWrap>
+              <SearchIcon size={15} strokeWidth={2.2} />
+            </SectionIconWrap>
+            <SectionTitle>Recent searches</SectionTitle>
+            {!!searches.length && <SectionCount>{searches.length}</SectionCount>}
+          </SectionHead>
+          {searches.length ? (
+            <ItemList>
+              {searches.map((row) => (
+                <ItemRow key={row._id}>
+                  <ItemMain>
+                    <ItemTitle style={{ textTransform: "none" }}>
+                      {row.searchType === "near" ? (
+                        "Near-me search"
+                      ) : (
+                        <>
+                          {row.fromCity} <ArrowRight size={12} strokeWidth={2.4} style={{ verticalAlign: -1 }} />{" "}
+                          {row.toCity}
+                        </>
+                      )}
+                    </ItemTitle>
+                    <ItemMeta>
+                      {row.travelDate ? `Shipping ${formatDate(row.travelDate)}` : "No date"} ·{" "}
+                      {formatDateTime(row.createdAt)}
+                    </ItemMeta>
+                    {row.resultCount === 0 && <ItemReason>Returned no trips — unserved lane.</ItemReason>}
+                  </ItemMain>
+                  <ItemRight>
+                    <ItemMeta>
+                      {row.resultCount} result{row.resultCount === 1 ? "" : "s"}
+                    </ItemMeta>
+                  </ItemRight>
+                </ItemRow>
+              ))}
+            </ItemList>
+          ) : (
+            <AdminEmptyState icon={SearchIcon}>No searches recorded for this account.</AdminEmptyState>
+          )}
+        </AdminCard>
+      </Section>
 
       <Section>
         <AdminCard>

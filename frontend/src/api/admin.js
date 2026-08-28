@@ -86,3 +86,31 @@ export const unpublishAdminPost = (id) => api.put(`/admin/posts/${id}/unpublish`
 export const archiveAdminPost = (id) => api.put(`/admin/posts/${id}/archive`);
 
 export const deleteAdminPost = (id) => api.del(`/admin/posts/${id}`);
+
+// Search analytics — the demand side of the marketplace. Every one of these
+// takes the SAME filter bag ({ from, to, source, role, q, zeroOnly, ... }),
+// so the page can hold one filter state and hand it to whichever view is on
+// screen; withPaginationParams drops the keys a given view doesn't use.
+export const getSearchAnalyticsSummary = (opts) =>
+  api.get(withPaginationParams("/admin/search-analytics/summary", opts));
+
+export const getSearchAnalyticsTrends = (opts) =>
+  api.get(withPaginationParams("/admin/search-analytics/trends", opts));
+
+export const listSearchRoutes = (opts) => api.get(withPaginationParams("/admin/search-analytics/routes", opts));
+
+export const listSearchCities = (opts) => api.get(withPaginationParams("/admin/search-analytics/cities", opts));
+
+export const getSearchRouteDetail = (opts) =>
+  api.get(withPaginationParams("/admin/search-analytics/route-detail", opts));
+
+export const listSearchLogs = (opts) => api.get(withPaginationParams("/admin/search-analytics/logs", opts));
+
+// The CSV pair mirrors the two tables exactly, filters included — an admin
+// who narrowed the view and hit Export should get the rows they were
+// looking at, not the whole collection.
+export const downloadSearchRoutesCsv = (opts) =>
+  downloadFile(withPaginationParams("/admin/search-analytics/routes.csv", opts), "search-routes.csv");
+
+export const downloadSearchLogsCsv = (opts) =>
+  downloadFile(withPaginationParams("/admin/search-analytics/logs.csv", opts), "search-logs.csv");

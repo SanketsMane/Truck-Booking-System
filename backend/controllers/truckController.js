@@ -3,6 +3,7 @@ const Trip = require("../models/tripModel");
 const { notify } = require("../utils/notify");
 const resolveDocuments = require("../utils/resolveDocuments");
 const { logAdminAction } = require("../utils/audit");
+const { findInFlightTrip } = require("../utils/truckInFlight");
 const sendServerError = require("../utils/sendServerError");
 const {
   registerTruckValidation,
@@ -26,23 +27,11 @@ const registerTruck = async (req, res) => {
       return res.status(409).json({ success: false, msg: "This registration number is already listed" });
     }
 
-    // One driver = one truck "in flight" at a time. An owner with an
-    // already-ACTIVE truck can still register a new one — that's the
-    // Change Vehicle flow, and the old truck keeps working until this one
-    // clears verification — but a second simultaneous candidate is
-    // blocked. A rejected candidate doesn't count, so a bad submission
-    // never permanently traps the driver.
-    const pendingCandidate = await Truck.exists({
-      owner: req.auth.id,
-      lifecycle: "candidate",
-      status: { $ne: "rejected" },
-    });
-    if (pendingCandidate) {
-      return res.status(409).json({
-        success: false,
-        msg: "You already have a truck awaiting verification — wait for it to be verified or rejected before adding another.",
-      });
-    }
+    // A transporter with three lorries used to be blocked here: only one
+    // truck could sit in verification at a time, and only one could ever be
+    // "active". That was us limiting someone's business on their behalf, so
+    // it's gone — register as many vehicles as you actually run. The unique
+    // index on regNumber still stops the same plate being listed twice.
 
     let resolvedDocuments = [];
     if (documents.length) {
@@ -101,7 +90,11 @@ const listMyTrucks = async (req, res) => {
 
 const updateTruck = async (req, res) => {
   try {
-    const { error } = updateTruckValidation.validate(req.body);
+    // `value`, not req.body — regNumberSchema normalizes the plate as part
+    // of validating it, and the change-detection below has to compare the
+    // normalized form or "MH 12 AB 1234" would read as different from
+    // "MH12AB1234" and pointlessly reset verification.
+    const { error, value } = updateTruckValidation.validate(req.body);
     if (error) {
       return res.status(400).json({ success: false, msg: error.details[0].message });
     }
@@ -125,16 +118,58 @@ const updateTruck = async (req, res) => {
       }
     }
 
-    const truck = await Truck.findOneAndUpdate(
-      { _id: req.params.id, owner: req.auth.id },
-      { $set: req.body },
-      { new: true, runValidators: true }
-    );
-    if (!truck) {
+    const existing = await Truck.findOne({ _id: req.params.id, owner: req.auth.id });
+    if (!existing) {
       return res.status(404).json({ success: false, msg: "Truck not found" });
     }
 
-    res.status(200).json({ success: true, msg: "Truck updated", truck });
+    // value.regNumber is already normalized by the validator, so this
+    // compares like for like — re-submitting the same plate formatted
+    // differently ("MH 12 AB 1234") isn't a change and mustn't trip either
+    // of the guards below.
+    const updates = { ...value };
+    const changingRegNumber = value.regNumber !== undefined && value.regNumber !== existing.regNumber;
+
+    if (changingRegNumber) {
+      // A run already underway is the one time the vehicle's identity is
+      // frozen. The shipper whose load is aboard booked THIS plate, the
+      // driver is carrying papers for it, and the trip record has to keep
+      // naming the truck that actually ran it — so the change waits until
+      // the delivery it promised is done.
+      const inFlight = await findInFlightTrip(existing._id);
+      if (inFlight) {
+        const until = inFlight.estimatedArrivalAt || inFlight.departureAt;
+        return res.status(409).json({
+          success: false,
+          msg: `${existing.regNumber} is on a trip right now (${inFlight.fromCity} → ${inFlight.toCity}). You can change its number once that delivery is complete${until ? ` — due ${until.toISOString().slice(0, 10)}` : ""}.`,
+        });
+      }
+
+      // The RC, insurance and permit on file were issued against the old
+      // plate, so they no longer evidence this vehicle. Sending the truck
+      // back to pending is the honest outcome — the alternative is a
+      // "verified" badge backed by documents for a different number.
+      if (existing.status === "verified") {
+        updates.status = "pending";
+        updates.rejectReason = undefined;
+        updates.reviewedBy = undefined;
+        updates.reviewedAt = undefined;
+      }
+    }
+
+    const truck = await Truck.findOneAndUpdate(
+      { _id: existing._id, owner: req.auth.id },
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      msg: changingRegNumber && updates.status === "pending"
+        ? "Registration number updated — the truck needs re-verification since its documents name the old plate"
+        : "Truck updated",
+      truck,
+    });
   } catch (error) {
     sendServerError(res, error, "truckController");
   }
@@ -277,17 +312,13 @@ const reviewTruck = async (req, res) => {
       reason: truck.rejectReason,
     });
 
-    // This candidate truck just cleared verification — it becomes the
-    // account's ACTIVE truck. If the owner already had a different active
-    // truck (this was a Change Vehicle swap), that one steps down to
-    // inactive — kept forever, never deleted, so its trip history stays
-    // resolvable. One rule handles both "first truck ever" (nothing to
-    // deactivate) and "Change Vehicle" alike.
+    // A verified candidate joins the owner's usable fleet. It no longer
+    // pushes the owner's other trucks out to make room — that swap was the
+    // "one driver = one active truck" rule, and a transporter who buys a
+    // second lorry shouldn't lose the first one by registering it.
+    // "inactive" now means only what its name says: retired, kept forever so
+    // past trips stay resolvable, never reachable for a new one.
     if (truck.status === "verified" && truck.lifecycle === "candidate") {
-      await Truck.updateMany(
-        { owner: truck.owner, lifecycle: "active", _id: { $ne: truck._id } },
-        { $set: { lifecycle: "inactive" } }
-      );
       await Truck.updateOne({ _id: truck._id }, { $set: { lifecycle: "active" } });
       truck.lifecycle = "active";
     }

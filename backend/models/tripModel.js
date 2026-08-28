@@ -52,6 +52,25 @@ const tripSchema = new mongoose.Schema(
 
     dropPoint: locationPointSchema(),
 
+    // Ordered intermediate stops between pickupPoint and dropPoint — the
+    // places the driver actually passes through and can load or unload at
+    // on the way. Same embedded shape as pickup/drop (address + optional
+    // coords + the GeoJSON shadow utils/setLocationGeo.js keeps in sync),
+    // so nothing downstream needs a second kind of point.
+    //
+    // The order is the route, not just a list: searchTrips walks
+    // pickup -> stops[0] -> ... -> dropPoint as one polyline, which is what
+    // lets a Mumbai->Nagpur truck stopping at Pune and Nashik surface for a
+    // Pune->Nashik search — and what lets it correctly NOT surface for a
+    // Nashik->Pune one, since that leg runs backwards along the same path.
+    //
+    // _id is off: a stop has no identity of its own, it's only ever read
+    // and written as part of its trip.
+    stops: {
+      type: [new mongoose.Schema(locationPointSchema(), { _id: false })],
+      default: [],
+    },
+
     totalCapacity: {
       type: Number,
       required: true,

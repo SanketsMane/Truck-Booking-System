@@ -7,6 +7,7 @@ const integrationController = require("../controllers/integrationController");
 const disputeController = require("../controllers/disputeController");
 const chatController = require("../controllers/chatController");
 const auditLogController = require("../controllers/auditLogController");
+const searchLogController = require("../controllers/searchLogController");
 const truckDeletionController = require("../controllers/truckDeletionController");
 const postController = require("../controllers/postController");
 const authMiddleware = require("../middleWare/middleWare");
@@ -64,6 +65,18 @@ router.put("/posts/:id/archive", requireAdminScope("content"), postController.ar
 router.delete("/posts/:id", requireAdminScope("full"), postController.deletePost);
 
 router.get("/audit-logs", auditLogController.listAuditLogs);
+
+// Search analytics — read-only demand telemetry, so plain requireAdmin like
+// every other admin list. Nothing here mutates anything, and an operator of
+// any scope needs the demand picture to do their job.
+router.get("/search-analytics/summary", searchLogController.getSearchSummary);
+router.get("/search-analytics/routes", searchLogController.listTopRoutes);
+router.get("/search-analytics/cities", searchLogController.listTopCities);
+router.get("/search-analytics/trends", searchLogController.getSearchTrends);
+router.get("/search-analytics/route-detail", searchLogController.getRouteDetail);
+router.get("/search-analytics/logs", searchLogController.listSearchLogs);
+router.get("/search-analytics/routes.csv", searchLogController.exportRoutesCsv);
+router.get("/search-analytics/logs.csv", searchLogController.exportSearchLogsCsv);
 
 router.get("/reports/bookings.csv", adminController.exportBookingsCsv);
 router.get("/reports/bookings-by-route.csv", adminController.exportBookingsByRouteCsv);

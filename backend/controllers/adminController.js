@@ -12,7 +12,7 @@ const { markBookingCancelled } = require("../utils/bookingCancellation");
 const { disconnectUser } = require("../realtime/io");
 const emailProvider = require("../utils/emailProvider");
 const { welcomeEmail, accountStatusEmail } = require("../emailTemplates/templates");
-const { toCsv } = require("../utils/csv");
+const { sendCsv } = require("../utils/csv");
 const escapeRegex = require("../utils/escapeRegex");
 const sendServerError = require("../utils/sendServerError");
 const { reclaimSupersededFile, ensurePublic } = require("../utils/uploadedFileRefs");
@@ -768,12 +768,6 @@ const updateBranding = async (req, res) => {
   } catch (error) {
     sendServerError(res, error, "adminController");
   }
-};
-
-const sendCsv = (res, filename, rows, columns) => {
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.status(200).send(toCsv(rows, columns));
 };
 
 // FR-11.8 / SRS-10.5 — exportable CSV reports.

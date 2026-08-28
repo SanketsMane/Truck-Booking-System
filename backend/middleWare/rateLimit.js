@@ -9,6 +9,12 @@ const apiLimiter = rateLimit({
   limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
+  // Same reasoning as otpLimiter below: the whole test suite runs against
+  // 127.0.0.1 inside one window, so a per-IP cap here isn't testing this
+  // limiter — it's a shared budget that silently starves whichever spec
+  // happens to run last, turning an unrelated assertion into a failure that
+  // passes on its own. Nothing asserts rate limiting, so nothing is lost.
+  skip: () => process.env.NODE_ENV === "test",
   message: { success: false, msg: "Too many requests — please slow down and try again shortly." },
 });
 
@@ -18,6 +24,10 @@ const uploadLimiter = rateLimit({
   limit: 40,
   standardHeaders: true,
   legacyHeaders: false,
+  // Skipped in tests for the same reason as apiLimiter — helpers.js's
+  // uploadTestFile runs well past 40 uploads across a full suite run, and
+  // the 41st failing tells you nothing about the code under test.
+  skip: () => process.env.NODE_ENV === "test",
   message: { success: false, msg: "Too many uploads — please slow down and try again shortly." },
 });
 

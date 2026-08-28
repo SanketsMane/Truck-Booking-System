@@ -21,4 +21,13 @@ const toCsv = (rows, columns) => {
   return `${header}\n${body}`;
 };
 
-module.exports = { toCsv };
+// Every CSV endpoint sends the same three headers before the body; lifted
+// here from adminController once a second controller (searchLogController)
+// needed the identical pair of headers to hand back a downloadable report.
+const sendCsv = (res, filename, rows, columns) => {
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).send(toCsv(rows, columns));
+};
+
+module.exports = { toCsv, sendCsv };

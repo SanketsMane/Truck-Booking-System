@@ -31,7 +31,7 @@ import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
 import { Accordion, AccordionItem } from "../components/ui/Accordion";
 import { fadeInUp } from "../theme/animations";
-import { toDateInputValue } from "../utils/format";
+import { toDateInputValue, formatMobile } from "../utils/format";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { WebsiteSchema } from "../components/WebsiteSchema";
 import { useUnitAmount } from "../hooks/useUnitAmount";
@@ -1457,7 +1457,7 @@ const HOME_FAQS = HOME_FAQ_IDS.map((id) => ALL_FAQ_ITEMS.find((item) => item.id 
 export const Home = () => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { platformName } = useBranding();
+  const { platformName, contactMobile } = useBranding();
   usePageMeta({
     description: `${platformName} — ship for less, earn from empty space. Discover spare truck capacity on routes across India, matched by route, zero commission — 100% free to use.`,
   });
@@ -1773,20 +1773,28 @@ export const Home = () => {
             ))}
           </WhyGrid>
 
-          <SupportStrip>
-            <SupportIcon>
-              <Headphones size={22} strokeWidth={2.2} aria-hidden="true" />
-            </SupportIcon>
-            <SupportText>
-              <SupportTitle>Dedicated Support</SupportTitle>
-              <SupportBody>Need help? Our support team is here to assist you.</SupportBody>
-            </SupportText>
-            <SupportDivider aria-hidden="true" />
-            <SupportContact>
-              <SupportLabel>Reach us anytime</SupportLabel>
-              <SupportPhone href="tel:+918130170669">+91 81301 70669</SupportPhone>
-            </SupportContact>
-          </SupportStrip>
+          {/* The number comes from Settings -> Branding -> Contact mobile,
+              the same field the footer and About page already read. The
+              whole strip is dropped when it's unset: a "Dedicated Support"
+              banner with no way to actually reach support is worse than no
+              banner, and this is the one place on the site that promises a
+              phone line rather than just listing one. */}
+          {contactMobile && (
+            <SupportStrip>
+              <SupportIcon>
+                <Headphones size={22} strokeWidth={2.2} aria-hidden="true" />
+              </SupportIcon>
+              <SupportText>
+                <SupportTitle>Dedicated Support</SupportTitle>
+                <SupportBody>Need help? Our support team is here to assist you.</SupportBody>
+              </SupportText>
+              <SupportDivider aria-hidden="true" />
+              <SupportContact>
+                <SupportLabel>Reach us anytime</SupportLabel>
+                <SupportPhone href={`tel:+91${contactMobile}`}>{formatMobile(contactMobile)}</SupportPhone>
+              </SupportContact>
+            </SupportStrip>
+          )}
         </Section>
       </PageContainer>
 

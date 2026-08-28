@@ -1,8 +1,10 @@
-// Covers the "one driver = one active truck" MVP rules that draftTripFlow.
-// test.js's postTrip-gate rewrite doesn't already exercise: the
-// one-candidate-at-a-time registration cap, the authorizedToList consent
-// requirement, truck deletion respecting ALL trip history (not just live
-// trips), and the role-scoped driver KYC document requirement.
+// Covers the truck lifecycle rules that draftTripFlow.test.js's postTrip-gate
+// rewrite doesn't already exercise: registering a fleet (the
+// one-candidate-at-a-time cap and the one-active-truck swap are both gone —
+// a transporter runs as many verified vehicles as they own), the
+// authorizedToList consent requirement, truck deletion respecting ALL trip
+// history (not just live trips), and the role-scoped driver KYC document
+// requirement.
 const app = require("../../app");
 const Truck = require("../../models/truckModel");
 const Trip = require("../../models/tripModel");
@@ -69,15 +71,28 @@ describe("POST /trucks — authorizedToList consent", () => {
   });
 });
 
-describe("POST /trucks — one candidate at a time", () => {
-  it("blocks registering a second truck while the first is still an unreviewed candidate", async () => {
+describe("POST /trucks — a transporter can register a whole fleet", () => {
+  it("allows registering a second truck while the first is still an unreviewed candidate", async () => {
     const { agent } = await newTransporter(4);
     const first = await registerTruck(agent);
     expect(first.status).toBe(201);
 
+    // Used to be a 409 ("one truck awaiting verification at a time"). A
+    // transporter putting three lorries on the platform at once was being
+    // made to queue them one at a time for our convenience, not theirs.
     const second = await registerTruck(agent);
-    expect(second.status).toBe(409);
-    expect(second.body.msg).toMatch(/already have a truck awaiting verification/i);
+    expect(second.status).toBe(201);
+    expect(second.body.truck._id).not.toBe(first.body.truck._id);
+  });
+
+  it("still refuses the same registration number twice", async () => {
+    const { agent } = await newTransporter(40);
+    const regNumber = uniqueRegNumber();
+    expect((await registerTruck(agent, { regNumber })).status).toBe(201);
+
+    const duplicate = await registerTruck(agent, { regNumber });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.msg).toMatch(/already listed/i);
   });
 
   it("does not block a new registration once the prior candidate was rejected", async () => {
@@ -115,7 +130,7 @@ describe("PUT /trucks/:id/review — lifecycle transitions", () => {
     expect(persisted.lifecycle).toBe("candidate");
   });
 
-  it("Change Vehicle: verifying a new truck flips the old active truck to inactive, and both remain in the database", async () => {
+  it("verifying a second truck adds it to the fleet instead of retiring the first", async () => {
     const { agent } = await newTransporter(11);
     const truckA = await registerTruck(agent);
     const { agent: adminAgent } = await newAdmin(12, "verification");
@@ -125,9 +140,10 @@ describe("PUT /trucks/:id/review — lifecycle transitions", () => {
     const reviewB = await adminAgent.put(`/trucks/${truckB.body.truck._id}/review`).send({ status: "verified" });
     expect(reviewB.body.truck.lifecycle).toBe("active");
 
+    // Verifying truckB used to demote truckA to "inactive" — the owner lost
+    // a working vehicle simply by adding another. Both stay active now.
     const persistedA = await Truck.findById(truckA.body.truck._id);
-    expect(persistedA).not.toBeNull();
-    expect(persistedA.lifecycle).toBe("inactive");
+    expect(persistedA.lifecycle).toBe("active");
     expect(persistedA.status).toBe("verified");
 
     const myTrucks = await agent.get("/trucks/me");

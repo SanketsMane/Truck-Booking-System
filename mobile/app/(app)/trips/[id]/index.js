@@ -88,6 +88,12 @@ export const TripDetailScreen = () => {
           <Muted>Pickup</Muted>
           <Body>{trip.pickupPoint?.address}</Body>
         </View>
+        {(trip.stops || []).map((stop, i) => (
+          <View key={`${stop.address}-${i}`} style={styles.rowBetween}>
+            <Muted>Stop {i + 1}</Muted>
+            <Body>{stop.address}</Body>
+          </View>
+        ))}
         <View style={styles.rowBetween}>
           <Muted>Drop</Muted>
           <Body>{trip.dropPoint?.address}</Body>

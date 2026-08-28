@@ -12,7 +12,8 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 
 ### For Shippers
 - Email OTP-based signup and login, or email + password — mobile number is optional (used only for contact, not login)
-- Search trips by origin city, destination city, and date
+- Search trips by origin city, destination city, and date — the date is a starting point, not a window, so every upcoming trip on a route shows up (narrow it with an explicit range if you want to)
+- Match a leg of a longer run: a truck that lists intermediate stops surfaces for a search between any two points along its route, in the direction it's travelling
 - Book capacity on a matching trip, with a server-computed price estimate
 - Pay for a confirmed booking from an in-app wallet or via Razorpay
 - In-app chat with the transporter for a booking
@@ -20,8 +21,10 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - Raise support requests and disputes tied to a specific booking
 
 ### For Transporters
-- Register and manage trucks, including KYC document upload
-- Post trips (route, schedule, capacity, price) once the truck and account are verified
+- Register and manage a whole fleet, including KYC document upload — every verified truck can carry trips, not just one nominated vehicle
+- Post trips (route, schedule, capacity, price) against any verified truck
+- Add intermediate stops to a trip, in the order you drive them, so shippers searching any leg of the route find you
+- Correct or re-plate a truck's registration number — locked only while that truck is out on a run, until the delivery it promised is complete
 - Accept or reject incoming booking requests
 - Confirm pickup and drop to progress a booking through its lifecycle
 - In-app chat with the shipper, and rate the shipper after completion
@@ -37,6 +40,7 @@ The application is a mobile-first Progressive Web App (installable, offline-tole
 - Support ticket handling
 - Configurable platform settings (e.g. the KYC verification gate) and SMS/email provider credentials, managed from the admin UI rather than server config
 - CSV exports for bookings, revenue by route, user growth, and verification turnaround
+- Search demand analytics: most-searched routes, the lanes shippers searched that returned no capacity, origin/destination city demand, daily volume trends, and a per-lane drill-down comparing demand against the capacity actually posted on it — plus a raw searchable log and CSV exports
 - Full audit log of admin actions
 
 ## Technology Stack
@@ -171,6 +175,7 @@ Full templates with explanatory comments live in `backend/.env.example` and `fro
 | `STORAGE_PROVIDER` | `local` (dev) or `s3` (required in production) |
 | `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Object storage credentials, used when `STORAGE_PROVIDER=s3` |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_MOBILE` / `SEED_ADMIN_NAME` | First admin account, used by `scripts/seedAdmin.js` (mobile optional) |
+| `SEARCH_LOG_RETENTION_DAYS` | How long search-analytics rows are kept before Mongo's TTL index prunes them (default 365) |
 
 Razorpay and SMS/email provider credentials are configured at runtime from the admin Settings page, not via environment variables.
 

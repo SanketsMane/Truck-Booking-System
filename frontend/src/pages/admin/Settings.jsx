@@ -539,7 +539,10 @@ const BrandingCard = () => {
                 />
               </Field>
             </FieldsGrid>
-            <Muted>Shown in the site footer and About page.</Muted>
+            <Muted>
+              Shown in the site footer and the About page. The mobile number is also the &ldquo;Dedicated
+              Support&rdquo; number on the home page, which is hidden entirely while this field is empty.
+            </Muted>
             <FieldsGrid>
               <Field label="KYC support WhatsApp number">
                 <Input

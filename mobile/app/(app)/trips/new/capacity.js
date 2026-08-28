@@ -4,6 +4,7 @@ import { Screen } from "../../../../src/components/ui/Screen";
 import { PageTitle, Muted } from "../../../../src/components/ui/Typography";
 import { TextField } from "../../../../src/components/ui/TextField";
 import { LocationField } from "../../../../src/components/LocationField";
+import { TripStopsField } from "../../../../src/components/TripStopsField";
 import { Button } from "../../../../src/components/ui/Button";
 import { usePostTripDraft } from "../../../../src/context/PostTripContext";
 
@@ -30,6 +31,10 @@ export const PostTripCapacityScreen = () => {
       <TextField label="Available to sell (tons)" value={draft.availableCapacity} onChangeText={(v) => updateDraft({ availableCapacity: v })} keyboardType="numeric" />
       <TextField label="Price per ton (₹)" value={draft.pricePerTon} onChangeText={(v) => updateDraft({ pricePerTon: v })} keyboardType="numeric" />
       <LocationField label="Pickup point" value={draft.pickupPoint} onChange={(pickupPoint) => updateDraft({ pickupPoint })} placeholder="Exact pickup address" />
+      <View style={styles.stops}>
+        <Muted>Stops along the way</Muted>
+        <TripStopsField stops={draft.stops || []} onChange={(stops) => updateDraft({ stops })} />
+      </View>
       <LocationField label="Drop point" value={draft.dropPoint} onChange={(dropPoint) => updateDraft({ dropPoint })} placeholder="Exact drop address" />
 
       <View style={styles.row}>
@@ -42,6 +47,7 @@ export const PostTripCapacityScreen = () => {
 
 const styles = StyleSheet.create({
   header: { gap: 4 },
+  stops: { gap: 8 },
   row: { flexDirection: "row", gap: 12, justifyContent: "space-between" },
 });
 

@@ -65,7 +65,14 @@ export const SearchResultsScreen = () => {
                     {item.fromCity} → {item.toCity}
                   </Body>
                   {item.matchType === "route" && <StatusBadge status="info">On route</StatusBadge>}
+                  {/* The transporter listed these stops themselves, so this
+                      is a stronger claim than the geometry-inferred "on
+                      route" above — worth saying differently. */}
+                  {item.matchType === "stop" && <StatusBadge status="info">Stops on your route</StatusBadge>}
                 </View>
+                {item.stops?.length > 0 && (
+                  <Muted>via {item.stops.map((stop) => stop.address).join(" → ")}</Muted>
+                )}
                 <Muted>
                   {item.truck?.regNumber} · {item.truck?.truckType}
                 </Muted>

@@ -36,6 +36,17 @@ export const formatTime = (value) => {
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
 };
 
+// "8130170669" → "+91 81301 70669". Branding stores a contact number as the
+// bare 10 digits its validator enforces (backend/validators/adminValidation
+// .js's MOBILE_PATTERN); this is only how one is shown to a visitor. Anything
+// that isn't exactly 10 digits is handed back untouched rather than sliced
+// into a wrong-looking number.
+export const formatMobile = (value) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length !== 10) return value || "";
+  return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+};
+
 export const formatTons = (value) =>
   `${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} t`;
 

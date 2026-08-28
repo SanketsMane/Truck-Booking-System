@@ -1,11 +1,15 @@
 // Covers what replaced the old "unverified truck -> draft trip, auto-
-// published on review" flow: postTrip now hard-blocks until the truck is
-// the account's ACTIVE truck (truckController.reviewTruck is the only
-// place that ever sets lifecycle "active") and the driver's own KYC is
-// verified — there's no more draft/auto-publish path for new trips.
+// published on review" flow: postTrip publishes immediately, and blocks
+// only on the two things that genuinely matter — the truck passed its own
+// KYC review, and it hasn't been retired. Driver person-level KYC follows
+// PlatformSetting.verificationGateEnabled like every other gate in the app,
+// so it's exercised here in both positions. There's no draft/auto-publish
+// path for new trips either way.
+const PlatformSetting = require("../../models/platformSettingModel");
 const request = require("supertest");
 const app = require("../../app");
 const Verification = require("../../models/verificationModel");
+const Truck = require("../../models/truckModel");
 const { signupUser, makeAdmin, uniqueRegNumber } = require("../helpers");
 
 const emailFor = (seed) => `draft${seed}@example.test`;
@@ -50,7 +54,7 @@ const postTripBody = (truckId, overrides = {}) => ({
   pricePerTon: overrides.pricePerTon || 1000,
 });
 
-describe("POST /trips — truck must be the account's active truck", () => {
+describe("POST /trips — the truck must be verified and not retired", () => {
   it("blocks posting a trip while the truck is still a pending candidate", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(1), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
@@ -58,7 +62,7 @@ describe("POST /trips — truck must be the account's active truck", () => {
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(400);
-    expect(res.body.msg).toMatch(/active, verified truck/i);
+    expect(res.body.msg).toMatch(/awaiting verification/i);
   });
 
   it("blocks posting a trip on a truck whose documents were rejected", async () => {
@@ -72,7 +76,7 @@ describe("POST /trips — truck must be the account's active truck", () => {
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(400);
-    expect(res.body.msg).toMatch(/active, verified truck/i);
+    expect(res.body.msg).toMatch(/awaiting verification/i);
   });
 
   it("publishes immediately (no draft) once the truck is verified and becomes active, and the trip is searchable/bookable", async () => {
@@ -106,7 +110,7 @@ describe("POST /trips — truck must be the account's active truck", () => {
     expect(bookRes.status).toBe(201);
   });
 
-  it("blocks posting against a truck that's been superseded (Change Vehicle) and is now inactive", async () => {
+  it("keeps BOTH trucks postable once a second one is verified", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(6), name: "Transporter", roles: ["transporter"] });
     const truckA = await registerTruck(agent);
     await verifyDriverKyc(user._id);
@@ -116,28 +120,62 @@ describe("POST /trips — truck must be the account's active truck", () => {
     const reviewB = await verifyTruck(truckB._id);
     expect(reviewB.body.truck.lifecycle).toBe("active");
 
-    const res = await agent.post("/trips").send(postTripBody(truckA._id));
+    // Verifying truckB used to retire truckA out from under the owner, so
+    // this exact call was a 400. A transporter running two lorries can post
+    // on either.
+    expect((await agent.post("/trips").send(postTripBody(truckA._id))).status).toBe(201);
+    expect((await agent.post("/trips").send(postTripBody(truckB._id))).status).toBe(201);
+  });
+
+  it("blocks posting against a truck that has actually been retired", async () => {
+    const { agent, user } = await signupUser(app, { email: emailFor(60), name: "Transporter", roles: ["transporter"] });
+    const truck = await registerTruck(agent);
+    await verifyDriverKyc(user._id);
+    await verifyTruck(truck._id);
+    await Truck.updateOne({ _id: truck._id }, { $set: { lifecycle: "inactive" } });
+
+    const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(400);
-    expect(res.body.msg).toMatch(/active, verified truck/i);
+    expect(res.body.msg).toMatch(/retired/i);
   });
 });
 
-describe("POST /trips — driver verification is required unconditionally", () => {
-  it("blocks posting when the driver has no verification record at all, even with an active truck", async () => {
+describe("POST /trips — driver verification follows the platform gate", () => {
+  const enableGate = async () => {
+    const settings = await PlatformSetting.getSettings();
+    settings.verificationGateEnabled = true;
+    await settings.save();
+  };
+
+  it("lets a driver with no verification record publish while the gate is off", async () => {
     const { agent } = await signupUser(app, { email: emailFor(7), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
     await verifyTruck(truck._id);
+
+    // This used to be a flat 403 — the one gate in the app that ignored the
+    // platform switch entirely, so an admin who had deliberately turned
+    // verification off still couldn't let a driver post.
+    const res = await agent.post("/trips").send(postTripBody(truck._id));
+    expect(res.status).toBe(201);
+  });
+
+  it("blocks a driver with no verification record once the gate is on", async () => {
+    const { agent } = await signupUser(app, { email: emailFor(70), name: "Transporter", roles: ["transporter"] });
+    const truck = await registerTruck(agent);
+    await verifyTruck(truck._id);
+    await enableGate();
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(403);
     expect(res.body.msg).toMatch(/driver verification/i);
   });
 
-  it("blocks posting while driver verification is still pending", async () => {
+  it("blocks a pending driver verification once the gate is on", async () => {
     const { agent, user } = await signupUser(app, { email: emailFor(8), name: "Transporter", roles: ["transporter"] });
     const truck = await registerTruck(agent);
     await verifyTruck(truck._id);
     await Verification.create({ user: user._id, type: "transporter", status: "pending" });
+    await enableGate();
 
     const res = await agent.post("/trips").send(postTripBody(truck._id));
     expect(res.status).toBe(403);

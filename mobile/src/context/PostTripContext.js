@@ -14,6 +14,8 @@ const initialDraft = {
   pricePerTon: "",
   pickupPoint: { address: "", lat: null, lng: null },
   dropPoint: { address: "", lat: null, lng: null },
+  // Ordered intermediate stops between pickup and drop.
+  stops: [],
 };
 
 // Holds the in-progress trip across the 4 wizard screens (mirrors

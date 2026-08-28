@@ -44,6 +44,13 @@ const registerTruckValidation = Joi.object({
 });
 
 const updateTruckValidation = Joi.object({
+  // Editable so a driver can correct a mis-typed plate or re-plate a
+  // vehicle without abandoning the truck's whole record. Two guards sit on
+  // it in truckController.updateTruck rather than here, because neither is
+  // expressible as a shape check: the truck must not be mid-trip, and a
+  // changed number sends the truck back for verification since its RC and
+  // insurance documents no longer match the plate on them.
+  regNumber: regNumberSchema.optional(),
   truckType: Joi.string().trim(),
   bodyType: Joi.string().trim().allow(""),
   totalCapacity: Joi.number().positive(),

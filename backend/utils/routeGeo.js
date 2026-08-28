@@ -59,4 +59,50 @@ const distanceFromRoute = (a, b, p) => {
   return { crossTrackKm: Math.abs(crossTrackKm), alongTrackKm, routeLengthKm };
 };
 
-module.exports = { distanceFromRoute, EARTH_RADIUS_KM };
+// A trip is no longer a single straight line: a transporter can add
+// intermediate stops (tripModel's `stops`), so the real route is the
+// polyline pickup -> stop1 -> ... -> drop. This finds where an arbitrary
+// point attaches to that polyline:
+//
+//   crossTrackKm  — perpendicular distance from the nearest segment
+//   alongTrackKm  — how far along the WHOLE path that attachment falls,
+//                   measured cumulatively from the very start. This is the
+//                   number that makes ordering checks work: a caller can
+//                   compare two points and know which one the truck reaches
+//                   first, even when they sit on different segments.
+//
+// Returns null when the point doesn't project onto any segment at all —
+// i.e. it's off the ends of the route rather than merely off to one side.
+//
+// slackKm is applied ONLY at the two open ends of the path. Interior joins
+// need none: consecutive segments are continuous, so a point near a stop
+// already projects cleanly onto one side of it or the other, and granting
+// slack there would let the same point attach twice.
+const locateOnPath = (path, point, slackKm = 0) => {
+  let best = null;
+  let travelled = 0;
+
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const { crossTrackKm, alongTrackKm, routeLengthKm } = distanceFromRoute(path[i], path[i + 1], point);
+
+    const lowerBound = i === 0 ? -slackKm : 0;
+    const upperBound = i === path.length - 2 ? routeLengthKm + slackKm : routeLengthKm;
+
+    if (alongTrackKm >= lowerBound && alongTrackKm <= upperBound) {
+      // Clamped before it's added to the running total so end slack can
+      // never push a cumulative distance below zero or past the path's
+      // real length — the slack decides whether the point counts at all,
+      // not where along the route it sits.
+      const withinSegment = Math.min(Math.max(alongTrackKm, 0), routeLengthKm);
+      if (!best || crossTrackKm < best.crossTrackKm) {
+        best = { crossTrackKm, alongTrackKm: travelled + withinSegment };
+      }
+    }
+
+    travelled += routeLengthKm;
+  }
+
+  return best ? { ...best, pathLengthKm: travelled } : null;
+};
+
+module.exports = { distanceFromRoute, locateOnPath, EARTH_RADIUS_KM };

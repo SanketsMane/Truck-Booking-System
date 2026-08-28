@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  Search as SearchIcon,
   ShieldCheck,
   Users as UsersIcon,
   Truck as TruckIcon,
@@ -30,6 +31,16 @@ const NAV = [
         description: "Platform overview and key metrics",
         icon: LayoutDashboard,
         end: true,
+      },
+      // Sits beside the Dashboard rather than down in Monitoring on
+      // purpose: the Dashboard reports what the platform SUPPLIED, this
+      // reports what shippers ASKED for — including the lanes nobody
+      // served, which no other screen in the console can show.
+      {
+        to: "/admin/search-logs",
+        label: "Search Demand",
+        description: "Most searched routes and the lanes with no capacity",
+        icon: SearchIcon,
       },
     ],
   },

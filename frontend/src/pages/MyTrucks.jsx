@@ -21,6 +21,7 @@ import {
 import {
   listMyTrucks,
   registerTruck,
+  updateTruck,
   addTruckDocuments,
   addTruckPhotos,
   raiseTruckDeleteRequest,
@@ -28,7 +29,7 @@ import {
 } from "../api/trucks";
 import { uploadFile, getFileBlobUrl } from "../api/files";
 import { BASE_URL } from "../api/client";
-import { PageContainer, PageTitle, SectionTitle, SubHeading, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
+import { PageContainer, PageTitle, SectionTitle, Muted, Stack, Row, EmptyState } from "../components/ui/Layout";
 import { Card, CardRow } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { StatusBadge } from "../components/ui/Badge";
@@ -540,6 +541,11 @@ const RegisterTruckForm = ({ onRegistered, title = "Register a truck" }) => {
 // list stays the primary at-a-glance view and this only takes up space
 // once opened.
 const TruckDetailPanel = ({ truck, onUpdated }) => {
+  const [showRegEdit, setShowRegEdit] = useState(false);
+  const [regDraft, setRegDraft] = useState(truck.regNumber);
+  const [regError, setRegError] = useState("");
+  const [savingReg, setSavingReg] = useState(false);
+
   const [showResubmit, setShowResubmit] = useState(false);
   const [docs, setDocs] = useState(emptyDocs);
   const [submitting, setSubmitting] = useState(false);
@@ -579,6 +585,36 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
     }
   };
 
+  // The server is the authority on whether this is allowed: it refuses with
+  // a 409 naming the trip while the truck is out on a run (see
+  // truckController.updateTruck's in-flight guard). Surfacing that message
+  // verbatim beats guessing at the rule here from trip data the page
+  // doesn't have — and it can't go stale.
+  const handleSaveRegNumber = async (e) => {
+    e.preventDefault();
+    const next = normalizeRegNumber(regDraft);
+    if (!isValidRegNumber(next)) {
+      setRegError("Enter a valid registration number (e.g. DL01AB1234)");
+      return;
+    }
+    if (next === truck.regNumber) {
+      setShowRegEdit(false);
+      return;
+    }
+    setSavingReg(true);
+    setRegError("");
+    try {
+      const res = await updateTruck(truck._id, { regNumber: next });
+      toast.success(res.msg || "Registration number updated");
+      onUpdated(res.truck);
+      setShowRegEdit(false);
+    } catch (err) {
+      setRegError(err.message);
+    } finally {
+      setSavingReg(false);
+    }
+  };
+
   const handleAddPhotos = async (e) => {
     e.preventDefault();
     const fileIds = newPhotos.map((p) => p.fileId);
@@ -602,6 +638,50 @@ const TruckDetailPanel = ({ truck, onUpdated }) => {
 
   return (
     <PanelWrap>
+      {showRegEdit ? (
+        <form onSubmit={handleSaveRegNumber}>
+          <Stack $gap={3}>
+            <Field
+              label="Registration number"
+              error={regError}
+              help="Changing this sends the truck back for verification — its RC and insurance name the old plate."
+            >
+              <Input
+                value={regDraft}
+                onChange={(e) => setRegDraft(e.target.value.toUpperCase())}
+                placeholder="e.g. MH12AB1234"
+                autoFocus
+              />
+            </Field>
+            <Row $gap={2}>
+              <Button type="submit" $size="sm" disabled={savingReg}>
+                {savingReg ? "Saving…" : "Save number"}
+              </Button>
+              <Button
+                type="button"
+                $variant="ghost"
+                $size="sm"
+                onClick={() => {
+                  setRegDraft(truck.regNumber);
+                  setRegError("");
+                  setShowRegEdit(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </Row>
+          </Stack>
+        </form>
+      ) : (
+        truck.lifecycle !== "inactive" && (
+          <Row $gap={2}>
+            <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowRegEdit(true)}>
+              Change registration number
+            </Button>
+          </Row>
+        )
+      )}
+
       {truck.photos?.length > 0 && (
         <Row $gap={2} $wrap>
           {truck.photos.map((photo, i) => (
@@ -764,11 +844,8 @@ const DeleteRequestModal = ({ truck, onCancel, onSubmit, submitting }) => {
 
 // One truck's at-a-glance summary — photo/type thumb, reg number, status,
 // and document/photo/capacity counts — with the full management panel
-// (TruckDetailPanel) tucked behind "Manage" so the list stays scannable.
-// onChangeVehicle, passed only for the account's current ACTIVE truck, adds
-// a "Change Vehicle" button — registering a new truck while this one still
-// works, per the MVP's one-driver-one-active-truck flow.
-const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequestDelete, onChangeVehicle }) => {
+// (TruckDetailPanel) tucked behind "Manage" so a fleet list stays scannable.
+const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequestDelete }) => {
   const StatusIcon = STATUS_ICON[truck.status];
   const docCount = truck.documents?.length || 0;
   const photoCount = truck.photos?.length || 0;
@@ -837,11 +914,6 @@ const TruckCard = ({ truck, expanded, onToggle, onUpdated, deleteRequest, onRequ
               {expanded ? "Close" : "Manage"}
               {expanded ? <ChevronUp size={15} strokeWidth={2.2} /> : <ChevronDown size={15} strokeWidth={2.2} />}
             </Button>
-            {onChangeVehicle && (
-              <Button type="button" $variant="secondary" $size="sm" onClick={onChangeVehicle}>
-                Change Vehicle
-              </Button>
-            )}
           </Row>
           {deleteRequest?.status === "pending" ? (
             <StatusBadge status="pending">
@@ -887,12 +959,11 @@ const TruckCardSkeleton = () => (
   </Card>
 );
 
-// One driver = one active truck (MVP scope) — trucks are no longer a
-// searchable/paginated fleet list. The account has at most one ACTIVE
-// truck (the one it can post trips against), at most one CANDIDATE truck
-// (a new registration awaiting verification — either the first truck ever,
-// or a Change Vehicle swap in progress), and any number of INACTIVE trucks
-// kept permanently as history once superseded.
+// A transporter runs a fleet, not one nominated vehicle. Anything verified
+// and not retired can carry a trip (tripController.postTrip), so the page
+// splits into two plain groups: the trucks in service — verified ones plus
+// any still in review — and retired ones, kept permanently as history so
+// past trips stay resolvable.
 export const MyTrucks = () => {
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -944,12 +1015,19 @@ export const MyTrucks = () => {
     }
   };
 
-  const activeTruck = useMemo(() => trucks.find((t) => t.lifecycle === "active"), [trucks]);
-  const candidateTruck = useMemo(() => trucks.find((t) => t.lifecycle === "candidate"), [trucks]);
+  // Verified first so the trucks that can actually take a trip today sit at
+  // the top, then the ones still working through review.
+  const fleetTrucks = useMemo(
+    () =>
+      trucks
+        .filter((t) => t.lifecycle !== "inactive")
+        .sort((a, b) => Number(b.status === "verified") - Number(a.status === "verified")),
+    [trucks]
+  );
   const historyTrucks = useMemo(() => trucks.filter((t) => t.lifecycle === "inactive"), [trucks]);
-  const hasBlockingCandidate = Boolean(candidateTruck && candidateTruck.status !== "rejected");
+  const readyCount = useMemo(() => fleetTrucks.filter((t) => t.status === "verified").length, [fleetTrucks]);
 
-  const renderTruckCard = (truck, { changeable = false } = {}) => (
+  const renderTruckCard = (truck) => (
     <TruckCard
       key={truck._id}
       truck={truck}
@@ -958,7 +1036,6 @@ export const MyTrucks = () => {
       onUpdated={handleTruckUpdated}
       deleteRequest={deleteRequestsByTruck[truck._id]}
       onRequestDelete={() => setDeleteRequestTarget(truck)}
-      onChangeVehicle={changeable && !hasBlockingCandidate ? () => setShowForm(true) : undefined}
     />
   );
 
@@ -966,15 +1043,19 @@ export const MyTrucks = () => {
     <PageContainer style={{ maxWidth: 1080 }}>
       <Stack $gap={5}>
         <Stack $gap={1}>
-          <PageTitle>My truck</PageTitle>
-          <Muted>Your one active truck, its verification status, and your truck history.</Muted>
+          <PageTitle>My trucks</PageTitle>
+          <Muted>
+            {readyCount > 0
+              ? `${readyCount} truck${readyCount === 1 ? "" : "s"} ready to take trips. Add as many vehicles as you run.`
+              : "Register the vehicles you run — each one can take trips once it's verified."}
+          </Muted>
         </Stack>
 
         {loading ? (
           <TruckCardSkeleton />
         ) : (
           <>
-            {!activeTruck && !candidateTruck && (
+            {fleetTrucks.length === 0 && (
               <EmptyState>
                 <Truck size={26} strokeWidth={1.6} />
                 <Muted>You haven't registered a truck yet. Register one to start posting trips.</Muted>
@@ -987,22 +1068,19 @@ export const MyTrucks = () => {
               </EmptyState>
             )}
 
-            {activeTruck && renderTruckCard(activeTruck, { changeable: true })}
+            {fleetTrucks.length > 0 && <Stack $gap={3}>{fleetTrucks.map((truck) => renderTruckCard(truck))}</Stack>}
 
-            {candidateTruck && (
-              <Stack $gap={2}>
-                {activeTruck && <SubHeading>New truck (Change Vehicle)</SubHeading>}
-                {renderTruckCard(candidateTruck)}
-              </Stack>
+            {fleetTrucks.length > 0 && !showForm && (
+              <Row $gap={2}>
+                <Button type="button" $variant="secondary" $size="sm" onClick={() => setShowForm(true)}>
+                  <Plus size={14} strokeWidth={2.4} />
+                  Add another truck
+                </Button>
+              </Row>
             )}
 
-            {showForm && !hasBlockingCandidate && (
-              <RegisterTruckForm onRegistered={handleRegistered} title={activeTruck ? "Change Vehicle" : "Register a truck"} />
-            )}
-            {showForm && hasBlockingCandidate && (
-              <Muted>Your new truck is already awaiting verification — resubmit its documents above if it was rejected.</Muted>
-            )}
-            {activeTruck && showForm && (
+            {showForm && <RegisterTruckForm onRegistered={handleRegistered} title="Register a truck" />}
+            {fleetTrucks.length > 0 && showForm && (
               <Row $gap={2}>
                 <Button type="button" $variant="ghost" $size="sm" onClick={() => setShowForm(false)}>
                   Cancel

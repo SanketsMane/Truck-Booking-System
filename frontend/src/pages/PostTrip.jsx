@@ -12,6 +12,7 @@ import { StatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Field, Input } from "../components/ui/Form";
 import { LocationAutocomplete } from "../components/ui/LocationAutocomplete";
+import { TripStopsField, cleanStops } from "../components/ui/TripStopsField";
 import { TimeInput } from "../components/ui/TimeInput";
 import { UnitAmountInput } from "../components/ui/UnitAmountInput";
 import { Spinner } from "../components/ui/Spinner";
@@ -27,6 +28,11 @@ import {
 import { useUnitAmount } from "../hooks/useUnitAmount";
 
 const STEPS = ["Route", "Truck", "Capacity", "Review"];
+
+// Kept in step with tripController.postTrip's two checks. A truck still in
+// review can't carry a trip yet, and a retired one is history rather than
+// fleet — everything else the transporter owns is fair game.
+const isUsableTruck = (truck) => truck.status === "verified" && truck.lifecycle !== "inactive";
 
 const StepRow = styled(Row)`
   overflow-x: auto;
@@ -230,6 +236,7 @@ export const PostTrip = () => {
   const [pricePerTon, setPricePerTon] = useState(draft?.pricePerTon ?? "");
   const [pickupPoint, setPickupPoint] = useState(draft?.pickupPoint ?? { address: "", lat: null, lng: null });
   const [dropPoint, setDropPoint] = useState(draft?.dropPoint ?? { address: "", lat: null, lng: null });
+  const [stops, setStops] = useState(draft?.stops ?? []);
   const [capacityErrors, setCapacityErrors] = useState({});
 
   // Transporter's own KYC status — fetched here (not just left to the
@@ -247,13 +254,18 @@ export const PostTrip = () => {
   useEffect(() => {
     listMyTrucks()
       .then(({ trucks }) => {
-        setTrucks(trucks || []);
-        // There's only ever one selectable (active) truck now — auto-pick
-        // it instead of making the transporter click a single-item picker.
-        // A stale draft's selectedTruckId (from before a Change Vehicle
-        // swap) is corrected here too, not just left dangling.
-        const active = (trucks || []).find((t) => t.lifecycle === "active");
-        if (active) setSelectedTruckId(active._id);
+        const list = trucks || [];
+        setTrucks(list);
+        // A transporter can now run a whole fleet, so this is a real picker.
+        // Auto-select only when there's exactly one usable truck (the common
+        // case) — with several, the driver has to say which one, and a
+        // stale draft pointing at a truck that's since been retired is
+        // cleared rather than left dangling.
+        const usable = list.filter(isUsableTruck);
+        setSelectedTruckId((current) => {
+          if (current && usable.some((t) => t._id === current)) return current;
+          return usable.length === 1 ? usable[0]._id : "";
+        });
       })
       .catch(() => setTrucks([]))
       .finally(() => setLoadingTrucks(false));
@@ -288,6 +300,7 @@ export const PostTrip = () => {
       pricePerTon,
       pickupPoint,
       dropPoint,
+      stops,
     };
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data));
@@ -312,6 +325,7 @@ export const PostTrip = () => {
     pricePerTon,
     pickupPoint,
     dropPoint,
+    stops,
   ]);
 
   const handleStartOver = () => {
@@ -320,10 +334,10 @@ export const PostTrip = () => {
   };
 
   const selectedTruck = trucks.find((t) => t._id === selectedTruckId);
-  // One driver = one active truck — there's at most one truck a trip can
-  // ever be posted against (tripController.postTrip hard-requires
-  // lifecycle "active"), so this is a 0-or-1 list, not a picker.
-  const activeTruck = trucks.find((t) => t.lifecycle === "active");
+  // Every truck a trip can actually be posted against — mirrors exactly what
+  // tripController.postTrip accepts (verified, and not retired), so the form
+  // never offers a truck the API will refuse.
+  const usableTrucks = trucks.filter(isUsableTruck);
   const transporterVerification = verifications.find((v) => v.type === "transporter");
   const transporterVerified = transporterVerification?.status === "verified";
 
@@ -403,6 +417,7 @@ export const PostTrip = () => {
         estimatedArrivalAt: arrivalAtInstant ? arrivalAtInstant.toISOString() : undefined,
         pickupPoint: { ...pickupPoint, address: pickupPoint.address.trim() },
         dropPoint: { ...dropPoint, address: dropPoint.address.trim() },
+        stops: cleanStops(stops),
         totalCapacity: Number(totalCapacityAmount.tons),
         availableCapacity: Number(availableCapacityAmount.tons),
         pricePerTon: Number(pricePerTon),
@@ -564,32 +579,45 @@ export const PostTrip = () => {
                     </Button>
                   </Stack>
                 </EmptyState>
-              ) : !activeTruck ? (
+              ) : usableTrucks.length === 0 ? (
                 <EmptyState>
                   <Stack $gap={3}>
-                    <p>Your truck isn't active yet — it needs to pass verification before you can post a trip.</p>
+                    <p>None of your trucks are verified yet — a truck has to pass verification before you can post a trip on it.</p>
                     <Button as={Link} to="/trucks" $size="sm">
                       Check verification status
                     </Button>
                   </Stack>
                 </EmptyState>
               ) : (
-                <TruckOption as="div" $active>
-                  <CardRow>
-                    <Row $gap={3}>
-                      <TruckThumb>
-                        <TruckIcon size={19} strokeWidth={2} />
-                      </TruckThumb>
-                      <Stack $gap={1}>
-                        <strong>{activeTruck.regNumber}</strong>
-                        <Muted>
-                          {activeTruck.truckType} · {formatTons(activeTruck.totalCapacity)} capacity
-                        </Muted>
-                      </Stack>
-                    </Row>
-                    <StatusBadge status={activeTruck.status} />
-                  </CardRow>
-                </TruckOption>
+                <Stack $gap={2}>
+                  {usableTrucks.map((truck) => (
+                    <TruckOption
+                      key={truck._id}
+                      type="button"
+                      $active={truck._id === selectedTruckId}
+                      onClick={() => setSelectedTruckId(truck._id)}
+                      aria-pressed={truck._id === selectedTruckId}
+                    >
+                      <CardRow>
+                        <Row $gap={3}>
+                          <TruckThumb>
+                            <TruckIcon size={19} strokeWidth={2} />
+                          </TruckThumb>
+                          <Stack $gap={1}>
+                            <strong>{truck.regNumber}</strong>
+                            <Muted>
+                              {truck.truckType} · {formatTons(truck.totalCapacity)} capacity
+                            </Muted>
+                          </Stack>
+                        </Row>
+                        <StatusBadge status={truck.status} />
+                      </CardRow>
+                    </TruckOption>
+                  ))}
+                  {usableTrucks.length > 1 && (
+                    <Muted style={{ fontSize: 13 }}>Pick the truck running this trip.</Muted>
+                  )}
+                </Stack>
               )}
               <Row $gap={3}>
                 <Button $variant="ghost" onClick={() => setStep(0)}>
@@ -659,6 +687,12 @@ export const PostTrip = () => {
                     value={pickupPoint}
                     onChange={setPickupPoint}
                   />
+                </Field>
+                <Field
+                  label="Stops along the way"
+                  help="Add the towns you pass through — shippers searching any leg of your route will find you."
+                >
+                  <TripStopsField stops={stops} onChange={setStops} />
                 </Field>
                 <Field label="Drop point" error={capacityErrors.dropPoint}>
                   <LocationAutocomplete
@@ -731,6 +765,12 @@ export const PostTrip = () => {
                   <Muted>Pickup</Muted>
                   <span>{pickupPoint.address}</span>
                 </CardRow>
+                {cleanStops(stops).length > 0 && (
+                  <CardRow>
+                    <Muted>Via</Muted>
+                    <span>{cleanStops(stops).map((stop) => stop.address).join(" → ")}</span>
+                  </CardRow>
+                )}
                 <CardRow>
                   <Muted>Drop</Muted>
                   <span>{dropPoint.address}</span>

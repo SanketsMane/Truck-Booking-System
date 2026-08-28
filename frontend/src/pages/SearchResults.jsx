@@ -113,10 +113,12 @@ const RouteLine = styled.div`
   margin-top: 1px;
 `;
 
-// Only for matchType "route" — makes it obvious this isn't a door-to-door
-// match on the exact searched cities, which is exactly the confusion this
-// feature exists to resolve (a shipper searching Pune->Mumbai finding a
-// Bangalore->Mumbai truck should understand WHY it showed up).
+// Shown whenever the trip's own from/to differ from what was searched —
+// makes it obvious this isn't a door-to-door match on the exact searched
+// cities, which is exactly the confusion this feature exists to resolve (a
+// shipper searching Pune->Mumbai finding a Bangalore->Mumbai truck should
+// understand WHY it showed up). "stop" says the transporter listed those
+// places themselves; "route" says we inferred it from the geometry.
 const RouteMatchBadge = styled.span`
   display: inline-flex;
   align-items: center;
@@ -446,7 +448,7 @@ export const SearchResults = () => {
               // real desired pickup point through so TripDetail can default
               // the booking form to it instead of the trip's own pickup
               // point, which may be a city away.
-              if (trip.matchType === "route" && fromLat && fromLng) {
+              if ((trip.matchType === "route" || trip.matchType === "stop") && fromLat && fromLng) {
                 linkParams.set("pickupLat", fromLat);
                 linkParams.set("pickupLng", fromLng);
                 if (fromCity) linkParams.set("pickupAddress", fromCity);
@@ -497,7 +499,18 @@ export const SearchResults = () => {
                               <RouteMatchBadge>Passes through your route</RouteMatchBadge>
                             </>
                           )}
+                          {trip.matchType === "stop" && (
+                            <>
+                              {" "}
+                              <RouteMatchBadge>Stops on your route</RouteMatchBadge>
+                            </>
+                          )}
                         </RouteLine>
+                        {trip.stops?.length > 0 && (
+                          <Muted style={{ fontSize: 12.5 }}>
+                            via {trip.stops.map((stop) => stop.address).join(" → ")}
+                          </Muted>
+                        )}
                       </div>
                     </Row>
                     <BadgeRow>
