@@ -1,16 +1,64 @@
+import { Pressable, View, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../../src/theme";
 
+// Filled when active, outline when not. A tab bar that only changes colour
+// asks the eye to compare five greens; a filled-vs-outline pair reads at a
+// glance, and it still works for someone who can't separate the two colours.
 const TAB_ICON = {
-  index: "search",
-  "bookings/index": "briefcase",
-  "trucks/index": "car",
-  "chat/index": "chatbubbles",
-  "profile/index": "person",
+  index: ["search", "search-outline"],
+  "bookings/index": ["cube", "cube-outline"],
+  "trucks/index": ["bus", "bus-outline"],
+  "chat/index": ["chatbubbles", "chatbubbles-outline"],
+  "profile/index": ["person", "person-outline"],
+};
+
+// The default tab button paints an Android ripple — a grey circle that
+// spreads out of the tap and lingers. It reads as a stray smudge rather than
+// as feedback, especially against a light bar. This replaces it with a brief
+// opacity press, which is what iOS does anyway; the real confirmation that a
+// tab was pressed is the tab becoming active, which is instant.
+const TabButton = ({ children, style, onPress, onLongPress, accessibilityState, accessibilityLabel, testID }) => (
+  <Pressable
+    onPress={onPress}
+    onLongPress={onLongPress}
+    accessibilityRole="tab"
+    accessibilityState={accessibilityState}
+    accessibilityLabel={accessibilityLabel}
+    testID={testID}
+    android_ripple={null}
+    style={({ pressed }) => [styles.tabButton, style, pressed && styles.tabButtonPressed]}
+  >
+    {children}
+  </Pressable>
+);
+
+const TabItem = ({ routeName, focused }) => {
+  const [filled, outline] = TAB_ICON[routeName] || ["ellipse", "ellipse-outline"];
+  return (
+    <View style={styles.item}>
+      {/* A short bar above the active tab. Colour alone is doing a lot of
+          work in a five-item bar; a position marker makes "where am I" a
+          shape question rather than a hue question. */}
+      <View style={[styles.indicator, focused && styles.indicatorActive]} />
+      <Ionicons
+        name={focused ? filled : outline}
+        size={theme.layout.icon.lg}
+        color={focused ? theme.color.accent : theme.color.textFaint}
+      />
+    </View>
+  );
 };
 
 export default function AppTabsLayout() {
+  // Hardcoding the bottom padding put the "Trucks" label underneath Android's
+  // gesture pill — verified on device. The inset is the only number that
+  // knows how much room the system actually needs, and it differs between a
+  // gesture-nav phone, a 3-button phone and a notched iPhone.
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       // Without this, back goes to the FIRST tab — bottom-tabs defaults
@@ -22,17 +70,18 @@ export default function AppTabsLayout() {
       backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarButton: TabButton,
         tabBarActiveTintColor: theme.color.accent,
         tabBarInactiveTintColor: theme.color.textFaint,
-        tabBarStyle: { borderTopColor: theme.color.border },
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons name={TAB_ICON[route.name] || "ellipse"} size={size} color={color} />
-        ),
+        tabBarStyle: [styles.bar, { height: BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom + theme.spacing.sm }],
+        tabBarItemStyle: styles.barItem,
+        tabBarLabelStyle: styles.label,
+        tabBarIcon: ({ focused }) => <TabItem routeName={route.name} focused={focused} />,
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
       <Tabs.Screen name="bookings/index" options={{ title: "Bookings" }} />
-      <Tabs.Screen name="trucks/index" options={{ title: "My Truck" }} />
+      <Tabs.Screen name="trucks/index" options={{ title: "Trucks" }} />
       <Tabs.Screen name="chat/index" options={{ title: "Chat" }} />
       <Tabs.Screen name="profile/index" options={{ title: "Profile" }} />
 
@@ -81,3 +130,32 @@ export default function AppTabsLayout() {
     </Tabs>
   );
 }
+
+// Content height; the system inset is added on top of this at runtime.
+const BAR_HEIGHT = 60;
+
+const styles = StyleSheet.create({
+  bar: {
+    paddingTop: theme.spacing.xs,
+    backgroundColor: theme.color.surface,
+    borderTopWidth: theme.layout.hairline,
+    borderTopColor: theme.color.border,
+    // The default bar has no elevation, so a white list scrolling underneath
+    // it runs straight into a white bar with only a hairline between them.
+    ...theme.elevation[2],
+  },
+  barItem: { paddingVertical: 0 },
+  label: { ...theme.text.overline, textTransform: "none", letterSpacing: 0.1 },
+
+  tabButton: { flex: 1, alignItems: "center", justifyContent: "center" },
+  tabButtonPressed: { opacity: 0.6 },
+
+  item: { alignItems: "center", gap: theme.spacing.xxs },
+  indicator: {
+    width: theme.spacing.lg,
+    height: 3,
+    borderRadius: theme.radius.pill,
+    backgroundColor: "transparent",
+  },
+  indicatorActive: { backgroundColor: theme.color.accent },
+});
