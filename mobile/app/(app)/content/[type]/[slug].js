@@ -26,12 +26,12 @@ export const ContentDetailScreen = () => {
   }, [slug]);
 
   if (loading) return <LoadingView />;
-  if (!post) return <Screen><Muted>{error || "Not found"}</Muted></Screen>;
+  if (!post) return <Screen title=""><Muted>{error || "Not found"}</Muted></Screen>;
 
   const byline = post.authorName || post.author?.name;
 
   return (
-    <Screen>
+    <Screen title="">
       {post.coverImageUrl && (
         <Image source={{ uri: `${BASE_URL}${post.coverImageUrl}` }} style={styles.cover} resizeMode="cover" />
       )}

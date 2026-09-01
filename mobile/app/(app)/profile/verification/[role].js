@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../../src/components/ui/Typography";
+import { Muted } from "../../../../src/components/ui/Typography";
 import { StatusBadge } from "../../../../src/components/ui/Badge";
 import { Button } from "../../../../src/components/ui/Button";
 import { DocumentUploadField } from "../../../../src/components/DocumentUploadField";
@@ -74,9 +74,8 @@ export const VerificationScreen = () => {
   if (loading) return null;
 
   return (
-    <Screen>
+    <Screen title={`${ROLE_LABEL[role] || role} verification`}>
       <View style={styles.header}>
-        <PageTitle>{ROLE_LABEL[role] || role} verification</PageTitle>
         <StatusBadge status={record?.status}>{record?.status || "Not submitted"}</StatusBadge>
       </View>
 

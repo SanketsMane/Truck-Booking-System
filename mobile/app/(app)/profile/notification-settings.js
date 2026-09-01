@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Switch, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, BodyStrong, Muted, Caption } from "../../../src/components/ui/Typography";
+import { Body, BodyStrong, Muted, Caption } from "../../../src/components/ui/Typography";
 import { Card, Section } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { SkeletonList } from "../../../src/components/ui/Skeleton";
@@ -121,8 +121,7 @@ export const NotificationSettingsScreen = () => {
   };
 
   return (
-    <Screen>
-      <PageTitle>Notifications</PageTitle>
+    <Screen title="Notifications">
 
       <Card>
         <View style={styles.pushRow}>

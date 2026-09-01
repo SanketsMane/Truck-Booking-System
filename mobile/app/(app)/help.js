@@ -1,14 +1,13 @@
 import { View, StyleSheet } from "react-native";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Body } from "../../src/components/ui/Typography";
+import { Body } from "../../src/components/ui/Typography";
 import { FaqAccordion } from "../../src/components/FaqAccordion";
 import { FAQ_CATEGORIES } from "../../src/content/faq";
 import { theme } from "../../src/theme";
 
 export const HelpScreen = () => (
-  <Screen>
+  <Screen title="Help centre">
     <View style={styles.header}>
-      <PageTitle>Help center</PageTitle>
       <Body>
         Search a route to find spare truck capacity, or post a trip if you’re a transporter with
         space to sell. Answers to the most common questions are below.

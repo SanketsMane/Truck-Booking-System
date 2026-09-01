@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../src/components/ui/Typography";
+import { Body, Muted } from "../../src/components/ui/Typography";
 import { Card } from "../../src/components/ui/Card";
 import { StatusBadge } from "../../src/components/ui/Badge";
 import { EmptyState } from "../../src/components/ui/EmptyState";
@@ -28,9 +28,8 @@ export const DisputesScreen = () => {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title="Disputes">
       <View style={styles.header}>
-        <PageTitle>Disputes</PageTitle>
       </View>
 
       {loading ? (

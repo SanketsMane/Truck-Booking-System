@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../src/components/ui/Typography";
+import { Muted } from "../../../src/components/ui/Typography";
 import { TextField } from "../../../src/components/ui/TextField";
 import { Button } from "../../../src/components/ui/Button";
 import { theme } from "../../../src/theme";
@@ -32,8 +32,7 @@ export const NewSupportRequestScreen = () => {
   };
 
   return (
-    <Screen>
-      <PageTitle>New support request</PageTitle>
+    <Screen title="New request">
       <TextField label="Subject" value={subject} onChangeText={setSubject} />
       <TextField label="Message" value={message} onChangeText={setMessage} multiline numberOfLines={4} />
       {error ? <Muted style={{ color: theme.color.danger }}>{error}</Muted> : null}

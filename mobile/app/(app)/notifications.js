@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, FlatList, Pressable, StyleSheet } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../src/components/ui/Typography";
+import { Body, Muted } from "../../src/components/ui/Typography";
 import { Button } from "../../src/components/ui/Button";
 import { EmptyState } from "../../src/components/ui/EmptyState";
 import { LoadingView } from "../../src/components/ui/LoadingView";
@@ -82,9 +82,8 @@ export const NotificationsScreen = () => {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title="Notifications">
       <View style={styles.header}>
-        <PageTitle>Notifications</PageTitle>
         <Button title="Mark all read" variant="ghost" onPress={() => markAllNotificationsRead().then(load)} />
       </View>
 

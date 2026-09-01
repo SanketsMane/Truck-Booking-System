@@ -1,6 +1,6 @@
 import { View, StyleSheet } from "react-native";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Body } from "../../src/components/ui/Typography";
+import { Body } from "../../src/components/ui/Typography";
 import { FaqAccordion } from "../../src/components/FaqAccordion";
 import { FAQ_CATEGORIES } from "../../src/content/faq";
 import { theme } from "../../src/theme";
@@ -8,9 +8,8 @@ import { theme } from "../../src/theme";
 // Same FAQ_CATEGORIES data as help.js, on its own route — mirrors the web
 // app, where Help.jsx and Faq.jsx are two thin pages over one dataset.
 export const FaqScreen = () => (
-  <Screen>
+  <Screen title="FAQ">
     <View style={styles.header}>
-      <PageTitle>Frequently Asked Questions</PageTitle>
       <Body>Answers to the most common questions from shippers and transporters using TruckGee.</Body>
     </View>
 

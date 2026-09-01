@@ -82,10 +82,10 @@ export const BookingDetailScreen = () => {
   };
 
   if (loading) return <LoadingView />;
-  if (!booking) return <Screen><Muted>{error || "Booking not found"}</Muted></Screen>;
+  if (!booking) return <Screen title=""><Muted>{error || "Booking not found"}</Muted></Screen>;
 
   return (
-    <Screen>
+    <Screen title="">
       <View style={styles.header}>
         <PageTitle>
           {booking.trip?.fromCity} → {booking.trip?.toCity}

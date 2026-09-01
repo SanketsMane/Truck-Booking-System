@@ -1,7 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../../src/components/ui/Typography";
+import { Muted } from "../../../../src/components/ui/Typography";
 import { TextField } from "../../../../src/components/ui/TextField";
 import { LocationField } from "../../../../src/components/LocationField";
 import { TripStopsField } from "../../../../src/components/TripStopsField";
@@ -21,9 +21,8 @@ export const PostTripCapacityScreen = () => {
     draft.dropPoint.address.trim();
 
   return (
-    <Screen>
+    <Screen title="Post a trip">
       <View style={styles.header}>
-        <PageTitle>Post a trip</PageTitle>
         <Muted>Step 3 of 4 — Capacity &amp; price</Muted>
       </View>
 

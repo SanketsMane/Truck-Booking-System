@@ -52,7 +52,7 @@ export const SignupScreen = () => {
   };
 
   return (
-    <Screen>
+    <Screen title="">
       <View style={styles.header}>
         <PageTitle>Create your account</PageTitle>
         <Muted>Search truck capacity, or list your own — free to use.</Muted>

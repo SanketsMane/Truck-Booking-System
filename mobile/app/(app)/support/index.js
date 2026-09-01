@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, FlatList, StyleSheet } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../../src/components/ui/Typography";
+import { Body, Muted } from "../../../src/components/ui/Typography";
 import { Card } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { StatusBadge } from "../../../src/components/ui/Badge";
@@ -28,9 +28,8 @@ export const SupportScreen = () => {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title="Support">
       <View style={styles.header}>
-        <PageTitle>Support</PageTitle>
         <Button title="New request" onPress={() => router.push("/(app)/support/new")} />
       </View>
 

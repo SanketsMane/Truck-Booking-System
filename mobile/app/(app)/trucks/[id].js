@@ -73,10 +73,10 @@ export const TruckDetailScreen = () => {
   };
 
   if (loading) return <LoadingView />;
-  if (!truck) return <Screen><Muted>Truck not found</Muted></Screen>;
+  if (!truck) return <Screen title={truck?.regNumber || "Truck"}><Muted>Truck not found</Muted></Screen>;
 
   return (
-    <Screen>
+    <Screen title={truck?.regNumber || "Truck"}>
       <View style={styles.header}>
         <PageTitle>{truck.regNumber}</PageTitle>
         <StatusBadge status={truck.status} />

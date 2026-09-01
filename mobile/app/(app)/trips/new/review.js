@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, SectionTitle, Body, Muted } from "../../../../src/components/ui/Typography";
+import { SectionTitle, Body, Muted } from "../../../../src/components/ui/Typography";
 import { Card } from "../../../../src/components/ui/Card";
 import { Button } from "../../../../src/components/ui/Button";
 import { theme } from "../../../../src/theme";
@@ -43,9 +43,8 @@ export const PostTripReviewScreen = () => {
   };
 
   return (
-    <Screen>
+    <Screen title="Post a trip">
       <View style={styles.header}>
-        <PageTitle>Post a trip</PageTitle>
         <Muted>Step 4 of 4 — Review &amp; publish</Muted>
       </View>
 

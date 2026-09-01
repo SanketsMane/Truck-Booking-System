@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../src/components/ui/Typography";
+import { Muted } from "../../../src/components/ui/Typography";
 import { TextField } from "../../../src/components/ui/TextField";
 import { Button } from "../../../src/components/ui/Button";
 import { theme } from "../../../src/theme";
@@ -31,8 +31,7 @@ export const PasswordScreen = () => {
   };
 
   return (
-    <Screen>
-      <PageTitle>{user?.hasPassword ? "Change password" : "Set a password"}</PageTitle>
+    <Screen title={user?.hasPassword ? "Change password" : "Set a password"}>
       {user?.hasPassword && (
         <TextField label="Current password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
       )}

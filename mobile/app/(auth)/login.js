@@ -68,7 +68,7 @@ export const LoginScreen = () => {
   const isOtp = mode === "otp";
 
   return (
-    <Screen contentStyle={styles.content}>
+    <Screen contentStyle={styles.content} title="">
       <View style={styles.brand}>
         <Image source={brandMark} style={styles.mark} resizeMode="contain" />
         <PageTitle>Welcome back</PageTitle>

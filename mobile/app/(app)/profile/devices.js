@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, Alert, StyleSheet } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../../src/components/ui/Typography";
+import { Body, Muted } from "../../../src/components/ui/Typography";
 import { Card } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { StatusBadge } from "../../../src/components/ui/Badge";
@@ -56,9 +56,8 @@ export const ManageDevicesScreen = () => {
   if (loading) return <LoadingView />;
 
   return (
-    <Screen>
+    <Screen title="Devices">
       <View style={styles.header}>
-        <PageTitle>Manage devices</PageTitle>
         <Muted>Everywhere you’re currently signed in to TruckGee.</Muted>
       </View>
 

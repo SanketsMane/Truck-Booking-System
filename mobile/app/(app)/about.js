@@ -1,6 +1,6 @@
 import { View, Linking, StyleSheet } from "react-native";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, SectionTitle, Body, Muted } from "../../src/components/ui/Typography";
+import { SectionTitle, Body, Muted } from "../../src/components/ui/Typography";
 import { Card } from "../../src/components/ui/Card";
 import { theme } from "../../src/theme";
 
@@ -22,10 +22,9 @@ const TRUST_POINTS = [
 ];
 
 export const AboutScreen = () => (
-  <Screen>
+  <Screen title="About TruckGee">
     <View style={styles.header}>
       <Muted style={styles.tagline}>Your Load. Their Empty Space.</Muted>
-      <PageTitle>About TruckGee</PageTitle>
       <Body style={styles.lede}>
         Every day, thousands of trucks travel across India with some unused space — we believe that
         space shouldn’t go to waste. TruckGee connects shippers who need to move goods with

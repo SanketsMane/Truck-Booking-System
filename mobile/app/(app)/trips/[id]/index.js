@@ -96,7 +96,7 @@ export const TripDetailScreen = () => {
 
   if (status === "loading") {
     return (
-      <Screen>
+      <Screen title="">
         <Skeleton height={theme.spacing.xxl} radius={theme.radius.sm} width="70%" />
         <Skeleton height={140} radius={theme.radius.card} />
         <Skeleton height={180} radius={theme.radius.card} />
@@ -106,7 +106,7 @@ export const TripDetailScreen = () => {
 
   if (status === "error" || !trip) {
     return (
-      <Screen>
+      <Screen title="">
         <ErrorState title="Couldn't load this trip" message={loadError} onRetry={retry} />
       </Screen>
     );
@@ -178,7 +178,7 @@ export const TripDetailScreen = () => {
   ) : null;
 
   return (
-    <Screen footer={footer}>
+    <Screen footer={footer} title="">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <PageTitle numberOfLines={2} style={styles.headerTitle}>

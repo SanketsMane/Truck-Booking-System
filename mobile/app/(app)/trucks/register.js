@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../src/components/ui/Typography";
+import { Muted } from "../../../src/components/ui/Typography";
 import { TextField } from "../../../src/components/ui/TextField";
 import { Button } from "../../../src/components/ui/Button";
 import { DocumentUploadField } from "../../../src/components/DocumentUploadField";
@@ -55,8 +55,7 @@ export const RegisterTruckScreen = () => {
   };
 
   return (
-    <Screen>
-      <PageTitle>Register a truck</PageTitle>
+    <Screen title="Register a truck">
 
       <TextField label="Registration number" value={regNumber} onChangeText={setRegNumber} autoCapitalize="characters" placeholder="e.g. MH12AB1234" />
       <TextField label="Truck type" value={truckType} onChangeText={setTruckType} placeholder="e.g. 20ft" />

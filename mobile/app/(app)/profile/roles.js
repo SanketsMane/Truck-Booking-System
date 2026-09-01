@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../../src/components/ui/Typography";
+import { Body, Muted } from "../../../src/components/ui/Typography";
 import { Card } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { theme } from "../../../src/theme";
@@ -34,8 +34,7 @@ export const RolesScreen = () => {
   };
 
   return (
-    <Screen>
-      <PageTitle>Roles</PageTitle>
+    <Screen title="Roles">
 
       <Card>
         <Body>Current roles</Body>

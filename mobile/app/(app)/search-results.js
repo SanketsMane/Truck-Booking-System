@@ -158,7 +158,7 @@ export const SearchResultsScreen = () => {
 
   if (status === "loading") {
     return (
-      <Screen>
+      <Screen title="">
         {header}
         <SkeletonList count={4} />
       </Screen>
@@ -167,7 +167,7 @@ export const SearchResultsScreen = () => {
 
   if (status === "error") {
     return (
-      <Screen>
+      <Screen title="">
         {header}
         <ErrorState title="Couldn't load results" message={error} onRetry={retry} />
       </Screen>
@@ -176,7 +176,7 @@ export const SearchResultsScreen = () => {
 
   if (trips.length === 0) {
     return (
-      <Screen>
+      <Screen title="">
         {header}
         {/* The old copy told a mobile user to "save a search alert from the
             web app" — sending someone out of the app they're already in. */}
@@ -191,7 +191,7 @@ export const SearchResultsScreen = () => {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title="">
       <FlatList
         data={trips}
         keyExtractor={(item) => item._id}

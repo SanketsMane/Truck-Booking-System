@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, Image, FlatList, Pressable, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, Body, Muted } from "../../../../src/components/ui/Typography";
+import { Body, Muted } from "../../../../src/components/ui/Typography";
 import { Card } from "../../../../src/components/ui/Card";
 import { Button } from "../../../../src/components/ui/Button";
 import { EmptyState } from "../../../../src/components/ui/EmptyState";
@@ -51,9 +51,8 @@ export const ContentListScreen = () => {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title={meta?.listTitle || "Articles"}>
       <View style={styles.header}>
-        <PageTitle>{meta.listTitle}</PageTitle>
         <Muted>{meta.listDescription}</Muted>
       </View>
 

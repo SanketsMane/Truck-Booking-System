@@ -3,7 +3,7 @@ import { View, FlatList, StyleSheet, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, Muted, Caption, Amount } from "../../../src/components/ui/Typography";
+import { Body, Muted, Caption, Amount } from "../../../src/components/ui/Typography";
 import { Card } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { StatusBadge } from "../../../src/components/ui/Badge";
@@ -115,7 +115,6 @@ export const MyTripsScreen = () => {
 
   const header = (
     <View style={styles.header}>
-      <PageTitle>My Trips</PageTitle>
       {status === "ready" && trips.length > 0 && (
         <Muted>
           {trips.length} {trips.length === 1 ? "trip" : "trips"}
@@ -127,7 +126,7 @@ export const MyTripsScreen = () => {
 
   if (status === "loading") {
     return (
-      <Screen>
+      <Screen title="My trips">
         {header}
         <SkeletonList count={4} />
       </Screen>

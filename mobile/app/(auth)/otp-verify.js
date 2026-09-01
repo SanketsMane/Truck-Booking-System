@@ -84,7 +84,7 @@ export const OtpVerifyScreen = () => {
   };
 
   return (
-    <Screen>
+    <Screen title="">
       <View style={styles.header}>
         <PageTitle>Enter the code</PageTitle>
         <Muted>We sent a 6-digit code to {email}.</Muted>

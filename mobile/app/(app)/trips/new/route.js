@@ -1,7 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../../../src/components/ui/Typography";
+import { Muted } from "../../../../src/components/ui/Typography";
 import { LocationField } from "../../../../src/components/LocationField";
 import { DateField } from "../../../../src/components/ui/DateField";
 import { Button } from "../../../../src/components/ui/Button";
@@ -12,9 +12,8 @@ export const PostTripRouteScreen = () => {
   const { draft, updateDraft } = usePostTripDraft();
 
   return (
-    <Screen>
+    <Screen title="Post a trip">
       <View style={styles.header}>
-        <PageTitle>Post a trip</PageTitle>
         <Muted>Step 1 of 4 — Route &amp; timing</Muted>
       </View>
 

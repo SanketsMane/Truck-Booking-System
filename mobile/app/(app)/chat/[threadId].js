@@ -75,10 +75,10 @@ export const ChatThreadScreen = () => {
   };
 
   if (loading) return <LoadingView />;
-  if (!thread) return <Screen><Muted>Conversation not found</Muted></Screen>;
+  if (!thread) return <Screen title={thread?.counterparty?.name || "Chat"}><Muted>Conversation not found</Muted></Screen>;
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title={thread?.counterparty?.name || "Chat"}>
       <View style={styles.header}>
         <PageTitle>{thread.counterparty?.name}</PageTitle>
         <Muted>{thread.trip ? `${thread.trip.fromCity} → ${thread.trip.toCity}` : ""}</Muted>

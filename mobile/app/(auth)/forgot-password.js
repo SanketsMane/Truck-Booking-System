@@ -36,7 +36,7 @@ export const ForgotPasswordScreen = () => {
   };
 
   return (
-    <Screen>
+    <Screen title="">
       <View style={styles.header}>
         <PageTitle>Reset your password</PageTitle>
         <Muted>

@@ -79,12 +79,12 @@ export const ManageTripScreen = () => {
   };
 
   if (loading) return <LoadingView />;
-  if (!trip) return <Screen><Muted>{message || "Trip not found"}</Muted></Screen>;
+  if (!trip) return <Screen title=""><Muted>{message || "Trip not found"}</Muted></Screen>;
 
   const canEdit = EDITABLE_STATUSES.includes(trip.status);
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} title="">
       <FlatList
         data={bookings}
         keyExtractor={(item) => item._id}

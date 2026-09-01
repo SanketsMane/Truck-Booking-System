@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { useRouter, Link } from "expo-router";
 import { Screen } from "../../../../src/components/ui/Screen";
-import { PageTitle, Muted, Body } from "../../../../src/components/ui/Typography";
+import { Muted, Body } from "../../../../src/components/ui/Typography";
 import { Card } from "../../../../src/components/ui/Card";
 import { Button } from "../../../../src/components/ui/Button";
 import { StatusBadge } from "../../../../src/components/ui/Badge";
@@ -42,9 +42,8 @@ export const PostTripTruckScreen = () => {
   if (loading) return <LoadingView />;
 
   return (
-    <Screen>
+    <Screen title="Post a trip">
       <View style={styles.header}>
-        <PageTitle>Post a trip</PageTitle>
         <Muted>Step 2 of 4 — Your truck</Muted>
       </View>
 

@@ -1,7 +1,7 @@
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, SectionTitle, Body, Muted } from "../../src/components/ui/Typography";
+import { SectionTitle, Body, Muted } from "../../src/components/ui/Typography";
 import { Card } from "../../src/components/ui/Card";
 import { Button } from "../../src/components/ui/Button";
 import { theme } from "../../src/theme";
@@ -34,10 +34,9 @@ const REASONS = [
 export const ForShippersScreen = () => {
   const router = useRouter();
   return (
-    <Screen>
+    <Screen title="For shippers">
       <View style={styles.header}>
         <Muted style={styles.tagline}>For Shippers</Muted>
-        <PageTitle>Why TruckGee?</PageTitle>
         <Body style={styles.lede}>Use the space that’s already going your way.</Body>
       </View>
 
