@@ -77,8 +77,12 @@ export const Button = ({
           backgroundColor: colors.bg,
           borderColor: colors.border,
           alignSelf: fullWidth ? "stretch" : "flex-start",
-          opacity: disabled ? 0.45 : 1,
         },
+        // A real disabled palette instead of fading the whole button: at
+        // opacity 0.45 the white label faded along with the green fill and
+        // ended up light-on-light, failing contrast in the exact state a
+        // user sits and reads while working out what's missing.
+        disabled && styles.disabled,
         // iOS has no ripple, so it gets the press feedback the platform
         // actually uses. On Android the ripple IS the feedback — dimming as
         // well would double up and read as sluggish.
@@ -92,7 +96,7 @@ export const Button = ({
           after the user commits to an action. */}
       <View style={[styles.content, loading && styles.contentHidden]}>
         {icon}
-        <Text style={[dims.text, { color: colors.fg }]} numberOfLines={1}>
+        <Text style={[dims.text, { color: disabled ? theme.color.textDisabled : colors.fg }]} numberOfLines={1}>
           {title}
         </Text>
       </View>
@@ -125,6 +129,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   contentHidden: { opacity: 0 },
+  disabled: { backgroundColor: theme.color.surfaceRaised, borderColor: theme.color.border },
   spinnerWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   pressedIos: { opacity: 0.6 },
 });

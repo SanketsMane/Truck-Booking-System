@@ -3,13 +3,14 @@ import { View, FlatList, StyleSheet, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../../../src/components/ui/Screen";
-import { PageTitle, Body, BodyStrong, Muted, Caption, Amount } from "../../../src/components/ui/Typography";
+import { PageTitle, Body, Muted, Caption, Amount } from "../../../src/components/ui/Typography";
 import { Card } from "../../../src/components/ui/Card";
 import { Button } from "../../../src/components/ui/Button";
 import { StatusBadge } from "../../../src/components/ui/Badge";
 import { PressableRow } from "../../../src/components/ui/PressableRow";
 import { SkeletonList } from "../../../src/components/ui/Skeleton";
 import { ErrorState } from "../../../src/components/ui/ErrorState";
+import { EmptyIllustration } from "../../../src/components/ui/EmptyIllustration";
 import { theme } from "../../../src/theme";
 import { listMyTrips } from "../../../src/api/trips";
 import { formatINR, formatTons, formatDate, formatTime } from "../../../src/utils/format";
@@ -146,16 +147,12 @@ export const MyTripsScreen = () => {
     return (
       <Screen>
         {header}
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="navigate-outline" size={theme.layout.icon.xl} color={theme.color.textFaint} />
-          </View>
-          <BodyStrong>No trips posted yet</BodyStrong>
-          <Muted style={styles.emptyText}>
-            Post the routes you&apos;re already running and let shippers book your spare capacity.
-          </Muted>
-          <Button title="Post a trip" onPress={() => router.push("/(app)/trips/new/route")} />
-        </View>
+        <EmptyIllustration
+          art="trips"
+          title="No trips posted yet"
+          message="Post the routes you're already running and let shippers book your spare capacity."
+          action={<Button title="Post a trip" onPress={() => router.push("/(app)/trips/new/route")} />}
+        />
       </Screen>
     );
   }
@@ -201,16 +198,6 @@ const styles = StyleSheet.create({
   },
   fill: { height: "100%", borderRadius: theme.radius.pill, backgroundColor: theme.color.accent },
 
-  empty: { alignItems: "center", gap: theme.spacing.smd, paddingVertical: theme.spacing.xxl },
-  emptyIcon: {
-    width: theme.spacing.giant,
-    height: theme.spacing.giant,
-    borderRadius: theme.radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.color.surfaceRaised,
-  },
-  emptyText: { textAlign: "center" },
 });
 
 export default MyTripsScreen;

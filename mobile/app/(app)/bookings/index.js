@@ -11,6 +11,7 @@ import { SegmentedControl } from "../../../src/components/ui/SegmentedControl";
 import { PressableRow } from "../../../src/components/ui/PressableRow";
 import { SkeletonList } from "../../../src/components/ui/Skeleton";
 import { ErrorState } from "../../../src/components/ui/ErrorState";
+import { EmptyIllustration } from "../../../src/components/ui/EmptyIllustration";
 import { theme } from "../../../src/theme";
 import { listMyBookings } from "../../../src/api/bookings";
 import { formatINR, formatTons, formatDate } from "../../../src/utils/format";
@@ -149,24 +150,22 @@ export const MyBookingsScreen = () => {
     }
     if (bookings.length === 0) {
       return (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="cube-outline" size={theme.layout.icon.xl} color={theme.color.textFaint} />
-          </View>
-          <BodyStrong>No bookings yet</BodyStrong>
-          {/* An empty state that only says "nothing here" wastes the one
-              moment the user is definitely looking for something to do. */}
-          <Muted style={styles.emptyText}>
-            {role === "shipper"
+        <EmptyIllustration
+          art="bookings"
+          title="No bookings yet"
+          message={
+            role === "shipper"
               ? "Search a route and request capacity — your bookings will show up here."
-              : "Bookings appear here once shippers request capacity on your posted trips."}
-          </Muted>
-          <Button
-            title={role === "shipper" ? "Find a truck" : "Post a trip"}
-            variant="secondary"
-            onPress={() => router.push(role === "shipper" ? "/(app)" : "/(app)/trips/new/route")}
-          />
-        </View>
+              : "Bookings appear here once shippers request capacity on your posted trips."
+          }
+          action={
+            <Button
+              title={role === "shipper" ? "Find a truck" : "Post a trip"}
+              variant="secondary"
+              onPress={() => router.push(role === "shipper" ? "/(app)" : "/(app)/trips/new/route")}
+            />
+          }
+        />
       );
     }
     return null;
@@ -230,16 +229,6 @@ const styles = StyleSheet.create({
   bottomRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   priceCol: { alignItems: "flex-end" },
 
-  empty: { alignItems: "center", gap: theme.spacing.smd, paddingVertical: theme.spacing.xxl },
-  emptyIcon: {
-    width: theme.spacing.giant,
-    height: theme.spacing.giant,
-    borderRadius: theme.radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.color.surfaceRaised,
-  },
-  emptyText: { textAlign: "center" },
 });
 
 export default MyBookingsScreen;

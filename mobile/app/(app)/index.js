@@ -13,7 +13,7 @@ import { DateField } from "../../src/components/ui/DateField";
 import { theme } from "../../src/theme";
 import { getPopularRoutes } from "../../src/api/trips";
 import { useAuth } from "../../src/context/AuthContext";
-import heroImage from "../../assets/hero-highway.jpg";
+import heroImage from "../../assets/hero-home.png";
 
 // Home has one job: start a search. Everything else is a shortcut to it.
 //
@@ -101,14 +101,17 @@ export const HomeScreen = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand colour is the BACKGROUND and the photo rides on top of it at
-            low opacity, rather than the photo being the background with a
-            translucent scrim over it. Verified on device: the scrim approach
-            left white text sitting on bright road surface, nowhere near the
-            4.5:1 contrast body text needs. This way the darkest the text ever
-            sits on is a known solid colour, so legibility can't depend on
-            what happens to be in that corner of the photograph. */}
         <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
+          {/* A stepped scrim rather than a single flat wash: three bands,
+              darkest at the top where the headline sits and clearing toward
+              the bottom, so the photograph keeps its golden-hour warmth
+              instead of being greyed out uniformly.
+              Three Views rather than expo-linear-gradient — this is the only
+              gradient in the app, and a dependency (plus a rebuild) to fade
+              one header isn't a trade worth making. */}
+          {SCRIM_BANDS.map((band) => (
+            <View key={band.top} style={[styles.scrim, band]} />
+          ))}
           <SafeAreaView edges={["top"]}>
             <View style={styles.heroContent}>
               <Overline style={styles.heroBrand}>TruckGee</Overline>
@@ -285,6 +288,16 @@ export const HomeScreen = () => {
 // Tall enough that the brand line, a two-line headline AND the trust chips
 // all clear the card that overlaps it. Measured on device: at 260 the chips
 // were sliced in half by the card, which is worse than not having them.
+// Five bands rather than three: at three the 0.66 → 0.44 step left a seam
+// visible across the flat part of the sky. Smaller deltas read as a fade.
+const SCRIM_BANDS = [
+  { top: "0%", height: "24%", backgroundColor: "rgba(8, 28, 18, 0.62)" },
+  { top: "24%", height: "18%", backgroundColor: "rgba(8, 28, 18, 0.54)" },
+  { top: "42%", height: "18%", backgroundColor: "rgba(8, 28, 18, 0.44)" },
+  { top: "60%", height: "20%", backgroundColor: "rgba(8, 28, 18, 0.34)" },
+  { top: "80%", height: "20%", backgroundColor: "rgba(8, 28, 18, 0.24)" },
+];
+
 const HERO_HEIGHT = 340;
 const CARD_OVERLAP = 72;
 
@@ -295,11 +308,16 @@ const styles = StyleSheet.create({
   hero: {
     height: HERO_HEIGHT,
     justifyContent: "flex-start",
+    // Shows through only until the photo decodes, so the hero never flashes
+    // white on a cold start.
     backgroundColor: theme.color.accentStrong,
   },
-  // Low enough that the photo reads as texture behind the words rather than
-  // as competing subject matter.
-  heroImage: { resizeMode: "cover", opacity: 0.38 },
+  heroImage: { resizeMode: "cover" },
+
+  // The sun sits in the top-left of this photograph — exactly where the
+  // headline goes — so the top band has to carry real weight. Measured
+  // against the brightest part of the image, not the average.
+  scrim: { position: "absolute", left: 0, right: 0 },
   heroContent: {
     paddingHorizontal: theme.spacing.md,
     // Clears the status bar; the title was crowding it.

@@ -10,6 +10,7 @@ import { Button } from "../../src/components/ui/Button";
 import { SkeletonList } from "../../src/components/ui/Skeleton";
 import { ErrorState } from "../../src/components/ui/ErrorState";
 import { PressableRow } from "../../src/components/ui/PressableRow";
+import { EmptyIllustration } from "../../src/components/ui/EmptyIllustration";
 import { TruckImage } from "../../src/components/TruckImage";
 import { theme } from "../../src/theme";
 import { searchTrips } from "../../src/api/trips";
@@ -177,20 +178,14 @@ export const SearchResultsScreen = () => {
     return (
       <Screen>
         {header}
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="search-outline" size={theme.layout.icon.xl} color={theme.color.textFaint} />
-          </View>
-          <BodyStrong>No trucks on this route yet</BodyStrong>
-          {/* The old copy told a mobile user to "save a search alert from the
-              web app" — sending someone out of the app they're already in.
-              These are things they can do right here instead. */}
-          <Muted style={styles.emptyText}>
-            Nobody has posted capacity for this lane on {formatDate(date)}. Try a nearby date, or search a different
-            route.
-          </Muted>
-          <Button title="Change search" variant="secondary" onPress={() => router.back()} />
-        </View>
+        {/* The old copy told a mobile user to "save a search alert from the
+            web app" — sending someone out of the app they're already in. */}
+        <EmptyIllustration
+          art="search"
+          title="No trucks on this route yet"
+          message={`Nobody has posted capacity for this lane on ${formatDate(date)}. Try a nearby date, or search a different route.`}
+          action={<Button title="Change search" variant="secondary" onPress={() => router.back()} />}
+        />
       </Screen>
     );
   }
@@ -233,16 +228,6 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing.sm },
   metaItem: { flexDirection: "row", alignItems: "center", gap: theme.spacing.xs, flexShrink: 1 },
 
-  empty: { alignItems: "center", gap: theme.spacing.smd, paddingVertical: theme.spacing.xxl },
-  emptyIcon: {
-    width: theme.spacing.giant,
-    height: theme.spacing.giant,
-    borderRadius: theme.radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.color.surfaceRaised,
-  },
-  emptyText: { textAlign: "center" },
 });
 
 export default SearchResultsScreen;

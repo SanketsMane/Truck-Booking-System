@@ -1,23 +1,32 @@
 import { useRef, useState } from "react";
-import { View, Text, ScrollView, Dimensions, StyleSheet, Pressable } from "react-native";
+import { View, Text, Image, ScrollView, Dimensions, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../theme";
 import { Button } from "../components/ui/Button";
+
+import slide1 from "../../assets/onboard-1.png";
+import slide2 from "../../assets/onboard-2.png";
+import slide3 from "../../assets/onboard-3.png";
 
 const { width } = Dimensions.get("window");
 
 const SLIDES = [
   {
+    art: slide1,
     title: "Ship for less",
     body: "Search spare truck capacity on routes across India, matched by route — no commission, book directly with the driver.",
   },
   {
+    art: slide2,
     title: "Earn from empty space",
     body: "Got a truck with room to spare? Post your route and capacity, and get booking requests from real shippers.",
   },
   {
+    art: slide3,
     title: "Verified & secure",
-    body: "Every driver is KYC-verified — ID, driving licence, and their one active truck — before they can post a trip.",
+    // "their one active truck" described a rule the app no longer has — a
+    // transporter can now run a whole verified fleet.
+    body: "Every driver is KYC-verified — ID, driving licence and vehicle papers — before they can post a trip.",
   },
 ];
 
@@ -58,6 +67,15 @@ export const OnboardingScreen = ({ onDone }) => {
       >
         {SLIDES.map((slide) => (
           <View key={slide.title} style={[styles.slide, { width }]}>
+            {/* Decorative — the title and body say the same thing, so a
+                screen reader shouldn't announce it twice. */}
+            <Image
+              source={slide.art}
+              style={styles.art}
+              resizeMode="contain"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
             <Text style={styles.title}>{slide.title}</Text>
             <Text style={styles.body}>{slide.body}</Text>
           </View>
@@ -81,10 +99,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.color.bg },
   skip: { alignSelf: "flex-end", padding: theme.space(4) },
   skipText: { color: theme.color.textMuted, fontSize: theme.font.size.sm },
-  slide: { padding: theme.space(6), alignItems: "center", justifyContent: "center", gap: theme.space(3) },
-  title: { fontSize: theme.font.size.display, fontWeight: theme.font.weight.bold, color: theme.color.text, textAlign: "center" },
-  body: { fontSize: theme.font.size.md, color: theme.color.textMuted, textAlign: "center", lineHeight: 22 },
-  dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: theme.space(4) },
+  slide: {
+    paddingHorizontal: theme.spacing.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.smd,
+  },
+  art: { width: 260, height: 260, marginBottom: theme.spacing.sm },
+  title: { ...theme.text.headline, color: theme.color.text, textAlign: "center" },
+  body: { ...theme.text.body, color: theme.color.textMuted, textAlign: "center" },
+  dots: { flexDirection: "row", justifyContent: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.border },
   dotActive: { backgroundColor: theme.color.accent, width: 20 },
   footer: { padding: theme.space(4) },
