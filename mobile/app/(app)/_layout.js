@@ -39,10 +39,13 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="trips/[id]/index" options={{ href: null }} />
       <Tabs.Screen name="trips/[id]/manage" options={{ href: null }} />
       <Tabs.Screen name="trips/mine" options={{ href: null }} />
-      <Tabs.Screen name="trips/new/route" options={{ href: null }} />
-      <Tabs.Screen name="trips/new/truck" options={{ href: null }} />
-      <Tabs.Screen name="trips/new/capacity" options={{ href: null }} />
-      <Tabs.Screen name="trips/new/review" options={{ href: null }} />
+      {/* trips/new has its own _layout.js (a Stack wrapping PostTripProvider),
+          so to this Tabs navigator the whole wizard is ONE child route named
+          "trips/new" — not four. Registering the individual step routes threw
+          "No route named trips/new/route" four times over, and because the
+          real route was never registered it escaped the href:null treatment
+          and rendered as a stray "trips/new" tab in the bar. */}
+      <Tabs.Screen name="trips/new" options={{ href: null }} />
       <Tabs.Screen name="bookings/[id]" options={{ href: null }} />
       <Tabs.Screen name="trucks/register" options={{ href: null }} />
       <Tabs.Screen name="trucks/[id]" options={{ href: null }} />
