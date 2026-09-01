@@ -13,6 +13,13 @@ const TAB_ICON = {
 export default function AppTabsLayout() {
   return (
     <Tabs
+      // Without this, back goes to the FIRST tab — bottom-tabs defaults
+      // backBehavior to "firstRoute". Since every detail screen in this app is
+      // a tab-level route (see the href:null list below), that meant pressing
+      // back from edit profile, a trip, a booking or any wizard step dropped
+      // you on Home instead of where you came from. "history" follows the
+      // order screens were actually visited.
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: theme.color.accent,
