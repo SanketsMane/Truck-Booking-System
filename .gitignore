@@ -68,7 +68,17 @@ Desktop.ini
 *.swo
 
 # ── AI tool / local assistant metadata (never part of the app itself) ────
-.claude/
+# Local assistant state (worktrees, settings.local.json, caches) stays out of
+# the repo. The exception is .claude/skills/ and the examples/templates its
+# SKILL.md files reference: those are a shared engineering standard for this
+# codebase, not per-developer metadata, so every clone gets the same one.
+# (.claude/* rather than .claude/ — git can't re-include a path whose parent
+# directory is itself excluded, so the negations below only work against a
+# pattern that matches the CHILDREN.)
+.claude/*
+!.claude/skills/
+!.claude/examples/
+!.claude/templates/
 .cursor/
 
 # ── Temp files ────────────────────────────────────────────────────────────
