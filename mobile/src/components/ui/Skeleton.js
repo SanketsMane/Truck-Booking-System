@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, View, StyleSheet, Easing, AccessibilityInfo } from "react-native";
 import { theme } from "../../theme";
 
@@ -11,7 +11,12 @@ import { theme } from "../../theme";
 // a perpetual pulse is exactly the kind of thing that causes discomfort, so it
 // settles to a static block instead.
 export const Skeleton = ({ width = "100%", height = theme.spacing.md, radius = theme.radius.xs, style }) => {
-  const pulse = useRef(new Animated.Value(0)).current;
+  // useState's lazy initialiser, not useRef().current — an Animated.Value
+  // read during render is exactly what the react-hooks/refs rule forbids, and
+  // it's a real hazard rather than a lint nicety: a ref read while rendering
+  // is not tracked, so the value the render sees can silently be stale.
+  // useState creates it exactly once and is safe to read during render.
+  const [pulse] = useState(() => new Animated.Value(0));
   const loop = useRef(null);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,18 +37,37 @@ export const HomeScreen = () => {
   // request into "there are no popular routes" — the user was told a lie and
   // offered no way to recover.
   const [routesStatus, setRoutesStatus] = useState("loading");
+  // Bumping this re-runs the fetch. The alternative — calling a loader
+  // function from inside the effect — sets state synchronously in the effect
+  // body, which cascades an extra render on every mount.
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const loadRoutes = useCallback(() => {
-    setRoutesStatus("loading");
+  useEffect(() => {
+    // `cancelled` matters: without it a response arriving after the user has
+    // navigated away sets state on an unmounted component. The initial status
+    // is already "loading", so this effect only ever sets state from the
+    // async callbacks, never synchronously.
+    let cancelled = false;
     getPopularRoutes()
       .then((res) => {
+        if (cancelled) return;
         setPopularRoutes(res.routes || []);
         setRoutesStatus("ready");
       })
-      .catch(() => setRoutesStatus("error"));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setRoutesStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
 
-  useEffect(loadRoutes, [loadRoutes]);
+  // Setting "loading" here is correct and allowed — this runs from a press,
+  // not from render.
+  const retryRoutes = () => {
+    setRoutesStatus("loading");
+    setReloadToken((t) => t + 1);
+  };
 
   const from = (fromCity || fromPoint.address).trim();
   const to = (toCity || toPoint.address).trim();
@@ -146,7 +165,7 @@ export const HomeScreen = () => {
             compact
             title="Couldn't load popular routes"
             message="You can still search any route above."
-            onRetry={loadRoutes}
+            onRetry={retryRoutes}
           />
         )}
 
