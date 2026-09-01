@@ -10,7 +10,7 @@ import { Skeleton } from "../../src/components/ui/Skeleton";
 import { ErrorState } from "../../src/components/ui/ErrorState";
 import { LocationField } from "../../src/components/LocationField";
 import { DateField } from "../../src/components/ui/DateField";
-import { theme, withAlpha } from "../../src/theme";
+import { theme } from "../../src/theme";
 import { getPopularRoutes } from "../../src/api/trips";
 import { useAuth } from "../../src/context/AuthContext";
 import heroImage from "../../assets/hero-highway.jpg";
@@ -101,11 +101,14 @@ export const HomeScreen = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Brand colour is the BACKGROUND and the photo rides on top of it at
+            low opacity, rather than the photo being the background with a
+            translucent scrim over it. Verified on device: the scrim approach
+            left white text sitting on bright road surface, nowhere near the
+            4.5:1 contrast body text needs. This way the darkest the text ever
+            sits on is a known solid colour, so legibility can't depend on
+            what happens to be in that corner of the photograph. */}
         <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
-          {/* A photo can't guarantee contrast for text laid over it, so a
-              solid scrim does. Without it the headline's legibility depends
-              on whatever happens to be in that corner of the image. */}
-          <View style={styles.heroScrim} />
           <SafeAreaView edges={["top"]}>
             <View style={styles.heroContent}>
               <Overline style={styles.heroBrand}>TruckGee</Overline>
@@ -279,18 +282,31 @@ export const HomeScreen = () => {
   );
 };
 
-const HERO_HEIGHT = 290;
-const CARD_OVERLAP = 44;
+// Tall enough that the brand line, a two-line headline AND the trust chips
+// all clear the card that overlaps it. Measured on device: at 260 the chips
+// were sliced in half by the card, which is worse than not having them.
+const HERO_HEIGHT = 340;
+const CARD_OVERLAP = 72;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.bg },
   scroll: { paddingBottom: theme.spacing.xxl },
 
-  hero: { height: HERO_HEIGHT, justifyContent: "flex-start" },
-  heroImage: { resizeMode: "cover" },
-  heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: withAlpha(theme.color.accentStrong, 0.82) },
-  heroContent: { paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md, gap: theme.spacing.sm },
-  heroBrand: { color: withAlpha(theme.color.onAccent, 0.75) },
+  hero: {
+    height: HERO_HEIGHT,
+    justifyContent: "flex-start",
+    backgroundColor: theme.color.accentStrong,
+  },
+  // Low enough that the photo reads as texture behind the words rather than
+  // as competing subject matter.
+  heroImage: { resizeMode: "cover", opacity: 0.38 },
+  heroContent: {
+    paddingHorizontal: theme.spacing.md,
+    // Clears the status bar; the title was crowding it.
+    paddingTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  heroBrand: { color: "rgba(255, 255, 255, 0.72)" },
   heroTitle: { color: theme.color.onAccent },
 
   trustRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs },
@@ -301,7 +317,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
     borderRadius: theme.radius.pill,
-    backgroundColor: withAlpha(theme.color.onAccent, 0.16),
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
   },
   trustText: { color: theme.color.onAccent },
 
