@@ -1,18 +1,26 @@
 import { useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Image, Pressable } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Muted } from "../../src/components/ui/Typography";
+import { PageTitle, Muted, Body, Caption } from "../../src/components/ui/Typography";
 import { TextField } from "../../src/components/ui/TextField";
 import { Button } from "../../src/components/ui/Button";
+import { SegmentedControl } from "../../src/components/ui/SegmentedControl";
 import { theme } from "../../src/theme";
 import { requestOtp, loginPassword } from "../../src/api/auth";
 import { getDevice } from "../../src/utils/deviceInfo";
 import { useAuth } from "../../src/context/AuthContext";
+import brandMark from "../../assets/brand-mark.png";
 
-// Mirrors frontend/src/pages/Login.jsx's dual-method toggle — OTP-by-email
-// (request here, enter the code on the next screen) or email+password,
-// same account either way.
+// The first screen a logged-out person sees, and it was carrying no brand at
+// all — a bare "Log in" heading on a grey page with two thirds of the screen
+// empty below the button. An account screen is a trust moment in a
+// marketplace, so this leads with the mark and with what the product is for.
+//
+// The OTP/password choice was a ghost button reading "Log in with password
+// instead", which hides one of two equal options behind a mode you have to
+// discover. A segmented control shows both, takes one tap, and announces
+// which one is selected.
 export const LoginScreen = () => {
   const router = useRouter();
   const { setUser } = useAuth();
@@ -57,55 +65,85 @@ export const LoginScreen = () => {
     }
   };
 
+  const isOtp = mode === "otp";
+
   return (
-    <Screen>
-      <View style={styles.header}>
-        <PageTitle>Log in</PageTitle>
-        <Muted>Welcome back to TruckGee.</Muted>
+    <Screen contentStyle={styles.content}>
+      <View style={styles.brand}>
+        <Image source={brandMark} style={styles.mark} resizeMode="contain" />
+        <PageTitle>Welcome back</PageTitle>
+        <Muted>Log in to book capacity or post your routes.</Muted>
       </View>
 
-      <TextField
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="you@example.com"
-      />
+      <View style={styles.card}>
+        <SegmentedControl
+          value={mode}
+          onChange={(m) => {
+            setError("");
+            setMode(m);
+          }}
+          segments={[
+            { value: "otp", label: "Email code" },
+            { value: "password", label: "Password" },
+          ]}
+        />
 
-      {mode === "password" && (
-        <TextField label="Password" value={password} onChangeText={setPassword} secureTextEntry placeholder="••••••••" />
-      )}
+        <TextField
+          label="Email"
+          value={email}
+          onChangeText={(v) => {
+            setEmail(v);
+            if (error) setError("");
+          }}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          placeholder="you@example.com"
+        />
 
-      {error ? <Muted style={styles.error}>{error}</Muted> : null}
+        {!isOtp && (
+          <TextField
+            label="Password"
+            value={password}
+            onChangeText={(v) => {
+              setPassword(v);
+              if (error) setError("");
+            }}
+            secureTextEntry
+            autoComplete="password"
+            placeholder="••••••••"
+          />
+        )}
 
-      <Button
-        title={mode === "otp" ? "Send OTP" : "Log in"}
-        onPress={mode === "otp" ? handleOtpLogin : handlePasswordLogin}
-        loading={submitting}
-        fullWidth
-      />
+        {error ? <Caption style={styles.error}>{error}</Caption> : null}
 
-      <Button
-        title={mode === "otp" ? "Log in with password instead" : "Log in with an email code instead"}
-        variant="ghost"
-        onPress={() => {
-          setError("");
-          setMode((m) => (m === "otp" ? "password" : "otp"));
-        }}
-        fullWidth
-      />
+        <Button
+          title={isOtp ? "Send code" : "Log in"}
+          size="lg"
+          onPress={isOtp ? handleOtpLogin : handlePasswordLogin}
+          loading={submitting}
+          fullWidth
+        />
 
-      {mode === "password" && (
-        <Link href="/(auth)/forgot-password" asChild>
-          <Button title="Forgot password?" variant="ghost" fullWidth />
-        </Link>
-      )}
+        {/* Says what will actually happen next, so a first-timer isn't left
+            guessing whether "Send code" texts or emails them. */}
+        {isOtp && <Caption style={styles.hint}>We&apos;ll email you a 6-digit code. No password needed.</Caption>}
+
+        {!isOtp && (
+          <Link href="/(auth)/forgot-password" asChild>
+            <Pressable accessibilityRole="link" style={styles.forgot} hitSlop={8}>
+              <Caption style={styles.linkText}>Forgot password?</Caption>
+            </Pressable>
+          </Link>
+        )}
+      </View>
 
       <View style={styles.footer}>
-        <Muted>Don’t have an account?</Muted>
-        <Link href="/(auth)/signup">
-          <Muted style={styles.link}>Sign up</Muted>
+        <Body>Don&apos;t have an account?</Body>
+        <Link href="/(auth)/signup" asChild>
+          <Pressable accessibilityRole="link" hitSlop={8}>
+            <Body style={styles.linkStrong}>Sign up</Body>
+          </Pressable>
         </Link>
       </View>
     </Screen>
@@ -113,23 +151,26 @@ export const LoginScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  header: {
-    gap: 4,
-    marginBottom: theme.space(2),
+  content: { gap: theme.spacing.lg, paddingTop: theme.spacing.xxl },
+
+  brand: { alignItems: "center", gap: theme.spacing.xs },
+  mark: { width: 64, height: 64, marginBottom: theme.spacing.xs },
+
+  card: {
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.md,
+    gap: theme.spacing.smd,
+    ...theme.elevation[2],
   },
-  error: {
-    color: theme.color.danger,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: theme.space(2),
-  },
-  link: {
-    color: theme.color.accent,
-    fontWeight: theme.font.weight.semibold,
-  },
+
+  error: { color: theme.color.danger },
+  hint: { textAlign: "center" },
+  forgot: { alignSelf: "center", paddingVertical: theme.spacing.xs },
+  linkText: { color: theme.color.accent },
+
+  footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: theme.spacing.xs },
+  linkStrong: { color: theme.color.accent, fontWeight: theme.font.weight.semibold },
 });
 
 export default LoginScreen;

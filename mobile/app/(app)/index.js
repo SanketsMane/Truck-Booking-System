@@ -1,28 +1,35 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, ImageBackground, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen } from "../../src/components/ui/Screen";
-import { PageTitle, Muted, Body, BodyStrong, Overline, Caption } from "../../src/components/ui/Typography";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { PageTitle, Muted, Body, BodyStrong, Caption, Overline } from "../../src/components/ui/Typography";
 import { Button } from "../../src/components/ui/Button";
-import { Card, Section } from "../../src/components/ui/Card";
 import { PressableRow } from "../../src/components/ui/PressableRow";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import { ErrorState } from "../../src/components/ui/ErrorState";
 import { LocationField } from "../../src/components/LocationField";
 import { DateField } from "../../src/components/ui/DateField";
-import { theme } from "../../src/theme";
+import { theme, withAlpha } from "../../src/theme";
 import { getPopularRoutes } from "../../src/api/trips";
 import { useAuth } from "../../src/context/AuthContext";
+import heroImage from "../../assets/hero-highway.jpg";
 
-// Home has exactly one job: start a search. Everything else on it is a
-// shortcut to that same job, so the search panel is the only raised surface
-// and the only primary button on the screen.
+// Home has one job: start a search. Everything else is a shortcut to it.
 //
-// The previous version inverted its own hierarchy — the wordmark was the
-// loudest element (26pt bold) while the tappable popular-route rows were the
-// quietest (13.5pt grey, no pressed state, ~38dp tall). The thing you look at
-// should not outrank the thing you press.
+// The previous version was a white form on a grey page — technically correct
+// and completely characterless, which is not something a freight app can
+// compete on. Three things carry the identity now: a photographic hero that
+// says what this app is for before a word is read, a search card that
+// OVERLAPS that hero so the screen is one composition with depth rather than
+// stacked rectangles, and a from→to rail that reads as a journey instead of
+// two unrelated text inputs that happen to sit above each other.
+const TRUST = [
+  { icon: "shield-checkmark", label: "Verified drivers" },
+  { icon: "pricetag", label: "No commission" },
+  { icon: "flash", label: "Book direct" },
+];
+
 export const HomeScreen = () => {
   const router = useRouter();
   const { user } = useAuth();
@@ -33,20 +40,10 @@ export const HomeScreen = () => {
   const [date, setDate] = useState(new Date());
 
   const [popularRoutes, setPopularRoutes] = useState([]);
-  // Four states, not two. `.catch(() => setRoutes([]))` used to turn a failed
-  // request into "there are no popular routes" — the user was told a lie and
-  // offered no way to recover.
   const [routesStatus, setRoutesStatus] = useState("loading");
-  // Bumping this re-runs the fetch. The alternative — calling a loader
-  // function from inside the effect — sets state synchronously in the effect
-  // body, which cascades an extra render on every mount.
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    // `cancelled` matters: without it a response arriving after the user has
-    // navigated away sets state on an unmounted component. The initial status
-    // is already "loading", so this effect only ever sets state from the
-    // async callbacks, never synchronously.
     let cancelled = false;
     getPopularRoutes()
       .then((res) => {
@@ -62,8 +59,6 @@ export const HomeScreen = () => {
     };
   }, [reloadToken]);
 
-  // Setting "loading" here is correct and allowed — this runs from a press,
-  // not from render.
   const retryRoutes = () => {
     setRoutesStatus("loading");
     setReloadToken((t) => t + 1);
@@ -73,8 +68,17 @@ export const HomeScreen = () => {
   const to = (toCity || toPoint.address).trim();
   const canSearch = Boolean(from && to);
 
-  const search = (params) =>
-    router.push({ pathname: "/(app)/search-results", params });
+  const search = (params) => router.push({ pathname: "/(app)/search-results", params });
+
+  // Return loads are half this business — a driver running Pune→Mumbai today
+  // is looking for Mumbai→Pune tomorrow — so swapping is a first-class
+  // control rather than something to retype.
+  const swap = () => {
+    setFromPoint(toPoint);
+    setToPoint(fromPoint);
+    setFromCity(toCity);
+    setToCity(fromCity);
+  };
 
   const handleSearch = () => {
     if (!canSearch) return;
@@ -88,149 +92,290 @@ export const HomeScreen = () => {
   };
 
   const isTransporter = user?.roles?.includes("transporter");
+  const firstName = user?.name?.split(" ")[0];
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <PageTitle>TruckGee</PageTitle>
-        <Muted>Ship for less, earn from empty space.</Muted>
-      </View>
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.heroImage}>
+          {/* A photo can't guarantee contrast for text laid over it, so a
+              solid scrim does. Without it the headline's legibility depends
+              on whatever happens to be in that corner of the image. */}
+          <View style={styles.heroScrim} />
+          <SafeAreaView edges={["top"]}>
+            <View style={styles.heroContent}>
+              <Overline style={styles.heroBrand}>TruckGee</Overline>
+              <PageTitle style={styles.heroTitle}>
+                {firstName ? `Where to, ${firstName}?` : "Where are you\nshipping today?"}
+              </PageTitle>
 
-      {/* The one raised surface on the screen. If everything is raised,
-          nothing is — so the search panel gets the lift and every other
-          grouping below is spacing-separated instead. */}
-      <Card variant="raised" style={styles.searchCard}>
-        <LocationField
-          label="From"
-          value={fromPoint}
-          onChange={setFromPoint}
-          onResolve={setFromCity}
-          placeholder="Pickup city or area"
-        />
-        <LocationField
-          label="To"
-          value={toPoint}
-          onChange={setToPoint}
-          onResolve={setToCity}
-          placeholder="Drop city or area"
-        />
-        <DateField label="Date" value={date} onChange={setDate} minimumDate={new Date()} />
-        <Button
-          title="Search trucks"
-          size="lg"
-          onPress={handleSearch}
-          disabled={!canSearch}
-          fullWidth
-          accessibilityHint={
-            canSearch ? "Shows trucks running this route" : "Enter a pickup and drop city first"
-          }
-        />
-        {/* Says WHY the button is disabled. A greyed-out CTA with no
-            explanation is the most common dead end in a mobile form. */}
-        {!canSearch && <Caption style={styles.hint}>Enter a pickup and drop city to search.</Caption>}
-      </Card>
-
-      {isTransporter && (
-        <Section>
-          <PressableRow
-            size="double"
-            style={styles.postRow}
-            onPress={() => router.push("/(app)/trips/new/route")}
-            accessibilityLabel="Post a trip"
-            accessibilityHint="List your spare capacity on a route"
-          >
-            <View style={styles.postIcon}>
-              <Ionicons name="add-circle-outline" size={theme.layout.icon.lg} color={theme.color.accent} />
+              <View style={styles.trustRow}>
+                {TRUST.map((t) => (
+                  <View key={t.label} style={styles.trustChip}>
+                    <Ionicons name={t.icon} size={theme.layout.icon.xs} color={theme.color.onAccent} />
+                    <Caption style={styles.trustText}>{t.label}</Caption>
+                  </View>
+                ))}
+              </View>
             </View>
-            <View style={styles.postText}>
-              <BodyStrong>Have spare capacity?</BodyStrong>
-              <Muted>Post a trip and get booked on your route.</Muted>
-            </View>
-            <Ionicons name="chevron-forward" size={theme.layout.icon.md} color={theme.color.textFaint} />
-          </PressableRow>
-        </Section>
-      )}
+          </SafeAreaView>
+        </ImageBackground>
 
-      <Section title="Popular routes" subtitle="Tap a lane to see trucks running it today">
-        {routesStatus === "loading" && (
-          <View style={styles.routeSkeletons}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} height={theme.layout.row.single} radius={theme.radius.control} />
-            ))}
+        {/* Pulled up over the hero. This overlap is what turns two stacked
+            blocks into one composition with depth. */}
+        <View style={styles.searchWrap}>
+          <View style={styles.searchCard}>
+            {/* From and To share one rail — a dot, a connecting line, a
+                square — so the pair reads as a route with a direction. */}
+            <View style={styles.railRow}>
+              <View style={styles.rail}>
+                <View style={styles.railDot} />
+                <View style={styles.railLine} />
+                <View style={styles.railSquare} />
+              </View>
+
+              <View style={styles.railFields}>
+                <View style={styles.field}>
+                  <Overline>From</Overline>
+                  <LocationField
+                    value={fromPoint}
+                    onChange={setFromPoint}
+                    onResolve={setFromCity}
+                    placeholder="Pickup city or area"
+                  />
+                </View>
+                <View style={styles.fieldDivider} />
+                <View style={styles.field}>
+                  <Overline>To</Overline>
+                  <LocationField
+                    value={toPoint}
+                    onChange={setToPoint}
+                    onResolve={setToCity}
+                    placeholder="Drop city or area"
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                onPress={swap}
+                style={styles.swap}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Swap pickup and drop"
+              >
+                <Ionicons name="swap-vertical" size={theme.layout.icon.md} color={theme.color.accent} />
+              </Pressable>
+            </View>
+
+            <View style={styles.dateRow}>
+              <Ionicons name="calendar-outline" size={theme.layout.icon.md} color={theme.color.textFaint} />
+              <View style={styles.dateField}>
+                <DateField value={date} onChange={setDate} minimumDate={new Date()} />
+              </View>
+            </View>
+
+            <Button
+              title="Search trucks"
+              size="lg"
+              onPress={handleSearch}
+              disabled={!canSearch}
+              fullWidth
+              accessibilityHint={canSearch ? "Shows trucks running this route" : "Enter a pickup and drop city first"}
+            />
+            {!canSearch && <Caption style={styles.hint}>Enter a pickup and drop city to search.</Caption>}
           </View>
-        )}
+        </View>
 
-        {routesStatus === "error" && (
-          <ErrorState
-            compact
-            title="Couldn't load popular routes"
-            message="You can still search any route above."
-            onRetry={retryRoutes}
-          />
-        )}
-
-        {routesStatus === "ready" && popularRoutes.length === 0 && (
-          <Muted>No routes yet — search any city pair above to get started.</Muted>
-        )}
-
-        {routesStatus === "ready" &&
-          popularRoutes.map((r) => (
+        {isTransporter && (
+          <View style={styles.section}>
             <PressableRow
-              key={`${r.fromCity}-${r.toCity}`}
-              style={styles.routeRow}
-              onPress={() =>
-                search({
-                  fromCity: r.fromCity,
-                  toCity: r.toCity,
-                  date: new Date().toISOString().slice(0, 10),
-                })
-              }
-              accessibilityLabel={`${r.fromCity} to ${r.toCity}`}
-              accessibilityHint="Search trucks on this route"
+              size="double"
+              style={styles.postRow}
+              onPress={() => router.push("/(app)/trips/new/route")}
+              accessibilityLabel="Post a trip"
+              accessibilityHint="List your spare capacity on a route"
             >
-              <Ionicons name="navigate-outline" size={theme.layout.icon.md} color={theme.color.accent} />
-              {/* The route is the content of the row, so it's body weight —
-                  not the muted 13.5pt it used to be. A label you can press
-                  should never be lighter than the label you can't. */}
-              <View style={styles.routeText}>
-                <Body numberOfLines={1}>
-                  {r.fromCity} <Overline style={styles.arrow}>to</Overline> {r.toCity}
-                </Body>
-                {r.count > 0 && (
-                  <Caption>
-                    {r.count} {r.count === 1 ? "truck" : "trucks"} listed
-                  </Caption>
-                )}
+              <View style={styles.postIcon}>
+                <Ionicons name="add" size={theme.layout.icon.md} color={theme.color.onAccent} />
+              </View>
+              <View style={styles.postText}>
+                <BodyStrong>Running empty?</BodyStrong>
+                <Muted>Post your route and get booked.</Muted>
               </View>
               <Ionicons name="chevron-forward" size={theme.layout.icon.md} color={theme.color.textFaint} />
             </PressableRow>
-          ))}
-      </Section>
-    </Screen>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <BodyStrong>Popular routes</BodyStrong>
+            <Caption>Tap to see trucks running it</Caption>
+          </View>
+
+          {routesStatus === "loading" && (
+            <View style={styles.routeList}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} height={theme.layout.row.single} radius={theme.radius.card} />
+              ))}
+            </View>
+          )}
+
+          {routesStatus === "error" && (
+            <ErrorState
+              compact
+              title="Couldn't load popular routes"
+              message="You can still search any route above."
+              onRetry={retryRoutes}
+            />
+          )}
+
+          {routesStatus === "ready" && popularRoutes.length === 0 && (
+            <Muted>No routes yet — search any city pair above to get started.</Muted>
+          )}
+
+          {routesStatus === "ready" &&
+            popularRoutes.length > 0 && (
+              <View style={styles.routeList}>
+                {popularRoutes.map((r) => (
+                  <PressableRow
+                    key={`${r.fromCity}-${r.toCity}`}
+                    style={styles.routeRow}
+                    onPress={() =>
+                      search({
+                        fromCity: r.fromCity,
+                        toCity: r.toCity,
+                        date: new Date().toISOString().slice(0, 10),
+                      })
+                    }
+                    accessibilityLabel={`${r.fromCity} to ${r.toCity}`}
+                    accessibilityHint="Search trucks on this route"
+                  >
+                    <View style={styles.routeIcon}>
+                      <Ionicons name="navigate" size={theme.layout.icon.sm} color={theme.color.accent} />
+                    </View>
+                    <View style={styles.routeText}>
+                      <Body numberOfLines={1}>
+                        {r.fromCity} → {r.toCity}
+                      </Body>
+                      {r.count > 0 && (
+                        <Caption>
+                          {r.count} {r.count === 1 ? "truck" : "trucks"} listed
+                        </Caption>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={theme.layout.icon.md} color={theme.color.textFaint} />
+                  </PressableRow>
+                ))}
+              </View>
+            )}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
+const HERO_HEIGHT = 290;
+const CARD_OVERLAP = 44;
+
 const styles = StyleSheet.create({
-  header: { gap: theme.spacing.xs },
-  searchCard: { gap: theme.spacing.md },
+  root: { flex: 1, backgroundColor: theme.color.bg },
+  scroll: { paddingBottom: theme.spacing.xxl },
+
+  hero: { height: HERO_HEIGHT, justifyContent: "flex-start" },
+  heroImage: { resizeMode: "cover" },
+  heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: withAlpha(theme.color.accentStrong, 0.82) },
+  heroContent: { paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md, gap: theme.spacing.sm },
+  heroBrand: { color: withAlpha(theme.color.onAccent, 0.75) },
+  heroTitle: { color: theme.color.onAccent },
+
+  trustRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs },
+  trustChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radius.pill,
+    backgroundColor: withAlpha(theme.color.onAccent, 0.16),
+  },
+  trustText: { color: theme.color.onAccent },
+
+  searchWrap: { paddingHorizontal: theme.spacing.md, marginTop: -CARD_OVERLAP },
+  searchCard: {
+    backgroundColor: theme.color.surface,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.md,
+    gap: theme.spacing.smd,
+    ...theme.elevation[3],
+  },
+
+  railRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.smd },
+  rail: { alignItems: "center", paddingVertical: theme.spacing.md },
+  railDot: { width: 9, height: 9, borderRadius: theme.radius.pill, backgroundColor: theme.color.accent },
+  railLine: { width: 2, flex: 1, minHeight: theme.spacing.xxl, backgroundColor: theme.color.border, marginVertical: 4 },
+  railSquare: { width: 9, height: 9, borderRadius: 2, backgroundColor: theme.color.text },
+  railFields: { flex: 1 },
+  field: { gap: theme.spacing.xxs, paddingVertical: theme.spacing.sm },
+  fieldDivider: { height: theme.layout.hairline, backgroundColor: theme.color.border },
+  swap: {
+    width: theme.spacing.xxl,
+    height: theme.spacing.xxl,
+    borderRadius: theme.radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.color.accentSoft,
+  },
+
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.smd,
+    borderTopWidth: theme.layout.hairline,
+    borderTopColor: theme.color.border,
+    paddingTop: theme.spacing.smd,
+  },
+  dateField: { flex: 1 },
   hint: { textAlign: "center" },
 
+  section: { paddingHorizontal: theme.spacing.md, marginTop: theme.spacing.lg, gap: theme.spacing.smd },
+  sectionHead: { gap: theme.spacing.xxs },
+
   postRow: {
-    backgroundColor: theme.color.accentSoft,
+    backgroundColor: theme.color.surface,
     borderWidth: theme.layout.hairline,
-    borderColor: "transparent",
+    borderColor: theme.color.border,
+    ...theme.elevation[1],
   },
-  postIcon: { alignItems: "center", justifyContent: "center" },
+  postIcon: {
+    width: theme.spacing.xxl,
+    height: theme.spacing.xxl,
+    borderRadius: theme.radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.color.accent,
+  },
   postText: { flex: 1, gap: theme.spacing.xxs },
 
-  routeSkeletons: { gap: theme.spacing.sm },
+  routeList: { gap: theme.spacing.sm },
   routeRow: {
     backgroundColor: theme.color.surface,
     borderWidth: theme.layout.hairline,
     borderColor: theme.color.border,
   },
+  routeIcon: {
+    width: theme.spacing.xl,
+    height: theme.spacing.xl,
+    borderRadius: theme.radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.color.accentSoft,
+  },
   routeText: { flex: 1, gap: theme.spacing.xxs },
-  arrow: { color: theme.color.textFaint },
 });
 
 export default HomeScreen;
