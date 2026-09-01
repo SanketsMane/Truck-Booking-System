@@ -19,6 +19,7 @@ import { TextField } from "../../../../src/components/ui/TextField";
 import { StatusBadge } from "../../../../src/components/ui/Badge";
 import { Skeleton } from "../../../../src/components/ui/Skeleton";
 import { ErrorState } from "../../../../src/components/ui/ErrorState";
+import { TruckImage } from "../../../../src/components/TruckImage";
 import { theme } from "../../../../src/theme";
 import { getTrip } from "../../../../src/api/trips";
 import { createBooking } from "../../../../src/api/bookings";
@@ -216,7 +217,7 @@ export const TripDetailScreen = () => {
         <Card variant="flat">
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Ionicons name="bus-outline" size={theme.layout.icon.md} color={theme.color.textFaint} />
+              <TruckImage bodyType={trip.truck?.bodyType} size={72} />
               <View style={styles.metaText}>
                 <BodyStrong>{trip.truck?.regNumber || "Truck"}</BodyStrong>
                 <Caption>

@@ -10,6 +10,7 @@ import { Button } from "../../src/components/ui/Button";
 import { SkeletonList } from "../../src/components/ui/Skeleton";
 import { ErrorState } from "../../src/components/ui/ErrorState";
 import { PressableRow } from "../../src/components/ui/PressableRow";
+import { TruckImage } from "../../src/components/TruckImage";
 import { theme } from "../../src/theme";
 import { searchTrips } from "../../src/api/trips";
 import { formatINR, formatTons, formatDate, formatTime, ratingLabel } from "../../src/utils/format";
@@ -76,8 +77,10 @@ const ResultCard = ({ trip, onPress }) => {
 
         <View style={styles.metaRow}>
           <View style={styles.metaItem}>
-            <Ionicons name="cube-outline" size={theme.layout.icon.sm} color={theme.color.textFaint} />
-            <Muted>
+            {/* The vehicle itself, not a generic box icon — body type is the
+                thing a shipper is actually shortlisting on. */}
+            <TruckImage bodyType={trip.truck?.bodyType} size={52} />
+            <Muted numberOfLines={1}>
               {trip.truck?.truckType}
               {trip.truck?.bodyType ? ` · ${trip.truck.bodyType}` : ""}
             </Muted>
