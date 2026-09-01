@@ -82,6 +82,14 @@ const lightColor = {
   moneyNegative: "#b4232f",
   moneyPending: palette.amber50,
 
+  // Navigation-bar specifics, to the brand spec. navInactive is a touch
+  // cooler than textFaint (#6b7280) — at 12sp under an icon, that half-step
+  // is the difference between "quietly available" and "disabled".
+  navInactive: "#68707D",
+  // green-100. The active pill behind a nav icon: present enough to locate,
+  // light enough that it never competes with the icon sitting on it.
+  accentSurface: "#DCFCE7",
+
   // Scrims and skeletons.
   scrim: "rgba(15, 18, 25, 0.45)",
   skeleton: palette.grey05,
@@ -125,6 +133,9 @@ export const darkColor = {
   moneyPositive: palette.green40,
   moneyNegative: "#f2606c",
   moneyPending: "#e8b13a",
+
+  navInactive: "#8b93a1",
+  accentSurface: "rgba(34, 163, 85, 0.20)",
 
   scrim: "rgba(0, 0, 0, 0.6)",
   skeleton: palette.grey80,

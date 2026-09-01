@@ -1,54 +1,64 @@
-import { Pressable, View, StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../../src/theme";
+import { TabBarItem } from "../../src/components/ui/TabBarItem";
 
-// Filled when active, outline when not. A tab bar that only changes colour
-// asks the eye to compare five greens; a filled-vs-outline pair reads at a
-// glance, and it still works for someone who can't separate the two colours.
-const TAB_ICON = {
-  index: ["search", "search-outline"],
-  "bookings/index": ["cube", "cube-outline"],
-  "trucks/index": ["bus", "bus-outline"],
-  "chat/index": ["chatbubbles", "chatbubbles-outline"],
-  "profile/index": ["person", "person-outline"],
+// Which destination each tab route maps to. The active one is decided by
+// expo-router's own `focused` flag — i.e. by the real navigation state — not
+// by anything this file tracks itself, so it can never drift out of sync with
+// the back stack.
+const TAB_LABEL = {
+  index: "Home",
+  "bookings/index": "Bookings",
+  "trucks/index": "Trucks",
+  "chat/index": "Chat",
+  "profile/index": "Profile",
 };
 
-// The default tab button paints an Android ripple — a grey circle that
-// spreads out of the tap and lingers. It reads as a stray smudge rather than
-// as feedback, especially against a light bar. This replaces it with a brief
-// opacity press, which is what iOS does anyway; the real confirmation that a
-// tab was pressed is the tab becoming active, which is instant.
-const TabButton = ({ children, style, onPress, onLongPress, accessibilityState, accessibilityLabel, testID }) => (
-  <Pressable
-    onPress={onPress}
-    onLongPress={onLongPress}
-    accessibilityRole="tab"
-    accessibilityState={accessibilityState}
-    accessibilityLabel={accessibilityLabel}
-    testID={testID}
-    android_ripple={null}
-    style={({ pressed }) => [styles.tabButton, style, pressed && styles.tabButtonPressed]}
-  >
-    {children}
-  </Pressable>
-);
+const TAB_KEY = {
+  index: "home",
+  "bookings/index": "bookings",
+  "trucks/index": "trucks",
+  "chat/index": "chat",
+  "profile/index": "profile",
+};
 
-const TabItem = ({ routeName, focused }) => {
-  const [filled, outline] = TAB_ICON[routeName] || ["ellipse", "ellipse-outline"];
+// Android's default tab ripple is a grey circle that spreads out of the tap
+// and lingers; against a light bar it reads as a smudge, not as feedback.
+// This gives a brief opacity press instead — the real confirmation is the
+// destination becoming active, which is instant.
+// The destination renders inside the BUTTON, not inside tabBarIcon. With
+// tabBarShowLabel:false React Navigation gives the icon slot a fixed width,
+// which clipped every label longer than the indicator — "Ho…", "Bo…", "Tru…",
+// "Pro…". The button is flex:1 across the bar, so the label gets the whole
+// destination width and the active pill has room to draw.
+//
+// `focused` comes from accessibilityState.selected — React Navigation's own
+// view of which destination is active, i.e. the real back-stack state, not
+// anything this file tracks.
+const TabButton = ({ routeName, style, onPress, onLongPress, testID, ...rest }) => {
+  // React Navigation 7 moved these props to the aria-* names; older versions
+  // pass accessibilityState. Reading both means the active destination is
+  // driven by the navigator's own state either way, rather than by anything
+  // this file tracks itself.
+  const selected = rest["aria-selected"] ?? rest.accessibilityState?.selected ?? false;
+
   return (
-    <View style={styles.item}>
-      {/* A short bar above the active tab. Colour alone is doing a lot of
-          work in a five-item bar; a position marker makes "where am I" a
-          shape question rather than a hue question. */}
-      <View style={[styles.indicator, focused && styles.indicatorActive]} />
-      <Ionicons
-        name={focused ? filled : outline}
-        size={theme.layout.icon.lg}
-        color={focused ? theme.color.accent : theme.color.textFaint}
-      />
-    </View>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="tab"
+      // Announces selected/unselected, so the active destination reaches a
+      // screen reader instead of only being visible.
+      accessibilityState={{ selected }}
+      accessibilityLabel={TAB_LABEL[routeName]}
+      testID={testID}
+      android_ripple={null}
+      style={({ pressed }) => [styles.tabButton, style, pressed && styles.tabButtonPressed]}
+    >
+      <TabBarItem name={TAB_KEY[routeName]} label={TAB_LABEL[routeName]} focused={selected} />
+    </Pressable>
   );
 };
 
@@ -70,13 +80,12 @@ export default function AppTabsLayout() {
       backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarButton: TabButton,
+        tabBarButton: (props) => <TabButton {...props} routeName={route.name} />,
         tabBarActiveTintColor: theme.color.accent,
         tabBarInactiveTintColor: theme.color.textFaint,
         tabBarStyle: [styles.bar, { height: BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom + theme.spacing.sm }],
         tabBarItemStyle: styles.barItem,
-        tabBarLabelStyle: styles.label,
-        tabBarIcon: ({ focused }) => <TabItem routeName={route.name} focused={focused} />,
+            tabBarShowLabel: false,
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
@@ -145,17 +154,9 @@ const styles = StyleSheet.create({
     ...theme.elevation[2],
   },
   barItem: { paddingVertical: 0 },
-  label: { ...theme.text.overline, textTransform: "none", letterSpacing: 0.1 },
 
-  tabButton: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // At least 48dp of tappable height per destination, spread equally across
+  // the bar.
+  tabButton: { flex: 1, minHeight: theme.layout.touchTarget, alignItems: "center", justifyContent: "center" },
   tabButtonPressed: { opacity: 0.6 },
-
-  item: { alignItems: "center", gap: theme.spacing.xxs },
-  indicator: {
-    width: theme.spacing.lg,
-    height: 3,
-    borderRadius: theme.radius.pill,
-    backgroundColor: "transparent",
-  },
-  indicatorActive: { backgroundColor: theme.color.accent },
 });
