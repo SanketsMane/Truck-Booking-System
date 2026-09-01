@@ -13,7 +13,7 @@ import { DateField } from "../../src/components/ui/DateField";
 import { theme } from "../../src/theme";
 import { getPopularRoutes } from "../../src/api/trips";
 import { useAuth } from "../../src/context/AuthContext";
-import heroImage from "../../assets/hero-home.png";
+import heroImage from "../../assets/hero-home.jpg";
 
 // Home has one job: start a search. Everything else is a shortcut to it.
 //
